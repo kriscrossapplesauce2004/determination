@@ -1,0 +1,60 @@
+#!/bin/sh
+# dos — DecemberOS host helper. Wraps the wireless-adb dance so nothing else
+# has to remember it. Uses official platform-tools if present (distro adb has
+# broken pairing), and never runs `adb root` (drops wireless transports).
+#
+#   dos find              discover the phone's current wireless port (mdns)
+#   dos connect           discover + connect
+#   dos shell [cmd...]    root shell (Magisk su) on the phone
+#   dos status            connection, root, kernel, mode, guest state
+#   dos recon             run the §9 recon
+#   dos push-module       install/refresh the Magisk module zip on the phone
+
+set -eu
+cd "$(dirname "$0")"
+
+for pt in "$HOME"/platform-tools /tmp/claude-*/-home-melissa/*/scratchpad/platform-tools; do
+    [ -x "$pt/adb" ] && PATH="$pt:$PATH" && break
+done
+
+mdns_addr() {
+    adb mdns services 2>/dev/null | awk '/_adb-tls-connect/ {print $3; exit}'
+}
+
+ensure() {
+    adb get-state >/dev/null 2>&1 && return 0
+    addr=$(mdns_addr)
+    [ -n "$addr" ] || { echo "phone not advertising — is Wireless debugging on?" >&2; exit 1; }
+    adb connect "$addr" >/dev/null
+    adb get-state >/dev/null 2>&1 || { echo "connect to $addr failed (re-pair?)" >&2; exit 1; }
+}
+
+case "${1:-status}" in
+find)
+    addr=$(mdns_addr); [ -n "$addr" ] && echo "$addr" || { echo "not advertising" >&2; exit 1; } ;;
+connect)
+    ensure && adb devices | sed -n 2p ;;
+shell)
+    ensure; shift
+    if [ $# -gt 0 ]; then adb shell su -c "$*"; else adb shell su; fi ;;
+status)
+    ensure
+    echo "connected: $(adb devices | awk 'NR==2{print $1}')"
+    adb shell su -c 'echo "root: ok ($(id -u))";
+        echo "kernel: $(uname -r)";
+        [ -e /proc/self/ns/pid ] && echo "pid-ns: YES (DecemberOS kernel)" || echo "pid-ns: no (stock kernel)";
+        echo "sf: $(getprop init.svc.surfaceflinger)";
+        [ -f /data/decemberos/run/desktop-mode ] && echo "mode: desktop" || echo "mode: phone";
+        [ -x /data/decemberos/bin/desktop-on ] && echo "module: installed" || echo "module: not installed"' ;;
+recon)
+    ensure && ./recon/recon.sh ;;
+push-module)
+    ensure
+    zipf=$(ls magisk-module/decemberos-magisk-*.zip 2>/dev/null | tail -1)
+    [ -n "$zipf" ] || { echo "no zip — run magisk-module/build-module.sh" >&2; exit 1; }
+    adb push "$zipf" /data/local/tmp/decemberos.zip
+    adb shell su -c 'magisk --install-module /data/local/tmp/decemberos.zip && rm /data/local/tmp/decemberos.zip'
+    echo "installed — reboot the phone to activate" ;;
+*)
+    sed -n '5,11p' "$0"; exit 2 ;;
+esac

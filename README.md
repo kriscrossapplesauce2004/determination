@@ -50,7 +50,12 @@ Full rationale, topology decision, and risk register: see
 
 - [x] Repo scaffolding, recon script, kernel fragment, Magisk module, guest
       builder, toggle scripts, evgrab
-- [ ] Recon run on real device (needs USB)
-- [ ] Kernel built + boot.img flashed
-- [ ] libhybris smoke test on guacamoleb
+- [x] Recon on real device over wireless adb → `docs/recon-findings.md`
+      (crDroid 12.10/A16, HIDL composer 2.4, gralloc4, binderfs present,
+      DP-alt works)
+- [x] Kernel built (crDroid 16.0 tree + running config + fragment, 3m13s),
+      `boot/decemberos-boot.img` repacked from the dumped boot_b and verified
+- [x] Module zip packaged with static aarch64 evgrab; `./dos` host helper
+- [ ] **Flash day** (needs USB cable) → `docs/flash-day.md`
+- [ ] Guest rootfs + libhybris smoke test on guacamoleb
 - [ ] Toggle stable across repeated cycles
