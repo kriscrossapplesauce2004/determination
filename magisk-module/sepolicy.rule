@@ -1,0 +1,22 @@
+# DecemberOS sepolicy — bring-up rules, applied live by Magisk (magiskpolicy
+# syntax). Deliberately scoped to the guest/toggle path; iterate here from
+# audit2allow output during bring-up, consolidate into a real policy module
+# before any release (spec §4).
+#
+# The guest and toggle tooling run in magisk's context (u:r:magisk:s0), which
+# is already permissive-ish; these rules cover what system daemons must accept
+# *from* us and the guest's own domain once it gets one.
+
+# Toggle needs to signal/observe surfaceflinger and read its service state.
+allow magisk surfaceflinger process { signal sigkill getattr }
+allow magisk init property_service { set }
+
+# evdev grab from the toggle path.
+allow magisk input_device chr_file { open read write ioctl getattr }
+allow magisk input_device dir { open read search }
+
+# Guest access to GPU/display/allocator device nodes (bind-mounted in).
+allow magisk graphics_device chr_file { open read write ioctl map }
+allow magisk gpu_device chr_file { open read write ioctl map }
+allow magisk ion_device chr_file { open read write ioctl }
+allow magisk dmabuf_system_heap_device chr_file { open read ioctl }

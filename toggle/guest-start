@@ -1,0 +1,19 @@
+#!/system/bin/sh
+# Start the guest container headless (no display acquisition). Runs at boot
+# from service.sh; desktop-on then only performs the display/input handoff.
+# Installed to /data/decemberos/bin/.
+
+set -u
+DOS=/data/decemberos
+LXC="$DOS/lxc/bin"  # static lxc build pushed alongside the rootfs
+export PATH="$LXC:$PATH"
+
+# Host end of the veth bridge + NAT out through whatever's up (wlan0/rmnet).
+ip link add decembr0 type bridge 2>/dev/null
+ip addr add 192.168.117.1/24 dev decembr0 2>/dev/null
+ip link set decembr0 up
+iptables -t nat -C POSTROUTING -s 192.168.117.0/24 -j MASQUERADE 2>/dev/null ||
+    iptables -t nat -A POSTROUTING -s 192.168.117.0/24 -j MASQUERADE
+
+lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING && exit 0
+exec lxc-start -P "$DOS" -n guest -f "$DOS/lxc/config" -l WARN -o "$DOS/log/lxc.log"

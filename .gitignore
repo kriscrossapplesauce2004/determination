@@ -1,0 +1,7 @@
+tools/evgrab/evgrab
+tools/evgrab/evgrab-host
+kernel/src/
+kernel/out/
+guest/rootfs.tar.gz
+boot/decemberos-boot.img
+recon/report-*/

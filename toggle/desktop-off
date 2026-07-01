@@ -1,0 +1,34 @@
+#!/system/bin/sh
+# DecemberOS handoff, desktop -> phone (spec §4). Reverse order of desktop-on:
+# guest releases composer first, then SF restarts, then input is released.
+# Installed to /data/decemberos/bin/. Run as root.
+
+set -u
+DOS=/data/decemberos
+exec >>"$DOS/log/toggle.log" 2>&1
+echo "--- desktop-off $(date)"
+
+# 1. Kill the suppressor before restarting SF, or it'll fight us.
+rm -f "$DOS/run/desktop-mode"
+[ -f "$DOS/run/suppressor.pid" ] && kill "$(cat "$DOS/run/suppressor.pid")" 2>/dev/null
+rm -f "$DOS/run/suppressor.pid"
+
+# 2. Guest compositor must release the composer client *cleanly* — killing it
+#    mid-frame is how the HAL state machine wedges (spec risk register).
+lxc-attach -P "$DOS" -n guest -- pkill -TERM sway 2>/dev/null
+[ -f "$DOS/run/compositor.pid" ] && kill "$(cat "$DOS/run/compositor.pid")" 2>/dev/null
+rm -f "$DOS/run/compositor.pid"
+sleep 2
+
+# 3. Restart SF; verify panel re-init (no dead/black transition).
+start surfaceflinger
+i=0
+until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
+    i=$((i+1)); [ $i -gt 20 ] && echo "WARN: SF slow to return" && break
+    sleep 0.5
+done
+
+# 4. Release the input grab last, once Android UI is back to receive events.
+[ -f "$DOS/run/evgrab.pid" ] && kill "$(cat "$DOS/run/evgrab.pid")" 2>/dev/null
+rm -f "$DOS/run/evgrab.pid"
+echo "phone mode restored"

@@ -1,0 +1,51 @@
+# DecemberOS guest container config (LXC).
+# The guest must see: Android /dev (binder, kgsl, ion/dmabuf, dri, input),
+# the property area, and /vendor + /system libs — spec §1 implication chain.
+
+lxc.uts.name = decemberos
+lxc.arch = aarch64
+lxc.rootfs.path = dir:/data/decemberos/guest
+lxc.init.cmd = /sbin/init
+
+# Android has no /etc/lxc conventions; keep everything under /data/decemberos.
+lxc.log.file = /data/decemberos/log/lxc.log
+lxc.log.level = WARN
+
+# --- Namespaces / privileges ---
+# Privileged container by design: it must own real device nodes. Isolation is
+# not the threat model here; the container exists for the glibc world, not
+# for sandboxing.
+lxc.include =
+lxc.apparmor.profile = unconfined
+lxc.autodev = 1
+lxc.autodev.tmpfs.size = 25000000
+
+# --- Android world, read-only ---
+lxc.mount.entry = /system android/system none bind,ro,optional 0 0
+lxc.mount.entry = /vendor android/vendor none bind,ro,optional 0 0
+lxc.mount.entry = /apex android/apex none rbind,ro,optional 0 0
+# Property area — libhybris reads Android props through here.
+lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,optional 0 0
+
+# --- Device nodes (bind, not mknod: keep host's SELinux labels) ---
+# Guest-private binder contexts from the custom kernel:
+lxc.mount.entry = /dev/guest-binder dev/binder none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/guest-hwbinder dev/hwbinder none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/guest-vndbinder dev/vndbinder none bind,create=file,optional 0 0
+# GPU + allocator:
+lxc.mount.entry = /dev/kgsl-3d0 dev/kgsl-3d0 none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/ion dev/ion none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/dma_heap dev/dma_heap none rbind,create=dir,optional 0 0
+lxc.mount.entry = /dev/dri dev/dri none rbind,create=dir,optional 0 0
+# Input — nodes are visible always; EXCLUSIVE ACCESS is arbitrated by
+# EVIOCGRAB at toggle time (spec §4), not by mount games.
+lxc.mount.entry = /dev/input dev/input none rbind,create=dir,optional 0 0
+
+lxc.cgroup.devices.allow = a *:* rwm
+
+# --- Network: veth into Android's connectivity, NAT'd by toggle/guest-start ---
+lxc.net.0.type = veth
+lxc.net.0.link = decembr0
+lxc.net.0.flags = up
+lxc.net.0.ipv4.address = 192.168.117.2/24
+lxc.net.0.ipv4.gateway = 192.168.117.1
