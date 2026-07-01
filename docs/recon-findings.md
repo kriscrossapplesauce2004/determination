@@ -64,3 +64,19 @@ zygote + zygote_secondary running.
   prefers `su -c` (fixed).
 - Port rotates on every wireless-debugging toggle/reboot; rediscover with
   `adb mdns services`.
+
+## DP-alt confirmed working (user-verified, 2026-07-01)
+
+DisplayPort over USB-C works on this hardware/ROM — crDroid enables what
+stock OnePlus never did. Android's native desktop mode runs on it (buggy, but
+functional). Consequences:
+
+- §5 external convergence's only hardware risk (DP-alt enumeration) is gone;
+  what remains is pointing the guest compositor at the external hwcomposer
+  display instead of Android.
+- The composer HAL demonstrably handles a second concurrent display on this
+  device — good news for hotplug paths in the wlroots backend.
+- Native desktop mode working means the A16 desktop/freeform framework paths
+  are alive on this ROM: the §6 flag flips / WMS hooks have a working
+  substrate, and "buggy native desktop" is the benchmark our guest desktop
+  has to beat (a real Debian desktop clears that bar easily).
