@@ -1,0 +1,7 @@
+[ro.boot.slot_suffix]: [_b]
+[ro.build.display.id]: [BP4A.251205.006 release-keys]
+[ro.crdroid.build.version]: [12.10]
+[ro.crdroid.device]: [guacamoleb]
+[ro.crdroid.display.version]: [v12.10-20260520]
+[ro.crdroid.version]: [16.0]
+[ro.crdroidlegal.url]: [https://crdroid.net/legal.php]

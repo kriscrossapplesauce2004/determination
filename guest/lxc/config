@@ -28,10 +28,10 @@ lxc.mount.entry = /apex android/apex none rbind,ro,optional 0 0
 lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,optional 0 0
 
 # --- Device nodes (bind, not mknod: keep host's SELinux labels) ---
-# Guest-private binder contexts from the custom kernel:
-lxc.mount.entry = /dev/guest-binder dev/binder none bind,create=file,optional 0 0
-lxc.mount.entry = /dev/guest-hwbinder dev/hwbinder none bind,create=file,optional 0 0
-lxc.mount.entry = /dev/guest-vndbinder dev/vndbinder none bind,create=file,optional 0 0
+# Binder: kernel has binderfs (recon 2026-07-01), so the guest mounts a fresh
+# instance in its own IPC namespace — private contexts, no fight with Android
+# over /dev/binder. Requires CONFIG_IPC_NS from the custom kernel.
+lxc.mount.entry = binder dev/binderfs binder nosuid,noexec,nodev,optional 0 0
 # GPU + allocator:
 lxc.mount.entry = /dev/kgsl-3d0 dev/kgsl-3d0 none bind,create=file,optional 0 0
 lxc.mount.entry = /dev/ion dev/ion none bind,create=file,optional 0 0

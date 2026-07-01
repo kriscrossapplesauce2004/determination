@@ -15,10 +15,10 @@ until [ "$(getprop sys.boot_completed)" = "1" ]; do sleep 2; done
 # Guest cgroup delegation (cgroup v2 hierarchy; Android mounts it at /sys/fs/cgroup).
 mkdir -p /sys/fs/cgroup/decemberos 2>/dev/null
 
-# Guest binder nodes: the custom kernel creates extra binder contexts
-# (guest-binder etc., see kernel/decemberos.config). Make sure they exist and
-# are reachable for the container config's bind-mounts.
-ls -l /dev/guest-binder >/dev/null 2>&1 || echo "WARN: guest binder nodes missing — wrong kernel?"
+# Sanity: the DecemberOS kernel must provide pid namespaces (LXC hard
+# requirement, missing from the stock crDroid kernel) and binderfs.
+grep -q pid /proc/self/ns/pid 2>/dev/null || [ -e /proc/self/ns/pid ] || echo "WARN: no pid ns — wrong kernel?"
+[ -d /dev/binderfs ] || echo "WARN: binderfs missing — wrong kernel?"
 
 # Guest networking: veth pair NAT'd through the phone's active connection is
 # set up by lxc from guest/lxc/config; here we just make sure forwarding is on.

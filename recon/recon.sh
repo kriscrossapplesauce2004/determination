@@ -18,15 +18,15 @@ if ! adb get-state >/dev/null 2>&1; then
     exit 1
 fi
 
-# Prefer adb root; fall back to `su -c` (Magisk).
-if adb root >/dev/null 2>&1 && [ "$(adb shell id -u)" = "0" ]; then
+# Prefer Magisk `su -c`; fall back to adb root. (adb root restarts adbd, which
+# drops wireless-debugging transports — only try it if su isn't available.)
+if [ "$(adb shell su -c id -u </dev/null 2>/dev/null | tr -d '\r')" = "0" ]; then
+    ash() { adb shell su -c "$*"; }
+elif adb root >/dev/null 2>&1 && sleep 2 && [ "$(adb shell id -u | tr -d '\r')" = "0" ]; then
     ash() { adb shell "$@"; }
 else
-    ash() { adb shell su -c "$*"; }
-    if [ "$(ash id -u | tr -d '\r')" != "0" ]; then
-        echo "error: no root on device (need adb root or Magisk su)" >&2
-        exit 1
-    fi
+    echo "error: no root on device (need Magisk su or adb root)" >&2
+    exit 1
 fi
 
 run() { # run <name> <command...>
