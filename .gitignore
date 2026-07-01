@@ -5,3 +5,4 @@ kernel/out/
 guest/rootfs.tar.gz
 boot/decemberos-boot.img
 recon/report-*/
+toolchain/
