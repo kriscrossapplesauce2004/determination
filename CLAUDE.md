@@ -69,12 +69,19 @@ order. Raw probe outputs live in `recon/report-*/` and `artifacts/`.
 
 ## State / next steps
 
-1. First kernel build was launched 2026-07-01 late evening (background task,
-   `kernel/out/`) — check whether it finished: `ls kernel/out/arch/arm64/boot/`.
-   If Image.gz-dtb exists, next is `boot/repack.sh` (needs magiskboot + the
-   stock boot.img for the *installed crDroid build* — `~/boot.img` may be
-   stale, safer to dump boot_b from the device with su + dd).
-2. Then: Magisk-patch, RAM-boot test via `fastboot boot` (cable day),
-   verify PID_NS etc. in the booted kernel, then guest bring-up
-   (`guest/build-rootfs.sh`, needs mmdebstrap installed).
-3. Milestone order and everything else: README.md.
+Flash-day ready as of 2026-07-01 night (see docs/flash-day.md — the runbook):
+kernel built (3m13s on this box), `boot/decemberos-boot.img` repacked from the
+dumped boot_b (`artifacts/boot_b-crdroid-12.10.img` = the pristine restore
+image) and verified; module zip packaged with static aarch64 evgrab; `./dos`
+host helper wraps the wireless-adb workflow. Official platform-tools persisted
+at `~/platform-tools`. magiskboot + aarch64 gcc/glibc live in `toolchain/`
+(gitignored; re-extract Arch pkgs if missing).
+
+Still missing before desktop-on can show anything (post-flash work):
+1. Static arm64 LXC build for the Android host side (`/data/decemberos/lxc/bin`).
+2. Guest rootfs (`guest/build-rootfs.sh` — mmdebstrap not installed on host yet).
+3. A wlroots compositor with the hwcomposer backend — stock Debian sway can
+   NOT drive hwcomposer; Droidian's packages (or a hybris-wlroots build) are
+   required. The libhybris `test_hwcomposer` smoke test gates everything.
+Until those land, desktop-on would stop SF and leave the panel dark with no
+touch (recover via `./dos shell /data/decemberos/bin/desktop-off`).
