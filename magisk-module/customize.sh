@@ -19,7 +19,7 @@ rm -rf "$MODPATH/tools"
 
 # Running the DecemberOS kernel? Warn, don't block — module install before
 # kernel flash is a legitimate order of operations.
-if [ ! -e /proc/self/ns/pid ] || ! grep -q ANDROID_BINDERFS=y /proc/config.gz 2>/dev/null; then
+if [ ! -e /proc/self/ns/pid ] || ! zcat /proc/config.gz 2>/dev/null | grep -q ANDROID_BINDERFS=y; then
     ui_print "! Note: DecemberOS kernel not detected (yet) — guest won't start until it's flashed"
 fi
 
