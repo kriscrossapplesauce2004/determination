@@ -21,6 +21,9 @@ rm -rf "$MODPATH/tools"
 # kernel flash is a legitimate order of operations.
 if [ ! -e /proc/self/ns/pid ] || ! zcat /proc/config.gz 2>/dev/null | grep -q ANDROID_BINDERFS=y; then
     ui_print "! Note: DecemberOS kernel not detected (yet) — guest won't start until it's flashed"
+elif ! zcat /proc/config.gz 2>/dev/null | grep -q '^CONFIG_VT=y'; then
+    # Kernel #3 marker: VT is off in stock and in kernels #1/#2.
+    ui_print "! Note: pre-#3 DecemberOS kernel — VT / nftables / IPv6-NAT need a kernel update"
 fi
 
 ui_print "- Toolkit installed to $DOS/bin"

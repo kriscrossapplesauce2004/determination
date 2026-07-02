@@ -35,9 +35,11 @@ $KMAKE olddefconfig
 
 # Verify the merge actually took — a silently-dropped option here costs a
 # flash-and-boot cycle to discover.
-for opt in NAMESPACES USER_NS PID_NS IPC_NS NET_NS CGROUP_DEVICE CGROUP_PIDS POSIX_MQUEUE ANDROID_BINDERFS VETH OVERLAY_FS QCA_CLD_WLAN; do
+for opt in NAMESPACES USER_NS PID_NS IPC_NS NET_NS CGROUP_DEVICE CGROUP_PIDS POSIX_MQUEUE ANDROID_BINDERFS VETH OVERLAY_FS QCA_CLD_WLAN \
+           VT VT_CONSOLE CHECKPOINT_RESTORE BINFMT_MISC NF_TABLES NFT_COMPAT IP6_NF_NAT MACVLAN VLAN_8021Q; do
     grep -q "^CONFIG_$opt=y" out/.config || { echo "MERGE FAILED: CONFIG_$opt not set" >&2; exit 1; }
 done
+! grep -q "^CONFIG_FRAMEBUFFER_CONSOLE=y" out/.config || { echo "MERGE FAILED: fbcon enabled — would fight SF for the panel" >&2; exit 1; }
 echo "config OK: all DecemberOS options present"
 
 time $KMAKE -j"$JOBS" Image.gz-dtb
