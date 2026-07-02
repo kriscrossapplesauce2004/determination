@@ -22,7 +22,8 @@ fi
 rm -rf /data/decemberos/run
 mkdir -p /data/decemberos/run
 
-# Hidden AOSP desktop/freeform flags — prop flips are the cheapest framework
-# tweaks (spec §6); Zygisk hooks only where no flag exists.
-resetprop persist.wm.debug.desktop_mode_enforce_device_restrictions false
-resetprop sf.debug.show_refresh_rate_overlay 0
+# NO framework prop tweaks here. v0.1.0 set
+# persist.wm.debug.desktop_mode_enforce_device_restrictions, which crash-looped
+# SystemUI on crDroid 12.10/A16 badly enough to block the lockscreen (2026-07-02).
+# The spec-§6 desktop-mode flags need per-flag testing over adb (where they can
+# be reverted) before any of them ship in post-fs-data again.

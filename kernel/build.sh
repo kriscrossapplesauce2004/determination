@@ -35,7 +35,7 @@ $KMAKE olddefconfig
 
 # Verify the merge actually took — a silently-dropped option here costs a
 # flash-and-boot cycle to discover.
-for opt in NAMESPACES USER_NS PID_NS IPC_NS NET_NS CGROUP_DEVICE CGROUP_PIDS POSIX_MQUEUE ANDROID_BINDERFS VETH OVERLAY_FS; do
+for opt in NAMESPACES USER_NS PID_NS IPC_NS NET_NS CGROUP_DEVICE CGROUP_PIDS POSIX_MQUEUE ANDROID_BINDERFS VETH OVERLAY_FS QCA_CLD_WLAN; do
     grep -q "^CONFIG_$opt=y" out/.config || { echo "MERGE FAILED: CONFIG_$opt not set" >&2; exit 1; }
 done
 echo "config OK: all DecemberOS options present"
