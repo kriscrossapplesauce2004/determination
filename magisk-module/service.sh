@@ -23,6 +23,10 @@ grep -q pid /proc/self/ns/pid 2>/dev/null || [ -e /proc/self/ns/pid ] || echo "W
 # Guest networking: veth pair NAT'd through the phone's active connection is
 # set up by lxc from guest/lxc/config; here we just make sure forwarding is on.
 echo 1 > /proc/sys/net/ipv4/ip_forward
+# Kernel #3 adds IPv6 NAT (NF_NAT_IPV6/IP6_NF_TARGET_MASQUERADE) — turn on v6
+# forwarding too so the guest isn't v4-only on v6-only carrier networks.
+# Fails harmlessly (logged) on older DecemberOS kernels.
+echo 1 > /proc/sys/net/ipv6/conf/all/forwarding || echo "WARN: no v6 forwarding (pre-#3 kernel?)"
 
 # Start the (headless, no display acquisition) guest container so desktop-on
 # only has to do the display/input handoff, not a cold boot of Debian.
