@@ -36,10 +36,13 @@ order. Raw probe outputs live in `recon/report-*/` and `artifacts/`.
   transport. Root is `adb shell su -c ...` (Magisk). If su returns
   "Permission denied" silently, the Shell toggle in Magisk's Superuser tab is
   off — ask melissa to flip it (screen must be unlocked for grant prompts).
-- No cable also means: no fastboot, so nothing can be flashed yet, and a
-  boot-looping flash could not be rescued. Do not flash anything until a
-  cable exists. Flashing is otherwise low-risk: `fastboot boot` (RAM-boot)
-  first, A/B slot fallback, MSM/EDL as last resort.
+- No cable still means no fastboot — but there IS a cable-free install path
+  now: `usb-install/` builds Magisk "action zips" that `dd` the boot
+  partition from the phone itself (Magisk app → Modules → Install from
+  storage). `./dos publish` pushes `dist/usb-payload/` to an OTG USB drive.
+  The one unrecoverable-without-cable scenario is the new kernel
+  bootlooping (restore zip needs a booted phone); melissa accepted that
+  trade knowingly — see usb-install/README.md "honest risk paragraph".
 
 ## Build system
 

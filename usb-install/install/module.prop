@@ -1,0 +1,6 @@
+id=decemberos-kernel-install
+name=DecemberOS kernel installer (action zip)
+version=v0.1.0
+versionCode=1
+author=melissa
+description=Flashes the Magisk-patched DecemberOS boot image to the active boot slot. Does not install as a module.

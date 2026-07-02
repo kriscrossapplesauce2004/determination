@@ -30,6 +30,7 @@ Full rationale, topology decision, and risk register: see
 | `guest/` | Debian arm64 rootfs builder + LXC config (binder/kgsl/dmabuf `/dev`, `/vendor`, property area bind-mounts, libhybris) |
 | `toggle/` | §4 internal-panel handoff: SF stop + respawn suppression + compositor swap + input grab |
 | `tools/evgrab/` | small C daemon that holds `EVIOCGRAB` on evdev nodes during desktop mode |
+| `usb-install/` | cable-free install: Magisk action zips that flash/restore the kernel from a USB drive on the phone itself |
 | `zygisk/` | Zygisk/LSPosed module for `system_server` hooks (desktop-mode flags, summon UX) — milestone 6 |
 | `docs/` | design spec, bring-up notes |
 
@@ -56,6 +57,8 @@ Full rationale, topology decision, and risk register: see
 - [x] Kernel built (crDroid 16.0 tree + running config + fragment, 3m13s),
       `boot/decemberos-boot.img` repacked from the dumped boot_b and verified
 - [x] Module zip packaged with static aarch64 evgrab; `./dos` host helper
-- [ ] **Flash day** (needs USB cable) → `docs/flash-day.md`
+- [x] Cable-free install path: `usb-install/` action zips + `./dos publish`
+      (flash via Magisk app + `dd`; rescue from a *bootloop* still needs a cable)
+- [ ] **Flash day** → `usb-install/README.md` (phone-only) or `docs/flash-day.md` (fastboot)
 - [ ] Guest rootfs + libhybris smoke test on guacamoleb
 - [ ] Toggle stable across repeated cycles

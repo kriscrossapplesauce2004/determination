@@ -9,6 +9,8 @@
 #   dos status            connection, root, kernel, mode, guest state
 #   dos recon             run the §9 recon
 #   dos push-module       install/refresh the Magisk module zip on the phone
+#   dos publish           push dist/usb-payload/ to the phone's USB drive
+#                         (falls back to /sdcard/DecemberOS if no drive)
 
 set -eu
 cd "$(dirname "$0")"
@@ -55,6 +57,23 @@ push-module)
     adb push "$zipf" /data/local/tmp/decemberos.zip
     adb shell su -c 'magisk --install-module /data/local/tmp/decemberos.zip && rm /data/local/tmp/decemberos.zip'
     echo "installed — reboot the phone to activate" ;;
+publish)
+    ensure
+    [ -d dist/usb-payload ] || { echo "no payload — run usb-install/build-usb-payload.sh" >&2; exit 1; }
+    # A mounted OTG drive shows up under /mnt/media_rw/<VOLUME>. adb push can't
+    # write there (shell uid), so push to /data/local/tmp and su-copy over.
+    vol=$(adb shell su -c 'ls /mnt/media_rw/ 2>/dev/null' </dev/null | tr -d '\r' | head -n1)
+    adb push dist/usb-payload /data/local/tmp/usb-payload
+    if [ -n "$vol" ]; then
+        dest="/mnt/media_rw/$vol/DecemberOS"
+        adb shell su -c "rm -rf '$dest' && cp -r /data/local/tmp/usb-payload '$dest' && rm -rf /data/local/tmp/usb-payload && sync" </dev/null
+        echo "published to USB drive: $dest"
+    else
+        dest=/sdcard/DecemberOS
+        adb shell su -c "rm -rf $dest && cp -r /data/local/tmp/usb-payload $dest && rm -rf /data/local/tmp/usb-payload" </dev/null
+        echo "no USB drive mounted — published to $dest instead"
+    fi
+    echo "next: usb-install/README.md (patch decemberos-boot.img in Magisk, flash install zip)" ;;
 *)
     sed -n '5,11p' "$0"; exit 2 ;;
 esac
