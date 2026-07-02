@@ -1,0 +1,6 @@
+id=decemberos-kmods
+name=DecemberOS kernel modules (WLAN)
+version=v0.1.0
+versionCode=1
+author=melissa
+description=Vendor kernel modules rebuilt for the DecemberOS kernel (qca_cld3 WLAN). Auto-disables its overlay when the stock kernel is booted.
