@@ -59,6 +59,10 @@ Full rationale, topology decision, and risk register: see
 - [x] Module zip packaged with static aarch64 evgrab; `./dos` host helper
 - [x] Cable-free install path: `usb-install/` action zips + `./dos publish`
       (flash via Magisk app + `dd`; rescue from a *bootloop* still needs a cable)
-- [ ] **Flash day** → `usb-install/README.md` (phone-only) or `docs/flash-day.md` (fastboot)
+- [x] **FLASHED AND BOOTING** (2026-07-02, via the USB-drive path): kernel
+      `4.14.357-perf-g96adfa8256dc` live on device, PID/USER/IPC_NS confirmed.
+      WiFi initially dead (stock `qca_cld3_wlan.ko` vermagic mismatch) — fixed
+      by `magisk-module-wlan/` overlay rebuilt from the same tree. Full
+      hardware smoke test green. DecemberOS module installed. Milestone 1 done.
 - [ ] Guest rootfs + libhybris smoke test on guacamoleb
 - [ ] Toggle stable across repeated cycles

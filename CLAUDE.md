@@ -72,7 +72,18 @@ order. Raw probe outputs live in `recon/report-*/` and `artifacts/`.
 
 ## State / next steps
 
-Flash-day ready as of 2026-07-01 night (see docs/flash-day.md — the runbook):
+**MILESTONE 1 DONE (2026-07-02): the DecemberOS kernel is flashed and running
+on the phone** (`uname -r` = `4.14.357-perf-g96adfa8256dc`; PID/USER/IPC_NS
+= y confirmed via /proc/config.gz). Flashed cable-free via the `usb-install/`
+action zips. Gotcha found on device: `/vendor/lib/modules/qca_cld3_wlan.ko`
+(WiFi) is vermagic-locked to the stock kernel → WiFi died until
+`magisk-module-wlan/` (kmods overlay rebuilt from our tree; auto-skip_mounts
+on non-DecemberOS kernels) was installed. `/vendor/lib/modules` holds ONLY
+wlan + gspca_main — both covered. Any future kernel rebuild MUST also rebuild
+modules (`make ... modules`) and reship decemberos-kmods, or WiFi dies again.
+Hardware smoke test green; DecemberOS module v0.1.0 installed.
+
+Pre-flash-day context (2026-07-01, see docs/flash-day.md — the runbook):
 kernel built (3m13s on this box), `boot/decemberos-boot.img` repacked from the
 dumped boot_b (`artifacts/boot_b-crdroid-12.10.img` = the pristine restore
 image) and verified; module zip packaged with static aarch64 evgrab; `./dos`
