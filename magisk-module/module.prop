@@ -1,6 +1,6 @@
 id=decemberos
 name=DecemberOS
-version=v0.1.2
-versionCode=3
+version=v0.1.3
+versionCode=4
 author=melissa
 description=Android convergence layer: LXC glibc desktop guest with libhybris display acquisition. Requires the DecemberOS custom kernel.

@@ -28,6 +28,31 @@ until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
     sleep 0.5
 done
 
+# 3b. A restarted SF replays the boot animation and waits for a "boot
+# finished" signal that never comes on an already-booted system — the
+# animation loops over a healthy UI forever (melissa hit this 2026-07-03).
+# Tell it to exit ourselves; only when boot is genuinely complete, so a
+# real first boot is never cut short. SF sets service.bootanim.exit=0 as
+# it starts, so wait until bootanim is actually up before signalling.
+if [ "$(getprop sys.boot_completed)" = "1" ]; then
+    i=0
+    while [ $i -lt 20 ]; do
+        [ "$(getprop init.svc.bootanim)" = "running" ] && break
+        i=$((i+1)); sleep 0.5
+    done
+    if [ "$(getprop init.svc.bootanim)" = "running" ]; then
+        setprop service.bootanim.exit 1
+        setprop service.bootanim.progress 1
+        i=0
+        while [ "$(getprop init.svc.bootanim)" = "running" ] && [ $i -lt 10 ]; do
+            i=$((i+1)); sleep 0.5
+        done
+        # Belt and braces: if it ignored the property, stop it outright.
+        [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim && echo "bootanim would not exit — stopped it"
+        echo "boot animation cleared"
+    fi
+fi
+
 # 4. Release the input grab last, once Android UI is back to receive events.
 [ -f "$DOS/run/evgrab.pid" ] && kill "$(cat "$DOS/run/evgrab.pid")" 2>/dev/null
 rm -f "$DOS/run/evgrab.pid"
