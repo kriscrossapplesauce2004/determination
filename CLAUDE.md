@@ -107,5 +107,9 @@ Still missing before desktop-on can show anything (post-flash work):
 3. A wlroots compositor with the hwcomposer backend — stock Debian sway can
    NOT drive hwcomposer; Droidian's packages (or a hybris-wlroots build) are
    required. The libhybris `test_hwcomposer` smoke test gates everything.
-Until those land, desktop-on would stop SF and leave the panel dark with no
+Until those land, desktop-on stops SF and leaves the panel dark with no
 touch (recover via `./dos shell /data/decemberos/bin/desktop-off`).
+melissa verified the full toggle round trip on kernel #3 (2026-07-03
+19:05): desktop-on grabbed all 13 input devices and stopped SF, desktop-off
+restored phone mode cleanly — the Android-side half of §4 is proven; only
+the guest-side half (compositor takeover) remains untested.
