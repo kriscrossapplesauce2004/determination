@@ -1,8 +1,37 @@
-# DecemberOS — install from the phone itself (no PC, no cable)
+# DecemberOS — kernel install (action zips + host script)
 
-Everything in this folder happens **on the phone**, using the Magisk app and
-a USB drive (or just files in Download). No fastboot involved: Magisk root
-writes the boot partition directly, exactly like the app's own Direct Install.
+Three ways in, safest first:
+
+1. **Action zips on the phone** (no PC needed): Magisk app flashes the boot
+   partition directly, exactly like its own Direct Install. This file mostly
+   documents that path.
+2. **`host-flash.sh` over the USB cable**: same checks driven from the PC
+   (`check` / `flash` / `restore` / `verify`), with one extra safety layer —
+   the pre-flash backup is also pulled to the PC (`artifacts/backups/`).
+   Magisk-patching the image stays in the app; everything else is scripted.
+3. **fastboot** (cable, last resort): `fastboot flash boot
+   artifacts/boot_a-crdroid-12.11.img` recovers even a bootloop.
+
+## Checks and safe modes (v0.2.x zips)
+
+Before a single byte is written, the install zip verifies: boot-image magic,
+size fit, **the exact kernel build** (full version banner incl. build
+timestamp — a stale `magisk_patched` from an older build is rejected on the
+spot), **that the ramdisk is Magisk-patched** (flashing an unpatched image
+would boot but silently remove root — and root is the only way back),
+battery ≥ 15%, free space for the backup, and the backup itself is
+sha256-verified against the partition. After writing it verifies the
+readback; if the partition already holds the exact image it stops as a
+no-op. It scans all `magisk_patched-*.img` newest-first and takes the first
+one that passes, printing why others were rejected.
+
+**Dry run**: `touch /sdcard/Download/decemberos-dryrun`, then flash either
+zip — every check runs, a verified backup is taken, nothing is written to
+the partition. Delete the flag file to arm the real flash. (`host-flash.sh
+check` is the same idea from the PC.)
+
+The restore zip additionally backs up the current (DecemberOS) boot before
+restoring, so the restore is itself undoable.
 
 ## What's on the drive (`dist/usb-payload/`)
 

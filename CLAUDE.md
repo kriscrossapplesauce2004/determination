@@ -41,6 +41,9 @@ order. Raw probe outputs live in `recon/report-*/` and `artifacts/`.
   boot partition from the phone itself (Magisk app → Modules → Install from
   storage). Payload can go to an OTG drive (`./dos publish`) or straight to
   `/sdcard/Download` via adb push — the Magisk app can install from either.
+  Cable alternative: `usb-install/host-flash.sh check|flash|restore|verify`
+  drives the same flow over adb with a host-side backup copy; dry-run safe
+  mode for the zips = `touch /sdcard/Download/decemberos-dryrun`.
 
 ## Build system
 

@@ -8,3 +8,4 @@ recon/report-*/
 toolchain/
 decemberos-magisk-*.zip
 dist/
+artifacts/backups/

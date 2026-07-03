@@ -43,18 +43,34 @@ EOF
 
 rm -rf "$PAYLOAD"
 mkdir -p "$PAYLOAD"
+WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 
 # --- install zip: scripts only, tiny -----------------------------------
-mkzip "$PAYLOAD/decemberos-kernel-install.zip" install
-echo "built decemberos-kernel-install.zip"
+# Bake the FULL version banner of the kernel inside decemberos-boot.img
+# into the install zip — its identity check then pins this exact build
+# (including build timestamp), so a stale magisk_patched image from an
+# older build is rejected on the phone instead of discovered at boot.
+export PATH="$REPO/toolchain/usr/bin:$PATH"
+command -v magiskboot >/dev/null || { echo "magiskboot not found (toolchain/usr/bin)" >&2; exit 1; }
+mkdir -p "$WORK/unpack"
+(cd "$WORK/unpack" && magiskboot unpack "$BOOTIMG" >/dev/null 2>&1)
+BANNER=$(strings "$WORK/unpack/kernel" | grep -m1 '^Linux version ')
+[ -n "$BANNER" ] || { echo "could not extract kernel banner from $BOOTIMG" >&2; exit 1; }
+case "$BANNER" in *[\|\&]*) echo "banner contains sed-unsafe chars: $BANNER" >&2; exit 1 ;; esac
+
+mkdir -p "$WORK/install"
+sed "s|@BANNER@|$BANNER|" install/customize.sh > "$WORK/install/customize.sh"
+cp install/module.prop "$WORK/install/"
+mkzip "$PAYLOAD/decemberos-kernel-install.zip" "$WORK/install"
+echo "built decemberos-kernel-install.zip (pins: $BANNER)"
 
 # --- restore zip: embeds the pristine boot image, checksum baked in ----
 SHA=$(sha256sum "$PRISTINE" | cut -d' ' -f1)
 SIZE=$(stat -c%s "$PRISTINE")
-WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
-sed -e "s/@SHA256@/$SHA/" -e "s/@SIZE@/$SIZE/" -e "s/@SLOT@/$SLOT/" restore/customize.sh > "$WORK/customize.sh"
-cp restore/module.prop "$WORK/"
-mkzip "$PAYLOAD/decemberos-kernel-restore.zip" "$WORK" "boot.img=$PRISTINE"
+mkdir -p "$WORK/restore"
+sed -e "s/@SHA256@/$SHA/" -e "s/@SIZE@/$SIZE/" -e "s/@SLOT@/$SLOT/" restore/customize.sh > "$WORK/restore/customize.sh"
+cp restore/module.prop "$WORK/restore/"
+mkzip "$PAYLOAD/decemberos-kernel-restore.zip" "$WORK/restore" "boot.img=$PRISTINE"
 echo "built decemberos-kernel-restore.zip (embeds pristine boot$SLOT ${PRISTINE##*/}, sha256 $SHA)"
 
 # --- the rest of the drive ---------------------------------------------
