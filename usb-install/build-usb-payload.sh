@@ -11,12 +11,20 @@ DIST="$REPO/dist"
 PAYLOAD="$DIST/usb-payload"
 
 BOOTIMG="$REPO/boot/decemberos-boot.img"
-PRISTINE="$REPO/artifacts/boot_b-crdroid-12.10.img"
-MODZIP=$(ls "$REPO"/magisk-module/decemberos-magisk-v*.zip 2>/dev/null | head -n1)
+# Pristine dump of the boot slot the phone is currently on (override via env
+# after an OTA moves slots/versions). Slot is derived from the filename and
+# baked into the restore zip's slot guard.
+PRISTINE="${PRISTINE:-$REPO/artifacts/boot_a-crdroid-12.11.img}"
+MODZIP=$(ls "$REPO"/magisk-module/decemberos-magisk-v*.zip 2>/dev/null | sort -V | tail -n1)
 
 [ -f "$BOOTIMG" ] || { echo "missing $BOOTIMG — run boot/repack.sh" >&2; exit 1; }
-[ -f "$PRISTINE" ] || { echo "missing pristine boot_b dump in artifacts/" >&2; exit 1; }
+[ -f "$PRISTINE" ] || { echo "missing pristine boot dump $PRISTINE" >&2; exit 1; }
 [ -n "$MODZIP" ] || { echo "missing module zip — run magisk-module/build-module.sh" >&2; exit 1; }
+case "${PRISTINE##*/}" in
+    boot_a-*) SLOT=_a ;;
+    boot_b-*) SLOT=_b ;;
+    *) echo "cannot derive slot from pristine filename ${PRISTINE##*/} (want boot_a-*/boot_b-*)" >&2; exit 1 ;;
+esac
 
 mkzip() { # mkzip <outzip> <dir-with-files> [extra: name=path ...]
     python3 - "$@" <<'EOF'
@@ -40,14 +48,14 @@ mkdir -p "$PAYLOAD"
 mkzip "$PAYLOAD/decemberos-kernel-install.zip" install
 echo "built decemberos-kernel-install.zip"
 
-# --- restore zip: embeds the pristine boot_b, checksum baked in --------
+# --- restore zip: embeds the pristine boot image, checksum baked in ----
 SHA=$(sha256sum "$PRISTINE" | cut -d' ' -f1)
 SIZE=$(stat -c%s "$PRISTINE")
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
-sed -e "s/@SHA256@/$SHA/" -e "s/@SIZE@/$SIZE/" restore/customize.sh > "$WORK/customize.sh"
+sed -e "s/@SHA256@/$SHA/" -e "s/@SIZE@/$SIZE/" -e "s/@SLOT@/$SLOT/" restore/customize.sh > "$WORK/customize.sh"
 cp restore/module.prop "$WORK/"
 mkzip "$PAYLOAD/decemberos-kernel-restore.zip" "$WORK" "boot.img=$PRISTINE"
-echo "built decemberos-kernel-restore.zip (embeds pristine boot_b, sha256 $SHA)"
+echo "built decemberos-kernel-restore.zip (embeds pristine boot$SLOT ${PRISTINE##*/}, sha256 $SHA)"
 
 # --- the rest of the drive ---------------------------------------------
 cp "$BOOTIMG" "$PAYLOAD/decemberos-boot.img"
