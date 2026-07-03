@@ -73,16 +73,19 @@ order. Raw probe outputs live in `recon/report-*/` and `artifacts/`.
 
 ## State / next steps
 
-**2026-07-03: the crDroid 12.11 OTA undid milestone 1 — kernel #3 rebuilt
-and staged for reinstall.** The OTA switched to slot `_a`, replaced our boot
-image with stock (`4.14.357-openela-perf-g6ecfabed032b`), and the re-root
-wiped all Magisk modules. Rebuilt from a clean `kernel/out` against the new
-running config (`artifacts/kernel-config-full-12.11.txt`, verified identical
-to the device's /proc/config.gz); new pristine dump
-`artifacts/boot_a-crdroid-12.11.img`; restore zip slot guard is now baked at
-build time (was hardcoded `_b`). Full payload pushed to the phone's
-`/sdcard/Download` and sha256-verified there. Awaiting melissa's 3-step
-Magisk install (patch → flash zip → reboot, then module v0.1.2).
+**2026-07-03 evening: MILESTONE 1 RESTORED — kernel #3 is flashed and
+running on crDroid 12.11.** `/proc/version` = `4.14.357-perf-g96adfa8256dc
+(melissa@terra) … Fri Jul 3 18:32:22 BST 2026`; `host-flash.sh verify`
+green (all DecemberOS options incl. VT/nftables/CRIU/binfmt_misc/macvlan);
+WiFi green on the BUILT-IN driver (5 GHz 11ac, no kmods overlay); module
+v0.1.2 installed, IPv6 forwarding on. Backups of the pre-flash boot:
+`/sdcard/Download/boot_a-before-decemberos-20260703-185113.img` (on phone),
+`artifacts/backups/` (host, gitignored), `artifacts/boot_a-crdroid-12.11.img`
+(committed pristine — all three sha-identical), plus the restore zip embeds
+it. Earlier that day: the 12.11 OTA had switched to slot `_a`, replaced
+kernel #1 with stock, and wiped all Magisk modules; kernel #3 was rebuilt
+from a clean `kernel/out` against the new running config
+(`artifacts/kernel-config-full-12.11.txt`).
 
 Kernel #3 has QCA_CLD_WLAN/GSPCA **built in** (=y) — the kmods overlay
 (`magisk-module-wlan/`, keyed to kernel #1's exact uname) is obsolete; do

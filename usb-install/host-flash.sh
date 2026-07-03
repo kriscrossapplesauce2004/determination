@@ -55,7 +55,8 @@ echo "device: slot ${slot:-none}, target $part ($partsize bytes)"
 
 # ---------- verify (post-reboot sanity) ------------------------------------
 if [ "$cmd" = verify ]; then
-    un=$("$ADB" shell uname -a)
+    # /proc/version, not uname -a: toybox uname omits the (builder@host) field
+    un=$("$ADB" shell cat /proc/version)
     echo "$un"
     echo "$un" | grep -q "$MARKER" || die "running kernel is NOT the DecemberOS build"
     bad=0
