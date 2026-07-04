@@ -132,47 +132,50 @@ wall.** Progress since the flash:
    the Jan/2025 staging key. Whole hybris stack pinned to the **z4** build
    (`*+z4+*`, May 2025) because it's the newest that installs on trixie.
 
-**THE WALL (spec §3 gate not passed):** `getprop`/`test_hwcomposer` SIGSEGV
-the instant bionic code runs (test_dlopen is fine because it never executes
-bionic). gdb: crash at `ldr x8,[x8,#2080]` inside `libc.so` with x8 garbage,
-x0=-1 — bionic reading a thread-local slot the libhybris **q** linker
-(newest it ships, ~API-29) never set up. Ruled out: version split (whole
-stack forced to z4, still crashes), SDK override (29/30/34, no change),
-missing `/linkerconfig/ld.config.txt` (generated it via the apex
-`linkerconfig` binary — 258 KB, still crashes identically). Root cause is a
-**TLS/thread-structure layout mismatch: this crDroid base is Android 16 /
-API 36 bionic, newer than Droidian's libhybris targets.**
+**THE TLS WALL — CLEARED 2026-07-04 by building upstream libhybris.**
+History: Droidian's z4 libhybris SIGSEGV'd the instant bionic ran (gdb:
+`ldr x8,[x8,#2080]` inside `libc.so`, x8 garbage — bionic reading a private
+TLS slot the libhybris `q` linker never set up; the documented
+`tpidr_el0`-offset conflict, `droidian/libhybris@99bb609`). Ruled out:
+version split, SDK override, missing linkerconfig, and the experimental
+`HYBRIS_TLS_PATCH=1` patcher (present in z4, too immature). Root cause was
+Droidian's fork being stale — **its last upstream merge was Aug 2024**, and
+droidian1 (Dec 2025) is only a header rebuild; both predate Android 15/16
+support. **Path B (newer glibc → droidian1) is DEAD** (same code). Distro
+swap (Arch/Alpine) doesn't bypass a libhybris-*source* problem; Alpine=musl
+is worse. See `guest/build-libhybris.sh` for the full rationale.
 
-**Forward path (recon done 2026-07-04, decision pending):** The wall is a
-libhybris *source-version* problem, NOT glibc/distro.
-- The crash is the documented "private bionic TLS slot" conflict
-  (`droidian/libhybris@99bb609`, "experimental TLS access patcher for
-  aarch64"): GLES/HAL drivers access bionic TLS at fixed `tpidr_el0` offsets,
-  inlined so unhookable; glibc has no notion of that reserved area. The
-  patcher (enable with **`HYBRIS_TLS_PATCH=1`**, NOT `HYBRIS_PATCH_TLS`) is
-  present in our z4 build but too immature — getprop still SIGSEGVs with it
-  on, no patcher debug output.
-- **Path B is DEAD:** droidian1 (Dec 2025) is a header-only rebuild; the
-  Droidian fork's last upstream merge was **Aug 2024**. Its debs at ANY glibc
-  predate Android 15/16 support. Rebuilding on sid/forky (glibc 2.42, avail)
-  to install droidian1 would ship identical TLS code — no help.
-- **Best path — build UPSTREAM libhybris from source.** `libhybris/libhybris`
-  master added real A16 support: PR #609 "Add support for Android 15 and 16"
-  (merged 2026-03-25), HWC3/AIDL composer (#578), `get_application_target_sdk_
-  version` fix, linker path-order fix for Android≥7, and a glibc-2.43 build
-  fix. All post-date and are absent from Droidian's fork. This builds on the
-  EXISTING trixie rootfs (glibc 2.41 fine; source build, no distro swap, no
-  rootfs rebuild). Open q: satisfying Droidian's phoc/wlroots debs against a
-  self-built libhybris (dpkg-provides/equivs, or build matching .debs).
-- **Distro swap (Arch ARM / Alpine) — side research, noted, NOT recommended
-  for the wall.** The wall is libhybris source, so no distro bypasses it.
-  Alpine = **musl**, which contradicts the patcher's whole glibc premise —
-  strictly worse. Arch ARM = rolling **glibc 2.43** (fine) but loses every
-  Droidian prebuilt (phoc, wlroots, adaptation configs) and still needs an
-  upstream-libhybris source build — no advantage over doing that on Debian.
+**Fix that worked — `guest/build-libhybris.sh`:** built `libhybris/libhybris`
+master (has PR #609 "Android 15 and 16", hwc2 A16, sdk-version fix, linker
+path-order fix) natively in the guest against trixie glibc 2.41. No distro
+swap, no rootfs rebuild. Gotchas encoded in the script: `TMPDIR=/tmp` (Android
+leaks `/data/local/tmp`), `--enable-arch=arm64` (default is 32-bit arm →
+`/system/lib` not lib64), android-headers-30 (provides pkg-config module +
+`hwcomposer2.h`; A16 support is runtime not header), `test_audio` build
+failure is the last subdir and harmless. Installs glibc-side libs +
+q/mm/n/o linkers to `/usr/local`. Run hybris progs with
+`LD_LIBRARY_PATH=/usr/local/lib`,
+`HYBRIS_LD_LIBRARY_PATH=/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic`,
+`EGL_PLATFORM=hwcomposer`. **Proof:** this upstream `test_hwcomposer` prints
+`Android SDK version 36`, loads the linker, and runs past the old crash —
+the TLS wall is gone.
 
-Until libhybris renders, desktop-on stops SF and leaves the panel dark
-(recover via `./dos shell /data/decemberos/bin/desktop-off`).
+**NEW BLOCKER (the real §3 remaining work): the HWC2 adaptation layer.**
+`test_hwcomposer` now stops at `library "libhwc2_compat_layer.so" not found`.
+`libhwc2.so` (from `hwc2/hwc2.c`) is only a glibc *wrapper* —
+`HYBRIS_LIBRARY_INITIALIZE` makes it `android_dlopen` a separate
+**bionic-compiled** `libhwc2_compat_layer.so` that holds the real HWC2 HAL
+implementation. That lib is built from the libhybris repo's **`compat/hwc2/`
+via `Android.mk` (bionic toolchain)** — it is the per-device *adaptation*
+Droidian ships in `adaptation-<device>`/`libdroid-hal`, and nobody has
+ported `guacamoleb`. `compat/hwc2/` has `HidlComposerHal.cpp` (matches our
+composer@2.1-2.4) and `AidlComposerHal.cpp`. Do NOT symlink it to
+`libhwc2.so` (that's the wrapper — recursion). Building it is an Android-side
+build (NDK cross-compile against the composer HIDL libs/headers, or a
+halium/droid-hal tree) — the next decision.
+
+Until the compat layer + a compositor land, desktop-on stops SF and leaves
+the panel dark (recover via `./dos shell /data/decemberos/bin/desktop-off`).
 
 Android-side of §4 stays proven (2026-07-03 19:05 toggle round trip: 13
 input devices grabbed, SF stopped, clean restore). Only the guest-side
