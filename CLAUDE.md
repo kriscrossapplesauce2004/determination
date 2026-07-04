@@ -143,15 +143,36 @@ missing `/linkerconfig/ld.config.txt` (generated it via the apex
 **TLS/thread-structure layout mismatch: this crDroid base is Android 16 /
 API 36 bionic, newer than Droidian's libhybris targets.**
 
-**Forward path (decision pending):** Droidian's newer **droidian1** libhybris
-(Dec 2025) pins `libc6 (>>2.42,<<2.43)` — it needs glibc **2.42**; trixie
-ships 2.41, which is why apt forced us onto the older z4. Droidian staging
-has moved ahead of trixie's glibc. Most promising next step is to rebuild
-the guest rootfs on **forky/sid** (glibc 2.42) and install the droidian1
-libhybris, which *may* carry the newer-bionic TLS fix — unverified. Fallback
-is patching libhybris' q linker for API-36 thread layout (real upstream C
-work). Until libhybris renders, desktop-on stops SF and leaves the panel
-dark (recover via `./dos shell /data/decemberos/bin/desktop-off`).
+**Forward path (recon done 2026-07-04, decision pending):** The wall is a
+libhybris *source-version* problem, NOT glibc/distro.
+- The crash is the documented "private bionic TLS slot" conflict
+  (`droidian/libhybris@99bb609`, "experimental TLS access patcher for
+  aarch64"): GLES/HAL drivers access bionic TLS at fixed `tpidr_el0` offsets,
+  inlined so unhookable; glibc has no notion of that reserved area. The
+  patcher (enable with **`HYBRIS_TLS_PATCH=1`**, NOT `HYBRIS_PATCH_TLS`) is
+  present in our z4 build but too immature — getprop still SIGSEGVs with it
+  on, no patcher debug output.
+- **Path B is DEAD:** droidian1 (Dec 2025) is a header-only rebuild; the
+  Droidian fork's last upstream merge was **Aug 2024**. Its debs at ANY glibc
+  predate Android 15/16 support. Rebuilding on sid/forky (glibc 2.42, avail)
+  to install droidian1 would ship identical TLS code — no help.
+- **Best path — build UPSTREAM libhybris from source.** `libhybris/libhybris`
+  master added real A16 support: PR #609 "Add support for Android 15 and 16"
+  (merged 2026-03-25), HWC3/AIDL composer (#578), `get_application_target_sdk_
+  version` fix, linker path-order fix for Android≥7, and a glibc-2.43 build
+  fix. All post-date and are absent from Droidian's fork. This builds on the
+  EXISTING trixie rootfs (glibc 2.41 fine; source build, no distro swap, no
+  rootfs rebuild). Open q: satisfying Droidian's phoc/wlroots debs against a
+  self-built libhybris (dpkg-provides/equivs, or build matching .debs).
+- **Distro swap (Arch ARM / Alpine) — side research, noted, NOT recommended
+  for the wall.** The wall is libhybris source, so no distro bypasses it.
+  Alpine = **musl**, which contradicts the patcher's whole glibc premise —
+  strictly worse. Arch ARM = rolling **glibc 2.43** (fine) but loses every
+  Droidian prebuilt (phoc, wlroots, adaptation configs) and still needs an
+  upstream-libhybris source build — no advantage over doing that on Debian.
+
+Until libhybris renders, desktop-on stops SF and leaves the panel dark
+(recover via `./dos shell /data/decemberos/bin/desktop-off`).
 
 Android-side of §4 stays proven (2026-07-03 19:05 toggle round trip: 13
 input devices grabbed, SF stopped, clean restore). Only the guest-side
