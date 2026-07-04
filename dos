@@ -42,12 +42,15 @@ shell)
 status)
     ensure
     echo "connected: $(adb devices | awk 'NR==2{print $1}')"
-    adb shell su -c 'echo "root: ok ($(id -u))";
-        echo "kernel: $(uname -r)";
-        [ -e /proc/self/ns/pid ] && echo "pid-ns: YES (DecemberOS kernel)" || echo "pid-ns: no (stock kernel)";
-        echo "sf: $(getprop init.svc.surfaceflinger)";
-        [ -f /data/decemberos/run/desktop-mode ] && echo "mode: desktop" || echo "mode: phone";
-        [ -x /data/decemberos/bin/desktop-on ] && echo "module: installed" || echo "module: not installed"' ;;
+    adb shell su <<'EOF'
+        echo "root: ok (`id -u`)"
+        echo "kernel: `uname -r`"
+        [ -e /proc/self/ns/pid ] && echo "pid-ns: YES (DecemberOS kernel)" || echo "pid-ns: no (stock kernel)"
+        echo "sf: `getprop init.svc.surfaceflinger`"
+        [ -f /data/decemberos/run/desktop-mode ] && echo "mode: desktop" || echo "mode: phone"
+        [ -x /data/decemberos/bin/desktop-on ] && echo "module: installed" || echo "module: not installed"
+EOF
+    ;;
 recon)
     ensure && ./recon/recon.sh ;;
 push-module)

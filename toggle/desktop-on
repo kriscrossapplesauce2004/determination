@@ -50,8 +50,34 @@ done
 # its *client*). Give the HAL a beat to drop the client state.
 sleep 1
 
-# 5. Guest compositor binds hwcomposer and drives the panel.
-lxc-attach -P "$DOS" -n guest -- machinectl shell melissa@ /usr/bin/sway \
-    || lxc-attach -P "$DOS" -n guest -- su -l melissa -c 'sway' &
+# 4b. Stopping SF zeroes the panel backlight (found 2026-07-04: guest renders
+# were reaching scanout but the light was off — the panel wasn't "dark", it
+# was unlit). Force it back on; desktop-off restores Android's own control.
+echo 600 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
+
+# 5. TEMP render test (2026-07-04, delete this block when the compositor
+#    lands and uncomment the sway step below). test_hwcomposer draws a
+#    color-cycling gradient via the hwc2 compat layer — proves the §3 chain
+#    on demand. Stopping SF zeroes the panel backlight (why every render
+#    looked "blank"), so a keeper loop holds it up while desktop-mode is
+#    set; it self-terminates on desktop-off and SF restores brightness.
+BL=/sys/class/backlight/panel0-backlight/brightness
+(
+    while [ -f "$DOS/run/desktop-mode" ]; do
+        echo 600 > "$BL" 2>/dev/null
+        sleep 2
+    done
+) &
+"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
+    export LD_LIBRARY_PATH=/usr/local/lib
+    export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
+    export EGL_PLATFORM=hwcomposer HYBRIS_EGLPLATFORM=hwcomposer ANDROID_ROOT=/system TMPDIR=/tmp
+    exec /root/build/libhybris/hybris/tests/.libs/test_hwcomposer
+' >/dev/null 2>&1 &
 echo $! > "$DOS/run/compositor.pid"
-echo "desktop mode up"
+echo "desktop mode up (TEMP render test)"
+# TEMP end — real compositor step, disabled meanwhile:
+# lxc-attach -P "$DOS" -n guest -- machinectl shell melissa@ /usr/bin/sway \
+#     || lxc-attach -P "$DOS" -n guest -- su -l melissa -c 'sway' &
+# echo $! > "$DOS/run/compositor.pid"
+# echo "desktop mode up"

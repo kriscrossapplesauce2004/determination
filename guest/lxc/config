@@ -45,6 +45,14 @@ lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,create=dir
 # instance in its own IPC namespace — private contexts, no fight with Android
 # over /dev/binder. Requires CONFIG_IPC_NS from the custom kernel.
 lxc.mount.entry = binder dev/binderfs binder nosuid,noexec,nodev,optional 0 0
+# HOST binder nodes: talking to Android's HALs (composer/allocator over
+# hwbinder, vndbinder services) requires the host's binder contexts, which
+# the private binderfs instance above cannot provide. Must be bind mounts —
+# mknod replicas of binderfs nodes open with ENXIO (found 2026-07-04: nodes
+# are backed by the binderfs superblock instance, not the global chrdev map).
+lxc.mount.entry = /dev/binderfs/binder dev/binder none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/binderfs/hwbinder dev/hwbinder none bind,create=file,optional 0 0
+lxc.mount.entry = /dev/binderfs/vndbinder dev/vndbinder none bind,create=file,optional 0 0
 # GPU + allocator:
 lxc.mount.entry = /dev/kgsl-3d0 dev/kgsl-3d0 none bind,create=file,optional 0 0
 lxc.mount.entry = /dev/ion dev/ion none bind,create=file,optional 0 0

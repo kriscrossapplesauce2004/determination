@@ -233,6 +233,10 @@ EOF
         "$SRCDIR/ComposerHal.cpp"
         "$SRCDIR/hwc2_compatibility_layer.cpp"
         aosp/hi_common/support/NativeHandle.cpp
+        # HdrMetadata::operator== is the single symbol we'd otherwise import
+        # from libgui.so, whose own dep chain (libpermission/PermissionCache)
+        # doesn't resolve under the hybris linker. Compile it in instead.
+        aosp/frameworks_native/libs/gui/HdrMetadata.cpp
     )
     local s o objs=() pids=()
     for s in "${srcs[@]}"; do
@@ -245,7 +249,7 @@ EOF
     for p in "${pids[@]:-}"; do [ -n "$p" ] && wait "$p"; done
     # Link against the device's own libs; -nostdlib++ + device libc++ keeps
     # DT_NEEDED = libc++.so (the platform one), not NDK's libc++_shared.
-    $CLANGXX -shared -Wl,-soname,libhwc2_compat_layer.so -Wl,--no-undefined -Wl,--allow-multiple-definition \
+    $CLANGXX -shared -Wl,-soname,libhwc2_compat_layer.so -Wl,--no-undefined -Wl,--allow-multiple-definition -Wl,--as-needed \
         -nostdlib++ -o out/libhwc2_compat_layer.so "${objs[@]}" \
         device-libs/*.so
     echo "OK: out/libhwc2_compat_layer.so"
@@ -298,9 +302,9 @@ install() {
     # Into the guest rootfs (visible to the hybris linker via
     # HYBRIS_LD_LIBRARY_PATH, see guest/setup-guest.sh).
     "$ADB" push out/libhwc2_compat_layer.so /sdcard/Download/ >/dev/null
-    "$ADB" shell "su -c 'mkdir -p /data/decemberos/rootfs/usr/lib/android && \
-        cp /sdcard/Download/libhwc2_compat_layer.so /data/decemberos/rootfs/usr/lib/android/ && \
-        chmod 644 /data/decemberos/rootfs/usr/lib/android/libhwc2_compat_layer.so'"
+    "$ADB" shell "su -c 'mkdir -p /data/decemberos/guest/usr/lib/android && \
+        cp /sdcard/Download/libhwc2_compat_layer.so /data/decemberos/guest/usr/lib/android/ && \
+        chmod 644 /data/decemberos/guest/usr/lib/android/libhwc2_compat_layer.so'"
     echo "Installed to guest rootfs /usr/lib/android/."
     echo "Ensure HYBRIS_LD_LIBRARY_PATH includes /usr/lib/android in the guest."
 }

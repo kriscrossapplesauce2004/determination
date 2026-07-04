@@ -27,7 +27,7 @@ cat > "$G/etc/profile.d/hybris.sh" <<'EOF'
 export EGL_PLATFORM=hwcomposer
 export HYBRIS_EGLPLATFORM=hwcomposer
 export ANDROID_ROOT=/system
-export HYBRIS_LD_LIBRARY_PATH=/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
+export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
 EOF
 
 # /product and /system_ext are symlinks into /system on Android; recreate

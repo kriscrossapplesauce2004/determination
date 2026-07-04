@@ -160,26 +160,49 @@ q/mm/n/o linkers to `/usr/local`. Run hybris progs with
 `Android SDK version 36`, loads the linker, and runs past the old crash —
 the TLS wall is gone.
 
-**NEW BLOCKER (the real §3 remaining work): the HWC2 adaptation layer.**
-`test_hwcomposer` now stops at `library "libhwc2_compat_layer.so" not found`.
-`libhwc2.so` (from `hwc2/hwc2.c`) is only a glibc *wrapper* —
-`HYBRIS_LIBRARY_INITIALIZE` makes it `android_dlopen` a separate
-**bionic-compiled** `libhwc2_compat_layer.so` that holds the real HWC2 HAL
-implementation. That lib is built from the libhybris repo's **`compat/hwc2/`
-via `Android.mk` (bionic toolchain)** — it is the per-device *adaptation*
-Droidian ships in `adaptation-<device>`/`libdroid-hal`, and nobody has
-ported `guacamoleb`. `compat/hwc2/` has `HidlComposerHal.cpp` (matches our
-composer@2.1-2.4) and `AidlComposerHal.cpp`. Do NOT symlink it to
-`libhwc2.so` (that's the wrapper — recursion). Building it is an Android-side
-build (NDK cross-compile against the composer HIDL libs/headers, or a
-halium/droid-hal tree) — the next decision.
+**2026-07-04 evening: §3 GATE PASSED — the guest renders on the panel.**
+`test_hwcomposer` inside the container: composer@2.4 client bound over the
+HOST's hwbinder, display 1080x2340, **GLES 3.2 on Adreno 640 in the guest**,
+~99.9% GPU busy with SF stopped, clean exit + SF restore. Evidence:
+`artifacts/guest-hwc2-gate-20260704.txt`; repro `guest/hwc-smoke.sh`
+(adb-su runner, always restores SF). The three fixes:
+1. `libhwc2_compat_layer.so` — standalone A16 NDK cross-build against
+   pulled device libs, `hwc2-compat/build.sh` (951141a + follow-ups: strip
+   libgui via compiled-in HdrMetadata.cpp + `--as-needed`; installs to
+   guest `/usr/lib/android/`). No Halium/ROM tree needed.
+2. libhybris hooks gap: bionic-only `__ctype_get_mb_cur_max` reads bionic
+   TLS `tp[-1]` (absent on glibc threads) → SIGSEGV in vendor libc++'s
+   `locale::classic()` during android_dlopen of the compat layer. hooks_mm
+   hooks the locale.h family but missed it. Hook it + the `*_l` family
+   (hooked newlocale hands out GLIBC locale_t — bionic `*_l` consumers must
+   never see one) + mb/wc conversions. Patch embedded in
+   `guest/build-libhybris.sh` (upstream-able); rebuild = `make -C
+   /root/build/libhybris/hybris/common install` in-guest.
+3. Binder: guest had none (private-binderfs entry silently never mounted).
+   mknod replicas of binderfs nodes open with **ENXIO** — nodes are backed
+   by the binderfs superblock, so BIND-MOUNT host
+   `/dev/binderfs/{binder,hwbinder,vndbinder}` (in `guest/lxc/config` now;
+   needs container restart via guest-start).
+Backlight gotcha (solved the eternal "dark panel"): stopping SF ZEROES
+`/sys/class/backlight/panel0-backlight/brightness` — guest frames reached
+scanout unlit. desktop-on step 4b + a keeper loop force 600 while in
+desktop mode; desktop-on currently runs test_hwcomposer as a TEMP stand-in
+compositor (block marked TEMP, swap back to sway when it lands).
+Known flake: composer-client creation right after SF stop can race SF's
+client teardown ("failed to create composer client", rc 134) — retry.
+Non-blockers: `libui_compat_layer.so` not found (gralloc falls back; could
+cross-build like hwc2 later); guest property_set fails (no property
+service socket).
 
-Until the compat layer + a compositor land, desktop-on stops SF and leaves
-the panel dark (recover via `./dos shell /data/decemberos/bin/desktop-off`).
+adb/su/lxc quoting (this, NOT SELinux, caused every mystery denial):
+`adb shell "su -c '<cmds>'"` — whole chain in ONE quoted arg, or only the
+first command runs as root. File drop into guest: adb push to
+/sdcard/Download → su cp over an EXISTING guest-rootfs file → lxc-attach
+`/bin/cp` to final name (direct exec, no inner shell).
 
-Android-side of §4 stays proven (2026-07-03 19:05 toggle round trip: 13
-input devices grabbed, SF stopped, clean restore). Only the guest-side
-(compositor takeover) is blocked, now specifically on libhybris.
+NEXT (§3 finish): a real compositor in the guest — sway/wlroots or phoc
+against hybris-EGL `hwcomposer` platform — then §4 guest-side handoff.
+Android-side of §4 stays proven (2026-07-03 toggle round trip).
 
 NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,
 libtls-padding0) and the runtime mounts/iptables/ip-rules do NOT persist a

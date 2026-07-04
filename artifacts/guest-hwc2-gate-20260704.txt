@@ -1,0 +1,73 @@
+§3 GATE — test_hwcomposer renders from inside the Debian guest (2026-07-04)
+===========================================================================
+
+Result: PASS. Chain: guest glibc → upstream libhybris (patched hooks) →
+libhwc2_compat_layer.so (hwc2-compat/build.sh, standalone A16 cross-build)
+→ host /dev/binderfs/hwbinder → composer@2.4 HIDL (SDM) → panel.
+GLES 3.2 on Adreno 640 initialized inside the container.
+
+Final run (30 s window, natural exit):
+    GUEST-TEST-RC=0
+    libc: Unable to set property "service.sf.present_timestamp" ... (benign)
+    width: 1080 height: 2340
+    library "libui_compat_layer.so" not found        (benign; gralloc falls back)
+    library "libadreno_app_profiles.so" not found    (benign vendor probe)
+    OpenGL ES 3.2 V@0502.0 (GIT@2f950bf, I802c3b73eb, 1623716683) (Date:06/14/21)
+    stop
+    SF: running bootanim: stopped                    (auto-restore OK)
+
+GPU proof (sampled mid-run, SurfaceFlinger stopped -> only the guest draws):
+    /sys/class/kgsl/kgsl-3d0/gpubusy ≈ 1005206/1005835 etc. — ~99.9% busy
+    in every sample across three runs.
+
+SDM logcat during the run window (pid 1205 = composer@2.4-service):
+    19:10:11.22 RegisterCallback: Registering callback: Refresh / Vsync2.4 /
+                VsyncPeriodTimingChanged / SeamlessPossible   <- guest client
+    19:10:11.22 DisplayBase::SetDisplayState: Set state = 1, display 28-0
+    ... 12 s silence (render loop) ...
+    19:10:23.14 Deregistering callbacks; SF reconnects cleanly.
+
+Two blockers found and fixed this session
+-----------------------------------------
+1) libhybris hooks gap — __ctype_get_mb_cur_max (bionic-only export; bionic's
+   MB_CUR_MAX). Crash signature: SIGSEGV in bionic libc.so file offset
+   0x83b28 = __ctype_get_mb_cur_max+8:
+       mrs  x8, tpidr_el0
+       ldur x8, [x8, #-8]        ; bionic TLS slot tp[-1] — absent on glibc
+       ldr  x8, [x8, #0x820]     ; <- faults, x8=0
+   Caller (gdb LR 0x7fbed73ce4) = /vendor/lib64/libc++.so locale machinery
+   past std::__1::locale::classic() — libc++ initializes the classic locale
+   during android_dlopen of any lib importing std::locale (our compat layer
+   does via HIDL toString/ostringstream). hooks.c hooks the whole locale.h
+   family (newlocale/uselocale/... → glibc) but not this one, so bionic's
+   real implementation ran on a glibc thread. Fix: hook it + the *_l family
+   (glibc locale_t objects must never reach bionic *_l consumers) + the
+   mb/wc conversions. Patch embedded in guest/build-libhybris.sh
+   (upstream-able to libhybris/libhybris). After the in-guest rebuild of
+   hybris/common: test_dlopen /usr/lib/android/libhwc2_compat_layer.so → rc 0.
+
+2) No binder in the guest — the private-binderfs mount entry never mounted
+   (silent, optional) and host binder nodes were never bound in, so
+   getService(composer@2.1) blocked forever (12 s silent hang, rc 124).
+   mknod replicas (c 489,N) open with ENXIO: binderfs nodes are backed by
+   the binderfs superblock instance, NOT the global chrdev map — bind mounts
+   are mandatory. Fix in guest/lxc/config:
+       lxc.mount.entry = /dev/binderfs/binder    dev/binder    none bind,create=file,optional 0 0
+       lxc.mount.entry = /dev/binderfs/hwbinder  dev/hwbinder  none bind,create=file,optional 0 0
+       lxc.mount.entry = /dev/binderfs/vndbinder dev/vndbinder none bind,create=file,optional 0 0
+   (First failure mode after adding nodes wrongly via mknod was libbinder
+   aborting: "Binder driver '/dev/vndbinder' could not be opened. Error: 6".)
+
+3) VISIBILITY: stopping SurfaceFlinger zeroes the panel backlight
+   (/sys/class/backlight/panel0-backlight/brightness -> 0), so the first
+   passing runs LOOKED black — frames were reaching scanout with the light
+   off. This is also why desktop-on always left the panel "dark". Fix:
+   force brightness (600) while SF is down, restore after; now in
+   guest/hwc-smoke.sh and toggle/desktop-on step 4b.
+
+Known flake: right after `stop surfaceflinger` the composer may still hold
+SF's client → guest gets "failed to create composer client" (rc 134).
+Rerun clears it; the smoke script sleeps 2 s, which is usually enough.
+
+Repro: guest/hwc-smoke.sh (adb su runner; stops SF, runs the test in the
+container, samples gpubusy, always restores SF).
