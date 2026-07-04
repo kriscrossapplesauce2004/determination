@@ -19,13 +19,26 @@ lxc.include =
 lxc.apparmor.profile = unconfined
 lxc.autodev = 1
 lxc.autodev.tmpfs.size = 25000000
+# proc/sys/cgroup must be requested explicitly — systemd needs all three.
+# (Found on first boot 2026-07-03: without this /proc is absent and systemd
+# hangs before its first console line.)
+lxc.mount.auto = proc:mixed sys:mixed cgroup:mixed
 
-# --- Android world, read-only ---
-lxc.mount.entry = /system android/system none bind,ro,optional 0 0
-lxc.mount.entry = /vendor android/vendor none bind,ro,optional 0 0
-lxc.mount.entry = /apex android/apex none rbind,ro,optional 0 0
-# Property area — libhybris reads Android props through here.
-lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,optional 0 0
+# --- Android world, read-only, at the REAL root paths ---
+# NOT under /android/: the partitions carry absolute symlinks into /apex
+# (e.g. /system/bin/linker64 -> /apex/com.android.runtime/bin/linker64) and
+# libhybris' compiled default search path is /vendor/lib64:/system/lib64:
+# /odm/lib64 with /system/build.prop hardcoded. Debian has none of these at
+# root, so there is no collision. (Found 2026-07-04: the /android/ prefix
+# broke the bionic linker — the apex symlinks dangled.)
+lxc.mount.entry = /system system none bind,ro,create=dir,optional 0 0
+lxc.mount.entry = /vendor vendor none bind,ro,create=dir,optional 0 0
+lxc.mount.entry = /odm odm none bind,ro,create=dir,optional 0 0
+lxc.mount.entry = /apex apex none rbind,ro,create=dir,optional 0 0
+# Property area — libhybris mmaps this at the fixed path /dev/__properties__.
+# create=dir: autodev's tmpfs is fresh, the target must be made or the bind
+# silently no-ops (it's optional).
+lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,create=dir,optional 0 0
 
 # --- Device nodes (bind, not mknod: keep host's SELinux labels) ---
 # Binder: kernel has binderfs (recon 2026-07-01), so the guest mounts a fresh

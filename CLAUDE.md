@@ -101,15 +101,64 @@ Toolchain context: `boot/repack.sh` needs magiskboot from
 toolchain/ gitignored (re-extract Arch pkgs if missing). Kernel build:
 ~4 min on this box.
 
-Still missing before desktop-on can show anything (post-flash work):
-1. Static arm64 LXC build for the Android host side (`/data/decemberos/lxc/bin`).
-2. Guest rootfs (`guest/build-rootfs.sh` — mmdebstrap not installed on host yet).
-3. A wlroots compositor with the hwcomposer backend — stock Debian sway can
-   NOT drive hwcomposer; Droidian's packages (or a hybris-wlroots build) are
-   required. The libhybris `test_hwcomposer` smoke test gates everything.
-Until those land, desktop-on stops SF and leaves the panel dark with no
-touch (recover via `./dos shell /data/decemberos/bin/desktop-off`).
-melissa verified the full toggle round trip on kernel #3 (2026-07-03
-19:05): desktop-on grabbed all 13 input devices and stopped SF, desktop-off
-restored phone mode cleanly — the Android-side half of §4 is proven; only
-the guest-side half (compositor takeover) remains untested.
+**2026-07-04: GUEST STACK STOOD UP; blocked at the libhybris/API-36 TLS
+wall.** Progress since the flash:
+1. DONE — static arm64 LXC on device (`guest/build-lxc.sh`, 7 tools in
+   `/data/decemberos/lxc/bin`). LXC 4.0.12, `-Wno-error=incompatible-pointer-
+   types` for the glibc-2.40 mount_setattr clash.
+2. DONE — Debian **trixie** arm64 rootfs, debootstrapped no-root (fakeroot
+   --foreign + on-device --second-stage), 253 pkgs configured. Container
+   boots systemd to RUNNING, zero failed units. `guest/setup-guest.sh`
+   (on-device customizer, mirror of `customize-hook.sh`).
+3. DONE — guest network egress. The fix was NOT nat/forward: Android's
+   policy-routing rule chain ends in `from all unreachable` with no
+   `lookup main`, so replies to the container were routed to nowhere.
+   Fix (baked into `toggle/guest-start`): `ip rule add pref 9000 to
+   192.168.117.0/24 lookup main` + `pref 21000 iif decembr0 lookup wlan0`,
+   plus explicit INPUT/OUTPUT/FORWARD accepts ahead of netd's chains.
+   guest-start also now does the bind-remount (dev,exec,suid) and pin-dir
+   creation that were previously manual.
+4. DONE — libhybris bring-up, mostly. Android world is now bind-mounted at
+   the **real root paths** (`/system`,`/vendor`,`/odm`,`/apex`), NOT under
+   `/android/` — the partitions carry absolute symlinks into `/apex` and
+   libhybris hardcodes `/system/build.prop` + a `/vendor/lib64:/system/lib64:
+   /odm/lib64` default path; the `/android/` prefix dangled the apex
+   symlinks and broke the bionic linker. `HYBRIS_LD_LIBRARY_PATH` adds
+   `/apex/com.android.runtime/lib64/bionic` (where libc.so lives on A10+).
+   `test_dlopen /system/lib64/libc.so` → rc=0: **the hybris linker loads
+   bionic libc**. Droidian repo pins: keyring must come from their *git*
+   (`raw.githubusercontent.com/droidian/droidian-archive-keyring/droidian/
+   droidian/droidian.gpg`) — every packaged keyring deb is stale and misses
+   the Jan/2025 staging key. Whole hybris stack pinned to the **z4** build
+   (`*+z4+*`, May 2025) because it's the newest that installs on trixie.
+
+**THE WALL (spec §3 gate not passed):** `getprop`/`test_hwcomposer` SIGSEGV
+the instant bionic code runs (test_dlopen is fine because it never executes
+bionic). gdb: crash at `ldr x8,[x8,#2080]` inside `libc.so` with x8 garbage,
+x0=-1 — bionic reading a thread-local slot the libhybris **q** linker
+(newest it ships, ~API-29) never set up. Ruled out: version split (whole
+stack forced to z4, still crashes), SDK override (29/30/34, no change),
+missing `/linkerconfig/ld.config.txt` (generated it via the apex
+`linkerconfig` binary — 258 KB, still crashes identically). Root cause is a
+**TLS/thread-structure layout mismatch: this crDroid base is Android 16 /
+API 36 bionic, newer than Droidian's libhybris targets.**
+
+**Forward path (decision pending):** Droidian's newer **droidian1** libhybris
+(Dec 2025) pins `libc6 (>>2.42,<<2.43)` — it needs glibc **2.42**; trixie
+ships 2.41, which is why apt forced us onto the older z4. Droidian staging
+has moved ahead of trixie's glibc. Most promising next step is to rebuild
+the guest rootfs on **forky/sid** (glibc 2.42) and install the droidian1
+libhybris, which *may* carry the newer-bionic TLS fix — unverified. Fallback
+is patching libhybris' q linker for API-36 thread layout (real upstream C
+work). Until libhybris renders, desktop-on stops SF and leaves the panel
+dark (recover via `./dos shell /data/decemberos/bin/desktop-off`).
+
+Android-side of §4 stays proven (2026-07-03 19:05 toggle round trip: 13
+input devices grabbed, SF stopped, clean restore). Only the guest-side
+(compositor takeover) is blocked, now specifically on libhybris.
+
+NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,
+libtls-padding0) and the runtime mounts/iptables/ip-rules do NOT persist a
+reboot — persistence is via `toggle/guest-start` + the on-device rootfs on
+`/data`, which does persist. A clean rebuild should go through
+`guest/setup-guest.sh`.

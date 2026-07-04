@@ -8,12 +8,47 @@ DOS=/data/decemberos
 LXC="$DOS/lxc/bin"  # static lxc build pushed alongside the rootfs
 export PATH="$LXC:$PATH"
 
-# Host end of the veth bridge + NAT out through whatever's up (wlan0/rmnet).
+# lxc-start pins the container rootfs here; must pre-exist or start fails.
+mkdir -p "$DOS/lxc/lib/lxc/rootfs" "$DOS/run" "$DOS/log"
+# lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config —
+# keep a copy of the config at that path (the rootfs dir doubles as it).
+[ -f "$DOS/guest/config" ] || cp "$DOS/lxc/config" "$DOS/guest/config"
+
+# /data is mounted nodev: device nodes inside the rootfs would be dead.
+# Bind-remount just the guest subtree with dev,exec,suid.
+if ! grep -q " $DOS/guest " /proc/mounts; then
+    mount --bind "$DOS/guest" "$DOS/guest"
+    mount -o remount,bind,dev,exec,suid "$DOS/guest" "$DOS/guest"
+fi
+
+# --- Network: veth bridge + NAT out through whatever's up (wlan0/rmnet) ---
 ip link add decembr0 type bridge 2>/dev/null
 ip addr add 192.168.117.1/24 dev decembr0 2>/dev/null
 ip link set decembr0 up
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
 iptables -t nat -C POSTROUTING -s 192.168.117.0/24 -j MASQUERADE 2>/dev/null ||
     iptables -t nat -A POSTROUTING -s 192.168.117.0/24 -j MASQUERADE
+# Android's netd chains (oem_in/bw/fw/tetherctrl) precede everything; put
+# explicit accepts for the guest segment at the very top.
+iptables -C INPUT -i decembr0 -j ACCEPT 2>/dev/null ||
+    iptables -I INPUT 1 -i decembr0 -j ACCEPT
+iptables -C OUTPUT -o decembr0 -j ACCEPT 2>/dev/null ||
+    iptables -I OUTPUT 1 -o decembr0 -j ACCEPT
+iptables -C FORWARD -s 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
+    iptables -I FORWARD 1 -s 192.168.117.0/24 -j ACCEPT
+iptables -C FORWARD -d 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
+    iptables -I FORWARD 1 -d 192.168.117.0/24 -j ACCEPT
+
+# Android's policy routing has NO "lookup main" rule — the rule chain ends
+# in "from all unreachable", so replies to the guest die unless the guest
+# subnet is reachable from a consulted table (found 2026-07-04: guest pings
+# reached INPUT fine; the replies were routed to unreachable). Mirror netd's
+# own tether pattern (cf. its "iif r_rmnet_data0 lookup wlan0" rules).
+ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
+    ip rule add pref 9000 to 192.168.117.0/24 lookup main
+ip rule list | grep -q "iif decembr0 lookup wlan0" ||
+    ip rule add pref 21000 iif decembr0 lookup wlan0
 
 lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING && exit 0
 exec lxc-start -P "$DOS" -n guest -f "$DOS/lxc/config" -l WARN -o "$DOS/log/lxc.log"
