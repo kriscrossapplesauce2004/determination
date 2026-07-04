@@ -1,0 +1,8 @@
+aosp/
+gen-hidl/
+gen-aidl/
+gen-gui/
+device-libs/
+out/
+stubs/
+libhybris/
