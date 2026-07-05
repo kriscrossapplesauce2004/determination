@@ -200,8 +200,33 @@ first command runs as root. File drop into guest: adb push to
 /sdcard/Download → su cp over an EXISTING guest-rootfs file → lxc-attach
 `/bin/cp` to final name (direct exec, no inner shell).
 
-NEXT (§3 finish): a real compositor in the guest — sway/wlroots or phoc
-against hybris-EGL `hwcomposer` platform — then §4 guest-side handoff.
+**2026-07-05/06: the NO_RESOURCES/FMQ wall + the REAL black-panel story.**
+Symptom: every guest hwc2 validate returned error 6 (NO_RESOURCES); root
+cause chain: composer FMQ (command queue) creation falls back to ashmem →
+modern libcutils opens `/dev/ashmem<boot_id>` (per-boot name) → container
+had neither node → writeQueue failed CLIENT-side. Three-part fix, all
+verified 2026-07-06 (`artifacts/guest-hwc2-ashmem-fix-20260706.txt`,
+validate/present all error=0, user-visible render): (1) bind host
+`/dev/ashmem` in `guest/lxc/config`; (2) `guest-start` mknods the per-boot
+`/dev/ashmem<boot_id>` (plain misc chardev 10:59 — mknod fine, the binderfs
+ENXIO rule doesn't apply); (3) `ashmem_create_region` interpose with memfd
+fallback + fmq/hidl `logError`→stderr interpose in
+`hwc2-compat/diag/hwc2_compat_extra.cpp` (guest has no logd — ALOG is a
+black hole). Also that session: (a) TRUE black-panel root cause = SDM
+starts every composer client at brightness 0 and DSPP-dims its output to
+black — one `setDisplayBrightness(1.0)` after power-on fixes it (b182d86;
+wired through libhybris hwc2 wrappers in `guest/build-libhybris.sh`);
+(b) the ACTIVE backlight node is `/sys/class/backlight/backlight` (max
+4095, keeper writes 2048) — `panel0-backlight` is INERT; (c) in-guest
+test_hwcomposer patched to render continuously (upstream exits after ~24s
+tearing down the display) — desktop-on now supervises ONE long-lived
+instance with fast-fail backoff, logging to `log/compositor.log`
+(stdbuf -oL required or the log stays empty). Old "composer-client race"
+flake note: measured never firing across many relaunches; treat as solved.
+
+NEXT (§3 finish): a real compositor in the guest — stock Debian sway is
+DRM/KMS-only and will NOT drive this panel; needs a wlroots/phoc build
+against the hybris-EGL `hwcomposer` platform — then §4 guest-side handoff.
 Android-side of §4 stays proven (2026-07-03 toggle round trip).
 
 NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,

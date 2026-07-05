@@ -53,30 +53,87 @@ sleep 1
 # 4b. Stopping SF zeroes the panel backlight (found 2026-07-04: guest renders
 # were reaching scanout but the light was off — the panel wasn't "dark", it
 # was unlit). Force it back on; desktop-off restores Android's own control.
-echo 600 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
+# ACTIVE node is backlight/ (max 4095); panel0-backlight is inert (2026-07-05
+# fill-run: frames visible with backlight/=2048 while panel0-backlight=0).
+echo 2048 > /sys/class/backlight/backlight/brightness 2>/dev/null
 
-# 5. TEMP render test (2026-07-04, delete this block when the compositor
-#    lands and uncomment the sway step below). test_hwcomposer draws a
-#    color-cycling gradient via the hwc2 compat layer — proves the §3 chain
-#    on demand. Stopping SF zeroes the panel backlight (why every render
-#    looked "blank"), so a keeper loop holds it up while desktop-mode is
-#    set; it self-terminates on desktop-off and SF restores brightness.
-BL=/sys/class/backlight/panel0-backlight/brightness
+# 5. TEMP render placeholder (2026-07-05, replace with the real compositor —
+#    see the disabled sway step below). test_hwcomposer draws a color-cycling
+#    gradient via the hwc2 compat layer and proves the §3 chain.
+#
+#    HISTORY of the "blank panel" bug and its two wrong fixes:
+#      (a) Upstream's demo renders a FIXED frame count (for i<1020*60) then
+#          prints "stop" and EXITS 0 (~24s on this panel). Launched ONCE (the
+#          original code), it left a permanent blank panel the instant it quit
+#          — SF still stopped, nothing redrawing.
+#      (b) A naive respawn loop (relaunch on every exit) *did* re-render each
+#          cycle — measured: every relaunch reaches "OpenGL ES 3.2" rc=0, the
+#          "composer-client race" never fired — BUT it tore the hwc2 display
+#          down and re-inited it every ~24s: a hard black flicker + a HAL
+#          teardown/re-acquire each cycle, ~1-2s dark between cycles. Still
+#          reads as a dead/flickering panel.
+#    REAL FIX (2026-07-05): the in-guest test_hwcomposer.cpp render loop was
+#    patched to run continuously (`for (i=0; ; ++i)`) and rebuilt in the guest.
+#    ONE instance now renders forever with NO teardown until desktop-off kills
+#    it — verified 99% GPU-busy, a SINGLE EGL init, no "stop", held past the
+#    old 24s boundary. (The patch is reproduced by guest/build-libhybris.sh so
+#    a clean rebuild keeps it.) The loop below is therefore no longer a
+#    per-frame respawn: it launches ONCE and only relaunches if the continuous
+#    process actually DIES, with fast-fail backoff so a broken build can't spin.
+#
+#    stdbuf -oL is REQUIRED: a non-exiting process never flushes its
+#    block-buffered stdout, so without it compositor.log stays empty and a
+#    hang is indistinguishable from a crash; line-buffering makes the log live.
+#    Two loops, both gated on desktop-mode; desktop-off clears desktop-mode and
+#    pkills test_hwcomposer (the supervisor then sees desktop-mode gone and stops):
+#      - backlight keeper: an SF stop (or a suppressed SF respawn) zeroes
+#        the backlight; re-assert every 2s (active node, see step 4b).
+#      - compositor supervisor: launch once; relaunch only on death, with
+#        fast-fail (<5s) backoff and per-attempt logging.
+BL=/sys/class/backlight/backlight/brightness
+CLOG="$DOS/log/compositor.log"
+: > "$CLOG"
 (
     while [ -f "$DOS/run/desktop-mode" ]; do
-        echo 600 > "$BL" 2>/dev/null
+        echo 2048 > "$BL" 2>/dev/null
         sleep 2
     done
 ) &
-"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
-    export LD_LIBRARY_PATH=/usr/local/lib
-    export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
-    export EGL_PLATFORM=hwcomposer HYBRIS_EGLPLATFORM=hwcomposer ANDROID_ROOT=/system TMPDIR=/tmp
-    exec /root/build/libhybris/hybris/tests/.libs/test_hwcomposer
-' >/dev/null 2>&1 &
+(
+    fails=0
+    while [ -f "$DOS/run/desktop-mode" ]; do
+        echo "--- launch test_hwcomposer (prior consecutive fast-fails: $fails) $(date)" >> "$CLOG"
+        t0=$(date +%s)
+        "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
+            export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export LD_LIBRARY_PATH=/usr/local/lib
+            export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
+            export EGL_PLATFORM=hwcomposer HYBRIS_EGLPLATFORM=hwcomposer ANDROID_ROOT=/system TMPDIR=/tmp
+            exec stdbuf -oL -eL /root/build/libhybris/hybris/tests/.libs/test_hwcomposer
+        ' >> "$CLOG" 2>&1
+        rc=$?
+        dur=$(( $(date +%s) - t0 ))
+        # desktop-off clears desktop-mode BEFORE it kills the process; that
+        # intentional teardown must not be treated as a crash to relaunch.
+        [ -f "$DOS/run/desktop-mode" ] || { echo "compositor exited rc=$rc after ${dur}s — desktop mode off, stopping $(date)" >> "$CLOG"; break; }
+        if [ "$dur" -lt 5 ]; then
+            fails=$((fails+1))
+            back=$fails; [ "$back" -gt 10 ] && back=10
+            echo "FAST-FAIL: compositor died in ${dur}s rc=$rc (consecutive=$fails); backing off ${back}s $(date)" >> "$CLOG"
+            sleep "$back"
+        else
+            echo "compositor exited rc=$rc after ${dur}s (ran long — not a fast-fail); relaunching $(date)" >> "$CLOG"
+            fails=0
+            sleep 1
+        fi
+    done
+) &
 echo $! > "$DOS/run/compositor.pid"
-echo "desktop mode up (TEMP render test)"
-# TEMP end — real compositor step, disabled meanwhile:
+echo "desktop mode up (TEMP render placeholder — continuous test_hwcomposer; log/compositor.log)"
+# TEMP end — real compositor step, disabled meanwhile. NOTE: stock Debian
+# sway/wlroots uses a DRM/KMS backend and will NOT drive this panel; the real
+# path is a wlroots/phoc build with the libhybris hwcomposer backend (spec §3
+# wlroots↔hwcomposer), plus guest networking to install it.
 # lxc-attach -P "$DOS" -n guest -- machinectl shell melissa@ /usr/bin/sway \
 #     || lxc-attach -P "$DOS" -n guest -- su -l melissa -c 'sway' &
 # echo $! > "$DOS/run/compositor.pid"

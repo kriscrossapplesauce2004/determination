@@ -12,7 +12,8 @@ export PATH="$LXC:$PATH"
 mkdir -p "$DOS/lxc/lib/lxc/rootfs" "$DOS/run" "$DOS/log"
 # lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config —
 # keep a copy of the config at that path (the rootfs dir doubles as it).
-[ -f "$DOS/guest/config" ] || cp "$DOS/lxc/config" "$DOS/guest/config"
+# Always refresh so config updates propagate.
+cp -f "$DOS/lxc/config" "$DOS/guest/config"
 
 # /data is mounted nodev: device nodes inside the rootfs would be dead.
 # Bind-remount just the guest subtree with dev,exec,suid.
@@ -50,5 +51,19 @@ ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
 ip rule list | grep -q "iif decembr0 lookup wlan0" ||
     ip rule add pref 21000 iif decembr0 lookup wlan0
 
-lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING && exit 0
-exec lxc-start -P "$DOS" -n guest -f "$DOS/lxc/config" -l WARN -o "$DOS/log/lxc.log"
+if ! lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING; then
+    lxc-start -P "$DOS" -n guest -f "$DOS/lxc/config" -l WARN -o "$DOS/log/lxc.log"
+    i=0
+    until lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING; do
+        i=$((i+1)); [ $i -gt 20 ] && exit 1; sleep 0.5
+    done
+fi
+
+# ashmem: modern libcutils opens /dev/ashmem<boot_id> — a per-boot name the
+# static lxc config can't carry. Without it composer FMQ creation fails and
+# every hwc2 validate returns NO_RESOURCES (found 2026-07-05). Plain misc
+# chardev, so mknod is fine (the binderfs ENXIO rule doesn't apply).
+BOOTID=$(cat /proc/sys/kernel/random/boot_id)
+lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
+    "[ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }" \
+    2>/dev/null

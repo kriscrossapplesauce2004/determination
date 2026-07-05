@@ -55,6 +55,11 @@ lxc.mount.entry = /dev/binderfs/hwbinder dev/hwbinder none bind,create=file,opti
 lxc.mount.entry = /dev/binderfs/vndbinder dev/vndbinder none bind,create=file,optional 0 0
 # GPU + allocator:
 lxc.mount.entry = /dev/kgsl-3d0 dev/kgsl-3d0 none bind,create=file,optional 0 0
+# ashmem: composer FMQ (command-queue) creation falls back to /dev/ashmem;
+# without it every hwc2 validate dies CLIENT-side with NO_RESOURCES
+# ("writeQueue FAILED", found 2026-07-05). Plain misc chardev — bind or
+# mknod both work (the ENXIO rule above is binderfs-specific).
+lxc.mount.entry = /dev/ashmem dev/ashmem none bind,create=file,optional 0 0
 lxc.mount.entry = /dev/ion dev/ion none bind,create=file,optional 0 0
 lxc.mount.entry = /dev/dma_heap dev/dma_heap none rbind,create=dir,optional 0 0
 lxc.mount.entry = /dev/dri dev/dri none rbind,create=dir,optional 0 0

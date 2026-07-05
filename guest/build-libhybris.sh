@@ -105,6 +105,45 @@ diff --git a/hybris/common/hooks.c b/hybris/common/hooks.c
      HOOK_DIRECT(mmap),
 HOOKPATCH
 fi
+
+# test_hwcomposer is DecemberOS's TEMP §4 render placeholder: toggle/desktop-on
+# runs it as the stand-in "compositor" until sway/phoc lands. Upstream's demo
+# renders a FIXED frame count (`for (i=0; i<1020*60; ++i)`) then exits ~24s,
+# which tears the hwc2 display down; desktop-on needs it to render CONTINUOUSLY
+# (one instance, no per-cycle teardown/black-flicker). Patch the loop to never
+# terminate. Idempotent — only rewrites the stock finite bound.
+if grep -q 'i<1020\*60;' "$SRC/hybris/tests/test_hwcomposer.cpp"; then
+    sed -i 's/i<1020\*60;/;/' "$SRC/hybris/tests/test_hwcomposer.cpp"
+fi
+
+# setDisplayBrightness (2026-07-05, THE black-panel root cause): SDM keeps
+# per-client display brightness and starts every new composer client at 0,
+# so the DSPP dims all of the client's composed output to pure black while
+# validate/present/fences all succeed. One composer@2.3 setDisplayBrightness
+# call after power-on fixes it. The bionic side already exports
+# hwc2_compat_display_set_brightness (hwc2-compat/diag/hwc2_compat_extra.cpp,
+# compiled into our libhwc2_compat_layer.so); wire the glibc-side wrapper
+# through and make the test set 1.0 after power-on. Upstream-able.
+if ! grep -q "hwc2_compat_display_set_brightness" "$SRC/hybris/hwc2/hwc2.c"; then
+    sed -i '/HYBRIS_IMPLEMENT_FUNCTION3(hwc2, hwc2_error_t, hwc2_compat_display_validate,/i\
+HYBRIS_IMPLEMENT_FUNCTION2(hwc2, hwc2_error_t, hwc2_compat_display_set_brightness,\
+                           hwc2_compat_display_t*, float);\
+' "$SRC/hybris/hwc2/hwc2.c"
+fi
+if ! grep -q "hwc2_compat_display_set_brightness" \
+        "$SRC/hybris/include/hybris/hwc2/hwc2_compatibility_layer.h"; then
+    sed -i '/hwc2_error_t hwc2_compat_display_validate(hwc2_compat_display_t\* display,/i\
+    hwc2_error_t hwc2_compat_display_set_brightness(hwc2_compat_display_t* display,\
+                                            float brightness);\
+' "$SRC/hybris/include/hybris/hwc2/hwc2_compatibility_layer.h"
+fi
+if ! grep -q "hwc2_compat_display_set_brightness" "$SRC/hybris/tests/test_common.cpp"; then
+    sed -i '/hwc2_compat_display_set_power_mode(hwcDisplay, HWC2_POWER_MODE_ON);/a\
+\	/* SDM starts new clients at brightness 0 -> DSPP dims output to black */\
+\	hwc2_compat_display_set_brightness(hwcDisplay, 1.0f);
+' "$SRC/hybris/tests/test_common.cpp"
+fi
+
 cd "$SRC/hybris"
 
 [ -x configure ] || NOCONFIGURE=1 ./autogen.sh

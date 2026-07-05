@@ -3,7 +3,8 @@
 # libhybris, restore SF regardless of outcome. Forces the panel backlight
 # on during the run — stopping SF zeroes it, which made renders invisible.
 set -u
-BL=/sys/class/backlight/panel0-backlight/brightness
+# ACTIVE node is backlight/ (max 4095); panel0-backlight is inert (2026-07-05).
+BL=/sys/class/backlight/backlight/brightness
 OLD_BL=$(cat $BL)
 restore() {
     start surfaceflinger
@@ -30,7 +31,7 @@ stop surfaceflinger
 sleep 2
 (
     for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
-        echo 600 > $BL 2>/dev/null
+        echo 2048 > $BL 2>/dev/null
         sleep 2
     done
 ) &

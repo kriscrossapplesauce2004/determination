@@ -1,0 +1,23 @@
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+GUEST-TEST-RC=124
+DOS-DIAG present(): present error=0 fence=19
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=11
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=10
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=17
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=19
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=11
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=10
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=17
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=19
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+DOS-DIAG present(): present error=0 fence=11
+DOS-DIAG present(): validate error=0 numTypes=0 numRequests=0
+SF: running bootanim: stopped
