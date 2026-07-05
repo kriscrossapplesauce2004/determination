@@ -1,0 +1,27 @@
+=== 19:37:04
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:07
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:10
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:14
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:17
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:20
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:23
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:26
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0
+=== 19:37:29
+/sys/class/backlight/backlight brightness=2048 actual=2048
+/sys/class/backlight/panel0-backlight brightness=0 actual=0

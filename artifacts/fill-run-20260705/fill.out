@@ -1,0 +1,21 @@
+power cycle: OFF
+power cycle: ON
+width: 1080 height: 2340
+set_usage64 rc=0
+FILL #0 RED w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a03a6b000 prev-content=0x00000000
+FILL-DIAG present#1 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL #1 RED w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a030b4000 prev-content=0x00000000
+FILL-DIAG present#2 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL #2 RED w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a03a6b000 prev-content=0xff0000ff
+FILL-DIAG present#3 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL-DIAG present#120 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL #180 GREEN w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a03a6b000 prev-content=0xff0000ff
+FILL-DIAG present#240 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL-DIAG present#360 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL #360 BLUE w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a03a6b000 prev-content=0xff00ff00
+FILL-DIAG present#480 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL #540 RED w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a03a6b000 prev-content=0xffff0000
+FILL-DIAG present#600 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL-DIAG present#720 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)
+FILL #720 GREEN w=1080 h=2340 stride=1088 fmt=0x1 usage=0x1833 vaddr=0x7a03a6b000 prev-content=0xff0000ff
+FILL-DIAG present#840 rc=0 presentFence=17 sync_wait=0(SIGNALED-on-screen)

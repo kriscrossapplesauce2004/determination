@@ -232,6 +232,9 @@ EOF
         "$SRCDIR/AidlComposerHal.cpp"
         "$SRCDIR/ComposerHal.cpp"
         "$SRCDIR/hwc2_compatibility_layer.cpp"
+        # brightness entry point upstream doesn't expose; without it SDM
+        # DSPP-dims a new client's output to black (2026-07-05 finding)
+        diag/hwc2_compat_extra.cpp
         aosp/hi_common/support/NativeHandle.cpp
         # HdrMetadata::operator== is the single symbol we'd otherwise import
         # from libgui.so, whose own dep chain (libpermission/PermissionCache)
@@ -253,6 +256,21 @@ EOF
         -nostdlib++ -o out/libhwc2_compat_layer.so "${objs[@]}" \
         device-libs/*.so
     echo "OK: out/libhwc2_compat_layer.so"
+
+    # libui_compat_layer.so -- the bionic-side gralloc shim (GraphicBuffer /
+    # GraphicBufferAllocator / GraphicBufferMapper wrappers, ui_compat.cpp).
+    # hybris-gralloc android_dlopen()s this; if graphic_buffer_allocator_allocate
+    # is present it takes the modern A10+ allocator path (version=2), else it
+    # falls back to the legacy gralloc HAL module -- which on an A16 base hands
+    # out non-scanout buffers and makes SDM validateDisplay return NO_RESOURCES
+    # on every frame (guest renders GLES but nothing reaches the panel). This is
+    # the guest-side counterpart to libhwc2_compat_layer.so; both are required.
+    $CLANGXX "${CFLAGS[@]}" "${INC[@]}" -shared -Wl,-soname,libui_compat_layer.so \
+        -Wl,--no-undefined -Wl,--as-needed -nostdlib++ \
+        -o out/libui_compat_layer.so \
+        "$SRCDIR/../ui/ui_compatibility_layer.cpp" \
+        device-libs/*.so
+    echo "OK: out/libui_compat_layer.so"
 
     # Standalone smoke-test binary (Android-side, no libhybris involved):
     # renders GLES frames straight through the compat layer + hwcomposer.
@@ -296,6 +314,23 @@ EOF
         -x c++ "$SRCDIR/tests/hybris-gralloc.c" -x none \
         out/libhwc2_compat_layer.so device-libs/*.so
     echo "OK: out/direct_hwc2_test"
+
+    # CPU-fill diagnostic: same present path as direct_hwc2_test but the
+    # buffer is solid-filled through gralloc lock (SW usage => linear, no
+    # UBWC) instead of GLES. Splits "GPU never wrote the buffer" from
+    # "presented buffer never reaches scanout" — see diag/.
+    $CLANGXX "${CFLAGS[@]}" "${INC[@]}" "${TFLAGS[@]}" \
+        -include stubs/gralloc-prelude.h -nostdlib++ \
+        -Wl,--allow-multiple-definition \
+        -o out/direct_hwc2_fill_test \
+        diag/direct_hwc2_fill_test.cpp \
+        "$SRCDIR/tests/hwcomposer_window.cpp" \
+        "$SRCDIR/tests/nativewindowbase.cpp" \
+        "$SRCDIR/GrallocUsageConversion.cpp" \
+        "$SRCDIR/../ui/ui_compatibility_layer.cpp" \
+        -x c++ "$SRCDIR/tests/hybris-gralloc.c" -x none \
+        out/libhwc2_compat_layer.so device-libs/*.so
+    echo "OK: out/direct_hwc2_fill_test"
 }
 
 install() {
