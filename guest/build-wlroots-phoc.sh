@@ -147,7 +147,9 @@ helper = '''\
 static void *dos_grab_thread(void *arg) {
 \tint fd = (int)(intptr_t)arg;
 \tstruct timespec ts = { .tv_sec = 0, .tv_nsec = 100 * 1000 * 1000 };
-\tfor (int i = 0; i < 300; i++) {
+\t/* 10min window, not 30s: a slow phoc bring-up outlived the first
+\t * version and left the session grabless (2026-07-06). */
+\tfor (int i = 0; i < 6000; i++) {
 \t\tif (ioctl(fd, EVIOCGRAB, (void *)1) == 0) {
 \t\t\tfprintf(stderr, "DecemberOS: EVIOCGRAB acquired (fd %d)\\n", fd);
 \t\t\tbreak;

@@ -76,3 +76,12 @@ lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
     "mount -o remount,gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null; \
      [ -e /dev/ptmx ] || ln -sf pts/ptmx /dev/ptmx" \
     2>/dev/null
+
+# VT nodes: kernel #3 has CONFIG_VT, so seatd binds seat0 to VTs and needs
+# /dev/tty0 for its activation handshake — without it every libseat client
+# times out "waiting session to become active" and phoc can't add the
+# libinput backend (found 2026-07-06, first phosh run). Nothing else uses
+# VTs on this device (no fbcon), so the ioctls are harmless.
+lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
+    "for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
+    2>/dev/null

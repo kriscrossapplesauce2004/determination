@@ -38,8 +38,13 @@ dpkg --configure -a 2>/dev/null || true
 apt-get update -qq
 # xkb-data: libxkbcommon finds no keymaps without it (we install with
 # --no-install-recommends everywhere); fonts-cantarell: phosh's UI font.
+# gnome-settings-daemon-common: phosh ABORTS (fatal GLib-GIO-ERROR) without
+# the org.gnome.settings-daemon.* schemas — it's only in Recommends
+# (found 2026-07-06: the "blinking compositor" crash loop on first light).
+# adwaita-icon-theme: squeekboard renders without its key icons otherwise.
 apt-get install -y -qq --no-install-recommends \
-    phosh squeekboard libinput-tools xkb-data fonts-cantarell
+    phosh squeekboard libinput-tools xkb-data fonts-cantarell \
+    gnome-settings-daemon-common adwaita-icon-theme
 
 echo "== seatd =="
 systemctl enable --now seatd
@@ -79,7 +84,16 @@ cat > /etc/libinput/local-overrides.quirks <<'EOF'
 [OnePlus 7 touchpanel]
 MatchName=touchpanel
 AttrEventCode=-ABS_MT_WIDTH_MAJOR;-ABS_MT_PRESSURE
+
+[OnePlus 7 power key inert in desktop mode]
+MatchName=qpnp_pon
+AttrEventCode=-KEY_POWER
 EOF
+# Power key: pressing it makes phosh blank the screen, and phoc's output
+# RE-ENABLE through the hwcomposer backend doesn't come back (2026-07-06
+# first light: "power button kills it"). Until that wake path is fixed,
+# strip KEY_POWER — the node stays open+grabbed (Android must not see it
+# either), the button is simply inert while in desktop mode.
 
 echo "== dos-pidfd-shim =="
 cat > /tmp/dos-pidfd-shim.c <<'EOF'

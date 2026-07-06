@@ -266,13 +266,60 @@ Hard-won facts (all encoded in the script + toggles):
 desktop-on now supervises phoc (fast-fail backoff) + a foot client loop;
 desktop-off pkills foot then phoc (TERM) before SF restart.
 
-NEXT (§4 guest-side input handoff): touch does NOT reach the guest yet —
-expected: phoc runs backend hwcomposer only (libinput backend needs
-seatd/udev wiring in the container), and evgrab holds exclusive EVIOCGRAB
-on all input nodes so events can't leak to the still-live Android. Design
-the handover (release/FD-pass the touchscreen grab to the guest + seatd or
-WLR_LIBINPUT_NO_DEVICES-style wiring), then squeekboard/phosh for a real
-mobile session. Android-side §4 stays proven (2026-07-03 round trip).
+**2026-07-06/07: §4 GUEST INPUT + PHOSH WORKING — melissa touch-verified
+(swipe-unlock, app grid, squeekboard typing).** Evidence:
+`artifacts/guest-phosh-touch-20260706.png`, `guest-input-bringup-20260706.txt`.
+Stack: phosh 0.46 + squeekboard 1.43 (trixie debs) on our phoc/wlroots,
+`WLR_BACKENDS=hwcomposer,libinput`. Guest root password: 1234 (phosh
+lockscreen PAM auth). What it took (encoded in guest/setup-input.sh,
+build-wlroots-phoc.sh PATCH 2, toggle/desktop-on 5d/5e, guest-start):
+1. wlroots EVIOCGRAB handoff: grab on a dup'd fd in a detached retry
+   thread per device (grabs live on the open file description); desktop-on
+   kills evgrab once phoc's socket is up. Retry window 10min and the 5d
+   watcher is uncapped — the first run's 30s/120s caps both expired during
+   live debugging and left the session grabless (fixed same night).
+2. libinput needs hand-fed udev properties (udevd can't run: ro /sys) —
+   dos-input-udevdb writes /run/udev/data — AND quirks
+   (/etc/libinput/local-overrides.quirks): the touchpanel advertises
+   min==max ABS_MT_WIDTH_MAJOR/_PRESSURE and libinput hard-rejects the
+   whole device otherwise.
+3. seatd (libseat session for the wlroots libinput backend): CONFIG_VT in
+   kernel #3 makes seatd VT-bound → container MUST have /dev/tty0-2
+   (guest-start mknods them) or every client times out "waiting session to
+   become active" and phoc dies at startup.
+4. THE pidfd HALF-BACKPORT (real mechanism behind "never phoc -E", now
+   proven): pidfd_open(434) WORKS on this kernel but waitid(P_PIDFD) is
+   EINVAL → glib child-watch fires with bogus status. dos-pidfd-shim.so
+   (LD_PRELOAD, guest) makes pidfd_open return ENOSYS → SIGCHLD fallback.
+   Verified A/B. Required for phosh app launching.
+5. phosh ABORTS (fatal GIO error) without gnome-settings-daemon-common —
+   it's only a Recommends; also adwaita-icon-theme for squeekboard keys.
+
+§4 KNOWN ISSUES: (a) power button: phosh blanks the screen but phoc's
+hwcomposer output RE-ENABLE never fires — "power kills the session";
+KEY_POWER is quirked inert (qpnp_pon quirk) until the wake path is
+debugged. Recovery from a blanked/wedged session: `pkill phoc` in guest —
+the desktop-on supervisor relaunches everything in ~10s, grabs included.
+(b) volume keys reach phosh; no audio stack in the guest yet so nothing
+happens. (c) guest DNS/egress breaks repeatedly at rest (raw egress fixed
+by re-running guest-start — netd reprograms chains; but UDP:53 also died
+twice on its own, undiagnosed). Package-install workaround: download deb
+on host → adb push → dpkg -i. (d) grim "failed to copy output" = the
+output is blanked, not a grim bug.
+
+DEVICE STABILITY (2026-07-06 evening): two spontaneous reboots + one
+battery shutdown + one REAL kernel panic into Qualcomm crashdump
+(USB 05c6:900e QUSB_BULK; hold Power+VolUp 10-15s to exit) — all during
+guest apt traffic while the battery was near-dead. melissa: not battery.
+NO PSTORE in kernel #3 so the panic text is lost — add CONFIG_PSTORE +
+PSTORE_RAM/RAMOOPS to decemberos.config for kernel #4. Until then run a
+`dmesg -w` tap to a host file during risky/network-heavy guest work.
+
+NEXT: debug the phoc output-power wake path (power button); guest DNS
+flakiness root cause; audio stack (pipewire) → volume keys + calls-less
+phone basics; phosh polish (feedbackd, backgrounds); pstore into kernel
+#4; then §5 external convergence. Android-side §4 stays proven
+(2026-07-03 round trip); full desktop-off regression after each session.
 
 NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,
 libtls-padding0) and the runtime mounts/iptables/ip-rules do NOT persist a

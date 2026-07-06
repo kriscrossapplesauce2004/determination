@@ -144,9 +144,12 @@ echo $! > "$DOS/run/compositor.pid"
 # a <=100ms release->grab gap, plus any phoc-crash window, where Android's
 # invisible UI could receive a touch. Keep fingers off the glass during
 # the toggle.
+# No iteration cap: on the first phosh bring-up (2026-07-06) phoc took
+# >120s to come healthy (seatd VT fix applied live) and a capped loop gave
+# up — evgrab kept the grabs and the session had no input. Wait as long as
+# desktop mode is on; the wlroots grab threads retry for 10min per device.
 (
-    i=0
-    while [ -f "$DOS/run/desktop-mode" ] && [ $i -lt 240 ]; do
+    while [ -f "$DOS/run/desktop-mode" ]; do
         if "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- \
                 /usr/bin/test -S /run/user/0/wayland-0 2>/dev/null; then
             [ -f "$DOS/run/evgrab.pid" ] && kill "$(cat "$DOS/run/evgrab.pid")" 2>/dev/null
@@ -154,7 +157,7 @@ echo $! > "$DOS/run/compositor.pid"
             echo "input handed to guest — evgrab released $(date)"
             break
         fi
-        i=$((i+1)); sleep 0.5
+        sleep 1
     done
 ) &
 
