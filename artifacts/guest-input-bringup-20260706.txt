@@ -1,0 +1,76 @@
+DecemberOS §4 guest-side input bring-up — evidence log, 2026-07-06 (late)
+==========================================================================
+
+GOAL: touch into the guest compositor + phosh/squeekboard as the real
+mobile session. All verified below WITHOUT stopping SF (no panel impact).
+
+INPUT DEVICE MAP (host /proc/bus/input/devices):
+  event0  qpnp_pon                power key
+  event1  touchpanel              THE touchscreen (PROP=2 direct, MT proto B)
+  event9  gpio-keys               volume keys
+  event8  oplus,hall_tri_state_key  alert slider
+  (event2/3/4 touchpanel_kpd/_ps/elliptic = gesture/proximity virtuals)
+
+TOUCHPANEL ABS RANGES (EVIOCGABS probe, guest):
+  ABS_MT_SLOT 0-9, TOUCH_MAJOR 0-255, POSITION_X 0-1078,
+  POSITION_Y 0-2338, TRACKING_ID 0-65535
+  BROKEN (min==max==0, advertised): ABS_MT_WIDTH_MAJOR, ABS_MT_PRESSURE
+
+FINDING 1 — libinput rejects the touchscreen outright:
+  "libinput error: event1 - touchpanel: kernel bug: device has
+   min == max on ABS_MT_WIDTH_MAJOR"
+  FIX: /etc/libinput/local-overrides.quirks (guest/setup-input.sh):
+    [OnePlus 7 touchpanel]
+    MatchName=touchpanel
+    AttrEventCode=-ABS_MT_WIDTH_MAJOR;-ABS_MT_PRESSURE
+  RESULT: libinput list-devices now shows
+    Device: touchpanel / Capabilities: keyboard touch        <-- GATE
+
+FINDING 2 — udevd cannot run in the container (ConditionPathIsReadWrite=
+/sys fails; /sys is ro) so libinput's udev backend sees no ID_INPUT_*
+properties and ignores every device. FIX: dos-input-udevdb hand-writes
+/run/udev/data/c13:NN from `udevadm test-builtin input_id` (works
+daemon-less). Verified entries: c13:65 = ID_INPUT + ID_INPUT_TOUCHSCREEN.
+
+FINDING 3 — THE pidfd HALF-BACKPORT (root cause of the "never phoc -E"
+rule, now precisely diagnosed): this 4.14.357 kernel BACKPORTS
+pidfd_open (syscall 434 returns a real fd) but NOT waitid(P_PIDFD)
+(EINVAL). glib sees pidfd_open succeed, commits to the pidfd path, then
+child-watch dispatch dies:
+  WITHOUT shim: GLib-WARNING waitid(pid:301, pidfd=4) failed: Invalid
+                argument ... CHILD-WATCH-FIRED status=-1   (bogus!)
+  WITH    shim: CHILD-WATCH-FIRED status=0                 (correct)
+  shim = /usr/local/lib/dos-pidfd-shim.so (guest/setup-input.sh):
+  interposes syscall()/pidfd_open() -> ENOSYS; glib falls back to
+  SIGCHLD. LD_PRELOADed into phoc + the phosh session by desktop-on.
+  (LXC seccomp would be cleaner but our static lxc 4.0.12 lacks it.)
+
+WLROOTS EVIOCGRAB HANDOFF (patch in guest/build-wlroots-phoc.sh, applied +
+rebuilt): on every /dev/input/event* open, dup the fd and take EVIOCGRAB
+in a detached 100ms-retry thread (grabs live on the open file
+description). desktop-on kills the Android-side evgrab once phoc's
+socket is up -> guest grab lands <=100ms later; no double-input window
+beyond that. Compiles clean; prints "DecemberOS: EVIOCGRAB acquired" to
+compositor.log per device.
+
+seatd 0.9.1 active in guest (systemd unit enabled) — wlroots' libinput
+backend needs a wlr_session (droidian-extensions is OFF in our build);
+LIBSEAT_BACKEND=seatd exported by desktop-on.
+
+STILL PENDING: apt install phosh+squeekboard (deferred: kernel panics /
+battery brownouts under heavy guest NAT traffic tonight — see below),
+then the panel test (desktop-on with WLR_BACKENDS=hwcomposer,libinput).
+
+CRASH FORENSICS (same evening): three device deaths during guest apt
+downloads. Boot-reason history: reboot 19:11, reboot 19:19,
+shutdown,battery -> boot 21:02, and a REAL kernel panic 23:23 into
+Qualcomm crashdump mode (USB 05c6:900e QUSB_BULK), forced-rebooted 23:30.
+Battery was near-dead for the first two (16% at 23:30 while charging) —
+brownout reboots are plausible there; the 23:23 crashdump is a genuine
+panic with no log (CONFIG_PSTORE not set in kernel #3 — add PSTORE/
+RAMOOPS to decemberos.config for kernel #4). Live dmesg -w tap to host
+(artifacts/kmsg-live-20260706.txt) now runs during risky operations;
+next heavy guest download happens on charger with the tap running.
+Also seen this boot: "wlan: disagrees about version of symbol
+module_layout" = the ROM trying to insmod its stale wlan.ko against our
+built-in driver — expected noise with kernel #3, harmless.

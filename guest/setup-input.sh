@@ -32,6 +32,9 @@ export DEBIAN_FRONTEND=noninteractive
 export TMPDIR=/tmp
 
 echo "== apt: phosh + squeekboard + input tools =="
+# Self-repair: adb/USB drops mid-run kill apt via SIGHUP and can leave dpkg
+# interrupted (happened 2026-07-06 when the phone's battery died mid-install).
+dpkg --configure -a 2>/dev/null || true
 apt-get update -qq
 # xkb-data: libxkbcommon finds no keymaps without it (we install with
 # --no-install-recommends everywhere); fonts-cantarell: phosh's UI font.
@@ -64,6 +67,19 @@ chmod 755 /usr/local/sbin/dos-input-udevdb
 echo "udev db entries:"; grep -l ID_INPUT /run/udev/data/c13:* | while read -r f; do
     echo "  $f: $(tr '\n' ' ' < "$f")"
 done
+
+echo "== libinput quirk: touchpanel bogus axes =="
+# The OnePlus touchpanel driver advertises ABS_MT_WIDTH_MAJOR and
+# ABS_MT_PRESSURE with min==max==0; libinput hard-rejects the whole device
+# ("kernel bug: device has min == max on ABS_MT_WIDTH_MAJOR", found
+# 2026-07-06). Strip the bogus axes via quirk — the good ones are
+# POSITION_X 0-1078, POSITION_Y 0-2338, TOUCH_MAJOR, SLOT 0-9, TRACKING_ID.
+mkdir -p /etc/libinput
+cat > /etc/libinput/local-overrides.quirks <<'EOF'
+[OnePlus 7 touchpanel]
+MatchName=touchpanel
+AttrEventCode=-ABS_MT_WIDTH_MAJOR;-ABS_MT_PRESSURE
+EOF
 
 echo "== dos-pidfd-shim =="
 cat > /tmp/dos-pidfd-shim.c <<'EOF'
