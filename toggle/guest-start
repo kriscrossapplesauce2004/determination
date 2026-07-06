@@ -23,33 +23,55 @@ if ! grep -q " $DOS/guest " /proc/mounts; then
 fi
 
 # --- Network: veth bridge + NAT out through whatever's up (wlan0/rmnet) ---
-ip link add decembr0 type bridge 2>/dev/null
-ip addr add 192.168.117.1/24 dev decembr0 2>/dev/null
-ip link set decembr0 up
-echo 1 > /proc/sys/net/ipv4/ip_forward
+# All of this is asserted by net_assert(), run once now and then re-asserted
+# every 20s by a keeper loop: qcom netmgrd/netd periodically REBUILD the
+# iptables rule set and the ip-rule chain, silently flushing every foreign
+# entry (found 2026-07-07: guest lost even gateway ping; our INPUT accepts
+# and pref-9000/21000 rules were gone, nm_mdmprxy chains freshly on top).
+# One-shot setup therefore CANNOT keep the guest online.
+net_assert() {
+    ip link add decembr0 type bridge 2>/dev/null
+    ip addr add 192.168.117.1/24 dev decembr0 2>/dev/null
+    ip link set decembr0 up
+    echo 1 > /proc/sys/net/ipv4/ip_forward
 
-iptables -t nat -C POSTROUTING -s 192.168.117.0/24 -j MASQUERADE 2>/dev/null ||
-    iptables -t nat -A POSTROUTING -s 192.168.117.0/24 -j MASQUERADE
-# Android's netd chains (oem_in/bw/fw/tetherctrl) precede everything; put
-# explicit accepts for the guest segment at the very top.
-iptables -C INPUT -i decembr0 -j ACCEPT 2>/dev/null ||
-    iptables -I INPUT 1 -i decembr0 -j ACCEPT
-iptables -C OUTPUT -o decembr0 -j ACCEPT 2>/dev/null ||
-    iptables -I OUTPUT 1 -o decembr0 -j ACCEPT
-iptables -C FORWARD -s 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
-    iptables -I FORWARD 1 -s 192.168.117.0/24 -j ACCEPT
-iptables -C FORWARD -d 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
-    iptables -I FORWARD 1 -d 192.168.117.0/24 -j ACCEPT
+    iptables -t nat -C POSTROUTING -s 192.168.117.0/24 -j MASQUERADE 2>/dev/null ||
+        iptables -t nat -A POSTROUTING -s 192.168.117.0/24 -j MASQUERADE
+    # Android's netd chains (oem_in/bw/fw/tetherctrl) precede everything;
+    # explicit accepts for the guest segment at the very top.
+    iptables -C INPUT -i decembr0 -j ACCEPT 2>/dev/null ||
+        iptables -I INPUT 1 -i decembr0 -j ACCEPT
+    iptables -C OUTPUT -o decembr0 -j ACCEPT 2>/dev/null ||
+        iptables -I OUTPUT 1 -o decembr0 -j ACCEPT
+    iptables -C FORWARD -s 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
+        iptables -I FORWARD 1 -s 192.168.117.0/24 -j ACCEPT
+    iptables -C FORWARD -d 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
+        iptables -I FORWARD 1 -d 192.168.117.0/24 -j ACCEPT
 
-# Android's policy routing has NO "lookup main" rule — the rule chain ends
-# in "from all unreachable", so replies to the guest die unless the guest
-# subnet is reachable from a consulted table (found 2026-07-04: guest pings
-# reached INPUT fine; the replies were routed to unreachable). Mirror netd's
-# own tether pattern (cf. its "iif r_rmnet_data0 lookup wlan0" rules).
-ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
-    ip rule add pref 9000 to 192.168.117.0/24 lookup main
-ip rule list | grep -q "iif decembr0 lookup wlan0" ||
-    ip rule add pref 21000 iif decembr0 lookup wlan0
+    # Android's policy routing has NO "lookup main" rule — the rule chain
+    # ends in "from all unreachable", so replies to the guest die unless
+    # the guest subnet is reachable from a consulted table (2026-07-04).
+    # Mirror netd's own tether pattern ("iif r_rmnet_data0 lookup wlan0").
+    ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
+        ip rule add pref 9000 to 192.168.117.0/24 lookup main
+    # Only valid once the wlan0 table exists (WiFi up) — harmless to retry.
+    ip rule list | grep -q "iif decembr0 lookup wlan0" ||
+        ip rule add pref 21000 iif decembr0 lookup wlan0 2>/dev/null
+}
+net_assert
+
+# net-keeper: re-assert every 20s, forever (all checks are cheap no-ops
+# while the rules survive). Killed by nothing — it must outlive desktop
+# toggles; a reboot clears it with everything else.
+if ! kill -0 "$(cat "$DOS/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
+    (
+        while :; do
+            net_assert 2>/dev/null
+            sleep 20
+        done
+    ) &
+    echo $! > "$DOS/run/net-keeper.pid"
+fi
 
 if ! lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING; then
     lxc-start -P "$DOS" -n guest -f "$DOS/lxc/config" -l WARN -o "$DOS/log/lxc.log"

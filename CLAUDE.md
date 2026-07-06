@@ -301,11 +301,32 @@ KEY_POWER is quirked inert (qpnp_pon quirk) until the wake path is
 debugged. Recovery from a blanked/wedged session: `pkill phoc` in guest —
 the desktop-on supervisor relaunches everything in ~10s, grabs included.
 (b) volume keys reach phosh; no audio stack in the guest yet so nothing
-happens. (c) guest DNS/egress breaks repeatedly at rest (raw egress fixed
-by re-running guest-start — netd reprograms chains; but UDP:53 also died
-twice on its own, undiagnosed). Package-install workaround: download deb
-on host → adb push → dpkg -i. (d) grim "failed to copy output" = the
-output is blanked, not a grim bug.
+happens. (c) ROOT CAUSE FOUND (2026-07-07 00:30): **in desktop mode
+system_server crash-loops** (WindowManager dies on the stopped SF; ~50s
+per cycle, verified via `ps -o etime` + logcat crash buffer) — every
+restart reprograms netd (flushing our iptables/ip-rules; guest-start now
+runs a 20s `net-keeper` loop for that) and bounces WiFi, which eventually
+stays DOWN (wlan0 DOWN, the `wlan0` route table deleted) → guest fully
+offline while in desktop mode. Milestone 6 (Zygisk hook on
+system_server's SF-death handling) is therefore URGENT, not polish; until
+then guest networking is only reliable in phone mode, and long desktop
+sessions thrash the framework (suspected contributor to the 07-06 kernel
+panic via wlan driver churn). Package-install workaround if needed:
+download deb on host → adb push → dpkg -i. (d) grim "failed to copy
+output" = the output is blanked, not a grim bug.
+
+§4 POLISH (2026-07-07, guest/setup-polish.sh — idempotent, run in PHONE
+mode for network): gnome-console/calculator/text-editor/clocks +
+gnome-backgrounds installed; phosh favorites + wallpaper set; **idle-delay
+forced 0** (an idle blank would hit the same broken wake path as the
+power button and soft-kill the session on a timer); **notch**: DT
+compatibles are generic qcom,sm8150* and gmobile 0.3.1 reads ONLY
+embedded GResources, so setup-polish.sh rebuilds libgmobile from source
+with the fajita (same 1080x2340 waterdrop glass) panel JSON registered
+under qcom,sm8150-mtp + qcom,sm8150, installed to /usr/local. BOTH phoc
+and phosh need LD_LIBRARY_PATH=/usr/local/... to load it (desktop-on
+exports it for the 5e client session too — phosh computes the top-bar
+notch margin).
 
 DEVICE STABILITY (2026-07-06 evening): two spontaneous reboots + one
 battery shutdown + one REAL kernel panic into Qualcomm crashdump

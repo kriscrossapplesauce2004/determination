@@ -177,6 +177,10 @@ echo $! > "$DOS/run/compositor.pid"
             export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export WAYLAND_DISPLAY=wayland-0 LANG=C.UTF-8
             export XDG_CURRENT_DESKTOP=Phosh XDG_SESSION_TYPE=wayland
+            # /usr/local first: phosh must load OUR libgmobile (embeds the
+            # OP7 notch panel for the qcom,sm8150 DT compatibles) — the
+            # Debian one has no entry and the top bar ignores the notch.
+            export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
             [ -f /usr/local/lib/dos-pidfd-shim.so ] &&
                 export LD_PRELOAD=/usr/local/lib/dos-pidfd-shim.so
             PHOSH=$(command -v phosh || true)
