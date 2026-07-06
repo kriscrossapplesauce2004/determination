@@ -15,11 +15,12 @@ rm -f "$DOS/run/suppressor.pid"
 
 # 2. Guest compositor must release the composer client *cleanly* — killing it
 #    mid-frame is how the HAL state machine wedges (spec risk register).
-lxc-attach -P "$DOS" -n guest -- pkill -TERM sway 2>/dev/null
-# TEMP: §3 render test teardown (remove with desktop-on's TEMP block)
-"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM test_hwcomposer 2>/dev/null
+#    Clients first, then phoc (SIGTERM: wlroots runs its display destroy).
+"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM foot 2>/dev/null
+"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM phoc 2>/dev/null
 [ -f "$DOS/run/compositor.pid" ] && kill "$(cat "$DOS/run/compositor.pid")" 2>/dev/null
-rm -f "$DOS/run/compositor.pid"
+[ -f "$DOS/run/client.pid" ] && kill "$(cat "$DOS/run/client.pid")" 2>/dev/null
+rm -f "$DOS/run/compositor.pid" "$DOS/run/client.pid"
 sleep 2
 
 # 3. Restart SF; verify panel re-init (no dead/black transition).

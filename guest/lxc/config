@@ -19,6 +19,10 @@ lxc.include =
 lxc.apparmor.profile = unconfined
 lxc.autodev = 1
 lxc.autodev.tmpfs.size = 25000000
+# Private devpts with a usable ptmx (0666 + /dev/ptmx symlink). Without it
+# the inherited devpts has ptmxmode=000 and terminals can't open PTYs —
+# foot's "failed to open PTY" killed the first phoc session (2026-07-06).
+lxc.pty.max = 1024
 # proc/sys/cgroup must be requested explicitly — systemd needs all three.
 # (Found on first boot 2026-07-03: without this /proc is absent and systemd
 # hangs before its first console line.)

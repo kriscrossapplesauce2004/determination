@@ -144,6 +144,31 @@ if ! grep -q "hwc2_compat_display_set_brightness" "$SRC/hybris/tests/test_common
 ' "$SRC/hybris/tests/test_common.cpp"
 fi
 
+# HWCNativeWindowSetBufferCount (2026-07-06, droidian API parity): the
+# droidian wlroots hwcomposer backend calls it (triple buffering); upstream
+# libhybris lacks it. setBufferCount is protected, so the C wrapper goes
+# through the public ANativeWindow perform() interface, which
+# BaseNativeWindow dispatches back to setBufferCount. Upstream-able.
+HWCW="$SRC/hybris/egl/platforms/hwcomposer"
+if ! grep -q HWCNativeWindowSetBufferCount "$HWCW/hwcomposer.h"; then
+    sed -i '/void HWCNativeWindowDestroy(struct ANativeWindow \*window);/a\
+\
+/* DecemberOS (droidian API parity): set swapchain depth. droidian wlroots\
+ * hwcomposer backend calls this for triple buffering. */\
+void HWCNativeWindowSetBufferCount(struct ANativeWindow *window, int cnt);' \
+        "$HWCW/hwcomposer.h"
+fi
+if ! grep -q HWCNativeWindowSetBufferCount "$HWCW/hwcomposer_window.cpp"; then
+    cat >> "$HWCW/hwcomposer_window.cpp" <<'EOF'
+
+extern "C" void HWCNativeWindowSetBufferCount(struct ANativeWindow *window, int cnt)
+{
+    /* setBufferCount is protected; use the public perform interface */
+    window->perform(window, NATIVE_WINDOW_SET_BUFFER_COUNT, cnt);
+}
+EOF
+fi
+
 cd "$SRC/hybris"
 
 [ -x configure ] || NOCONFIGURE=1 ./autogen.sh
@@ -163,6 +188,11 @@ make -j"$JOBS" || true
 make install || true    # -> /usr/local; installs the q/mm/n/o linkers to
                         # /usr/local/lib/libhybris/linker/ (HYBRIS_LINKER_DIR
                         # default) and the glibc-side libs to /usr/local/lib.
+# GOTCHA (bit us 2026-07-06): the include/ install can lag the patched
+# source headers (the hwc2 set_brightness decl never landed in
+# /usr/local/include until wlroots failed to compile against it). Force it.
+cp "$SRC/hybris/include/hybris/hwc2/hwc2_compatibility_layer.h" \
+   /usr/local/include/hybris/hwc2/hwc2_compatibility_layer.h 2>/dev/null || true
 ldconfig || true
 
 cat <<'NOTE'

@@ -1,0 +1,33 @@
+WAYLAND SOCKET UP after 1 half-seconds
+FOOT-RC=124 (124=lived full 40s window = GOOD)
+--- phoc log tail:
+phoc-wlroots-Message: 00:01:09.776: [backend/hwcomposer/hwcomposer2.c:253] width: 1080, height: 2340, refresh: 16666666, dpiX: 403.411011, dpiY: 409.903015
+
+phoc-wlroots-Message: 00:01:09.776: [backend/hwcomposer/output.c:254] wlr_hwcomposer_add_output width=1080 height=2340 refresh=60000 idle_time=2000000
+phoc-wlroots-Message: 00:01:09.788: [render/egl.c:242] Supported EGL client extensions: EGL_ANDROID_GLES_layers EGL_ANGLE_platform_angle EGL_EXT_client_extensions EGL_KHR_platform_android  EGL_EXT_client_extensions EGL_EXT_platform_wayland EGL_KHR_platform_wayland
+library "libadreno_app_profiles.so" not found
+phoc-wlroots-Message: 00:01:09.810: [render/egl.c:439] Using EGL 1.5
+phoc-wlroots-Message: 00:01:09.810: [render/egl.c:440] Supported EGL display extensions: EGL_ANDROID_front_buffer_auto_refresh EGL_ANDROID_get_native_client_buffer EGL_ANDROID_presentation_time EGL_EXT_surface_CTA861_3_metadata EGL_EXT_surface_SMPTE2086_metadata EGL_KHR_get_all_proc_addresses EGL_KHR_swap_buffers_with_damage EGL_ANDROID_get_frame_timestamps EGL_EXT_gl_colorspace_scrgb EGL_EXT_gl_colorspace_scrgb_linear EGL_EXT_gl_colorspace_display_p3_linear EGL_EXT_gl_colorspace_display_p3 EGL_EXT_gl_colorspace_display_p3_passthrough EGL_EXT_gl_colorspace_bt2020_hlg EGL_EXT_gl_colorspace_bt2020_linear EGL_EXT_gl_colorspace_bt2020_pq EGL_ANDROID_image_native_buffer EGL_ANDROID_native_fence_sync EGL_ANDROID_recordable EGL_EXT_create_context_robustness EGL_EXT_image_gl_colorspace EGL_EXT_pixel_format_float EGL_EXT_protected_content EGL_EXT_yuv_surface EGL_IMG_context_priority EGL_KHR_create_context EGL_KHR_create_context_no_error EGL_KHR_fence_sync EGL_KHR_gl_colorspace EGL_KHR_gl_renderbuffer_image EGL_KHR_gl_texture_2D_image EGL_KHR_gl_texture_3D_image EGL_KHR_gl_texture_cubemap_image EGL_KHR_image EGL_KHR_image_base EGL_KHR_lock_surface EGL_KHR_mutable_render_buffer EGL_KHR_no_config_context EGL_KHR_partial_update EGL_KHR_reusable_sync EGL_KHR_surfaceless_context EGL_KHR_wait_sync  EGL_HYBRIS_native_buffer2 EGL_HYBRIS_WL_acquire_native_buffer EGL_WL_bind_wayland_display
+phoc-wlroots-Message: 00:01:09.810: [render/egl.c:444] EGL vendor: Android
+phoc-wlroots-Message: 00:01:09.811: [render/gles2/renderer.c:845] Creating GLES2 renderer
+phoc-wlroots-Message: 00:01:09.811: [render/gles2/renderer.c:846] Using OpenGL ES 3.2 V@0502.0 (GIT@2f950bf, I802c3b73eb, 1623716683) (Date:06/14/21)
+phoc-wlroots-Message: 00:01:09.811: [render/gles2/renderer.c:847] GL vendor: Qualcomm
+phoc-wlroots-Message: 00:01:09.811: [render/gles2/renderer.c:848] GL renderer: Adreno (TM) 640
+phoc-wlroots-Message: 00:01:09.811: [render/gles2/renderer.c:849] Supported GLES2 extensions: GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_sync GL_OES_vertex_half_float GL_OES_framebuffer_object GL_OES_rgb8_rgba8 GL_OES_compressed_ETC1_RGB8_texture GL_AMD_compressed_ATC_texture GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_hdr GL_OES_texture_compression_astc GL_OES_texture_npot GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_EXT_read_format_bgra GL_OES_texture_3D GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_QCOM_alpha_test GL_OES_depth24 GL_OES_packed_depth_stencil GL_OES_depth_texture GL_OES_depth_texture_cube_map GL_EXT_sRGB GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_EXT_texture_type_2_10_10_10_REV GL_EXT_texture_sRGB_decode GL_EXT_texture_format_sRGB_override GL_OES_element_index_uint GL_EXT_copy_image GL_EXT_geometry_shader GL_EXT_tessellation_shader GL_OES_texture_stencil8 GL_EXT_shader_io_blocks GL_OES_shader_image_atomic GL_OES_sample_variables GL_EXT_texture_border_clamp GL_EXT_EGL_image_external_wrap_modes GL_EXT_multisampled_render_to_texture GL_EXT_multisampled_render_to_texture2 GL_OES_shader_multisample_interpolation GL_EXT_texture_cube_map_array GL_EXT_draw_buffers_indexed GL_EXT_gpu_shader5 GL_EXT_robustness GL_EXT_texture_buffer GL_EXT_shader_framebuffer_fetch GL_ARM_shader_framebuffer_fetch_depth_stencil GL_OES_texture_storage_multisample_2d_array GL_OES_sample_shading GL_OES_get_program_binary GL_EXT_debug_label GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_QCOM_tiled_rendering GL_ANDROID_extension_pack_es31a GL_EXT_primitive_bounding_box GL_OES_standard_derivatives GL_OES_vertex_array_object GL_EXT_disjoint_timer_query GL_KHR_debug GL_EXT_YUV_target GL_EXT_sRGB_write_control GL_EXT_texture_norm16 GL_EXT_discard_framebuffer GL_OES_surfaceless_context GL_OVR_multiview GL_OVR_multiview2 GL_EXT_texture_sRGB_R8 GL_KHR_no_error GL_EXT_debug_marker GL_OES_EGL_image_external_essl3 GL_OVR_multiview_multisampled_render_to_texture GL_EXT_buffer_storage GL_EXT_external_buffer GL_EXT_blit_framebuffer_params GL_EXT_clip_cull_distance GL_EXT_protected_textures GL_EXT_shader_non_constant_global_initializers GL_QCOM_texture_foveated GL_QCOM_texture_foveated_subsampled_layout GL_QCOM_shader_framebuffer_fetch_noncoherent GL_QCOM_shader_framebuffer_fetch_rate GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_EGL_image_array GL_NV_shader_noperspective_interpolation GL_KHR_robust_buffer_access_behavior GL_EXT_EGL_image_storage GL_EXT_blend_func_extended GL_EXT_clip_control GL_OES_texture_view GL_EXT_fragment_invocation_density GL_QCOM_motion_estimation GL_QCOM_validate_shader_binary GL_QCOM_YUV_texture_gather 
+
+(phoc:10277): phoc-wlroots-CRITICAL **: 00:01:09.811: [render/gles2/renderer.c:852] EGL_EXT_image_dma_buf_import not supported
+
+(phoc:10277): phoc-wlroots-CRITICAL **: 00:01:09.811: [render/gles2/renderer.c:858] GL_EXT_unpack_subimage not supported
+phoc-server-Message: 00:01:09.825: Linux dmabuf support unavailable
+Running compositor on wayland display 'wayland-0'
+phoc-wlroots-Message: 00:01:09.835: [backend/hwcomposer/backend.c:26] Starting hwcomposer backend
+phoc-output-Message: 00:01:09.835: No valid mode set for output 'HWCOMPOSER-1', using default scale
+phoc-output-Message: 00:01:09.846: Output 'HWCOMPOSER-1' added ('hwcomposer'/'hwcomposer'/'(null)'), 68mm x 145mm
+
+(phoc:10277): phoc-idle-inhibit-WARNING **: 00:01:09.846: Failed to get screensaver session proxy: Failed to execute child process ?dbus-launch? (No such file or directory)
+DOS-FMQ: ashmem_create_region -> fd=35 errno=0 size=65536
+--- foot log:
+warn: wayland.c:1729: compositor does not implement server-side cursors, falling back to client-side cursors
+warn: wayland.c:1734: compositor does not implement the XDG toplevel icon protocol
+warn: terminal.c:2015: slave exited with signal 1 (Hangup)
+SF: running bootanim: stopped

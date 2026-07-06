@@ -224,10 +224,55 @@ instance with fast-fail backoff, logging to `log/compositor.log`
 (stdbuf -oL required or the log stays empty). Old "composer-client race"
 flake note: measured never firing across many relaunches; treat as solved.
 
-NEXT (§3 finish): a real compositor in the guest — stock Debian sway is
-DRM/KMS-only and will NOT drive this panel; needs a wlroots/phoc build
-against the hybris-EGL `hwcomposer` platform — then §4 guest-side handoff.
-Android-side of §4 stays proven (2026-07-03 toggle round trip).
+**2026-07-06: §3 COMPLETE — phoc + foot terminal live on the panel.**
+The real compositor is **phoc 0.47** (droidian branch
+`group/102/keypad-slide-lights`) on the **droidian wlroots fork**
+(`feature/next/backport-0.18`, their live line: 0.17.4 + backported 0.18
+APIs + hwcomposer backend + android renderer), all built IN-GUEST against
+our upstream libhybris — `guest/build-wlroots-phoc.sh` (one script, all
+gotchas encoded). Verified: phoc on HWCOMPOSER-1 1080x2340, GLES 3.2
+Adreno 640, hybris EGL 1.5; foot as a separate Wayland client, visible and
+readable (photo-confirmed); grim screencopy works in-compositor. Evidence:
+`artifacts/guest-phoc-foot-v2-20260706.txt`, `guest-phoc-shot-20260706.png`.
+Hard-won facts (all encoded in the script + toggles):
+- sway is a DEAD END against this fork (1.9 too old / 1.10 too new for its
+  hybrid 0.17/0.18 API); phoc group/102 pins exactly wlroots >=0.17 <0.18
+  and REQUIRES xwayland-enabled wlroots (unguarded includes/fields).
+- libdroid: build-dep of the wlroots hwc backend; glibc-native (gio +
+  libgbinder). Build from source — the droidian BINARY deb drags their
+  stale TLS-broken libhybris in.
+- Upstream libhybris needed `HWCNativeWindowSetBufferCount` (droidian API,
+  triple buffering) — added via perform(); patch in build-libhybris.sh,
+  which now also force-installs the patched hwc2 header (the include
+  install lagged the source and broke the first wlroots compile).
+- The SDM DSPP-dim strikes ANY new composer client: wlroots hwcomposer2.c
+  patched to setDisplayBrightness(1.0) after power-on (in the build script).
+- Runtime MUST use LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/
+  aarch64-linux-gnu — droidian z4 libhybris debs still sit in
+  /lib/aarch64-linux-gnu and win ld.so.conf ordering otherwise.
+- glib child-watch is broken on this pidfd-less 4.14 kernel
+  (waitid(P_PIDFD) EINVAL): NEVER `phoc -E` — phoc thinks the session died
+  and exits (will bite anything glib-spawn-based, e.g. phosh, later).
+  desktop-on launches compositor and clients separately.
+- Container PTYs: inherited devpts has ptmxmode=000, terminals die with
+  "failed to open PTY". lxc.pty.max is NOT honored by our static LXC
+  4.0.12; guest-start remounts devpts + symlinks /dev/ptmx post-start.
+- Panel is ~403dpi: /etc/phoc.ini ([output:HWCOMPOSER-1] scale=3,
+  guest/phoc.ini) or text is unreadable.
+- dmabuf is unavailable (no EGL_EXT_image_dma_buf_import via hybris);
+  clients render over wl_shm — fine for terminals, revisit for phosh/apps.
+- phoc teardown segfaults after its wayland display is destroyed
+  (rc 139 / SIGSEGV at exit) — post-cleanup, cosmetic so far; watch it.
+desktop-on now supervises phoc (fast-fail backoff) + a foot client loop;
+desktop-off pkills foot then phoc (TERM) before SF restart.
+
+NEXT (§4 guest-side input handoff): touch does NOT reach the guest yet —
+expected: phoc runs backend hwcomposer only (libinput backend needs
+seatd/udev wiring in the container), and evgrab holds exclusive EVIOCGRAB
+on all input nodes so events can't leak to the still-live Android. Design
+the handover (release/FD-pass the touchscreen grab to the guest + seatd or
+WLR_LIBINPUT_NO_DEVICES-style wiring), then squeekboard/phosh for a real
+mobile session. Android-side §4 stays proven (2026-07-03 round trip).
 
 NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,
 libtls-padding0) and the runtime mounts/iptables/ip-rules do NOT persist a

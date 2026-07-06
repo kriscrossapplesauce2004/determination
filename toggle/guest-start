@@ -67,3 +67,12 @@ BOOTID=$(cat /proc/sys/kernel/random/boot_id)
 lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
     "[ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }" \
     2>/dev/null
+
+# devpts: the inherited mount has ptmxmode=000 and no /dev/ptmx, so
+# terminals die with "failed to open PTY" (killed foot 2026-07-06).
+# lxc.pty.max in the config is NOT honored by our static LXC 4.0.12 build,
+# so force it post-start like the ashmem node above.
+lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
+    "mount -o remount,gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null; \
+     [ -e /dev/ptmx ] || ln -sf pts/ptmx /dev/ptmx" \
+    2>/dev/null

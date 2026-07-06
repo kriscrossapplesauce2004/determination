@@ -1,0 +1,125 @@
+#!/bin/sh
+# DecemberOS §3 finish: build the REAL guest compositor — phoc 0.47 on the
+# droidian wlroots fork's hwcomposer backend — inside the trixie guest,
+# against OUR upstream libhybris in /usr/local (guest/build-libhybris.sh).
+# Run INSIDE the container as root. Non-destructive/idempotent-ish: safe to
+# re-run; clones are wiped and re-fetched.
+#
+# WHY THESE SOURCES (2026-07-06):
+#  - Stock Debian sway/wlroots is DRM/KMS-only and cannot drive this panel.
+#  - droidian/wlroots branch feature/next/backport-0.18 is their LIVE line
+#    (default branch, pushed 2026-05): wlroots 0.17.4 + backported 0.18
+#    APIs + the hwcomposer backend + an "android" renderer.
+#  - sway is a DEAD END against this fork: sway 1.9 wants pure 0.17 API
+#    (fails on the backported 0.18 presentation/transform APIs), sway 1.10
+#    wants real 0.18 (version pin rejects 0.17.4). Don't retry.
+#  - droidian/phoc branch group/102/keypad-slide-lights (phoc 0.47, their
+#    droidian-102 shipping line) pins system wlroots >=0.17 <0.18 — an
+#    exact match for the fork. It REQUIRES xwayland-enabled wlroots
+#    (unguarded includes and struct fields).
+#  - libdroid is a build-dep of the wlroots hwcomposer backend. It is
+#    glibc-native (gio + libgbinder, talks to HALs over binder directly, no
+#    libhybris linkage) — but droidian's BINARY package would drag in their
+#    stale TLS-broken libhybris debs, so it's built from source too.
+#
+# RUNTIME GOTCHAS THE OUTPUT DEPENDS ON (encoded in toggle/desktop-on):
+#  - LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu is
+#    MANDATORY: droidian z4 libhybris debs still sit in /lib/aarch64-linux-gnu
+#    and win ld.so.conf ordering otherwise (aarch64-linux-gnu.conf sorts
+#    before libc.conf).
+#  - phoc must NOT use -E/--exec: glib child-watch is broken on the
+#    pidfd-less 4.14 kernel (waitid(P_PIDFD) EINVAL) and phoc tears the
+#    session down thinking the child died. Launch clients separately.
+#  - The container needs lxc.pty.max (guest/lxc/config) or terminals get
+#    "failed to open PTY" (inherited devpts has ptmxmode=000).
+#  - /etc/phoc.ini sets output scale 3 — default scale 1 is unreadable at
+#    403dpi (guest/phoc.ini).
+#  - SDM DSPP-dims new composer clients to black: our wlroots patch below
+#    calls hwc2_compat_display_set_brightness(1.0) after power-on.
+set -e
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive
+export TMPDIR=/tmp
+export PKG_CONFIG_PATH=/usr/local/lib/aarch64-linux-gnu/pkgconfig:/usr/local/lib/pkgconfig
+export CFLAGS=-I/usr/local/include LDFLAGS=-L/usr/local/lib
+B=/root/build
+mkdir -p "$B"
+
+echo "== deps (apt) =="
+# wlroots core + sway-era leftovers + phoc/GNOME bits + xwayland (phoc hard
+# requirement) + drm backend bits (libdisplay-info/liftoff) + runtime
+# (foot terminal, a font — foot fails without one — grim for screenshots,
+# dbus quiets phoc's session warnings).
+apt-get update -qq
+apt-get install -y -qq --no-install-recommends \
+    meson ninja-build git ca-certificates pkg-config gettext \
+    wayland-protocols libwayland-dev libdrm-dev libgbm-dev libinput-dev \
+    libxkbcommon-dev libpixman-1-dev libseat-dev libudev-dev hwdata \
+    libegl-dev libgles-dev glslang-tools libevdev-dev \
+    libgbinder-dev libglib2.0-dev libgirepository1.0-dev libsystemd-dev \
+    systemd-dev \
+    libgnome-desktop-3-dev gsettings-desktop-schemas mutter-common \
+    libgmobile-dev libjson-glib-dev \
+    xwayland libxcb1-dev libxcb-composite0-dev libxcb-render0-dev \
+    libxcb-res0-dev libxcb-xfixes0-dev libxcb-icccm4-dev libxcb-ewmh-dev \
+    libxcb-xinput-dev libxcb-dri3-dev libxcb-present-dev libxcb-shm0-dev \
+    libdisplay-info-dev libliftoff-dev \
+    foot fonts-dejavu-core dbus grim
+
+echo "== libhybris prereq check =="
+# android-headers comes from the droidian repo (installed by
+# build-libhybris.sh's flow); the SetBufferCount + set_brightness patches
+# must already be in the installed libhybris (build-libhybris.sh).
+pkg-config --exists 'android-headers >= 9.0.0' || {
+    echo "FATAL: android-headers pkg-config missing (install android-headers-30)"; exit 1; }
+nm -D /usr/local/lib/libhybris-hwcomposerwindow.so | grep -q HWCNativeWindowSetBufferCount || {
+    echo "FATAL: libhybris lacks HWCNativeWindowSetBufferCount — re-run guest/build-libhybris.sh"; exit 1; }
+nm -D /usr/local/lib/libhwc2.so.1 | grep -q hwc2_compat_display_set_brightness || {
+    echo "FATAL: libhwc2 lacks set_brightness wrapper — re-run guest/build-libhybris.sh"; exit 1; }
+grep -q hwc2_compat_display_set_brightness /usr/local/include/hybris/hwc2/hwc2_compatibility_layer.h || {
+    echo "FATAL: installed hwc2 header lacks set_brightness decl — re-run guest/build-libhybris.sh"; exit 1; }
+
+echo "== libdroid (from source — do NOT apt install libdroid-dev) =="
+cd "$B" && rm -rf libdroid
+git clone --depth 1 -b droidian https://github.com/droidian/libdroid.git
+cd libdroid
+meson setup build --prefix=/usr/local -Dbuildtype=release
+ninja -C build && ninja -C build install
+
+echo "== wlroots (droidian fork, hwcomposer backend) =="
+cd "$B" && rm -rf wlroots
+git clone --depth 1 -b feature/next/backport-0.18 https://github.com/droidian/wlroots.git
+cd wlroots
+
+# PATCH (upstream-able to droidian): SDM (qcom sm8150) starts every NEW
+# composer client at per-client brightness 0 and DSPP-dims its output to
+# pure black while validate/present succeed (decemberos b182d86). Call
+# setDisplayBrightness(1.0) once after successful power-on. Idempotent.
+F=backend/hwcomposer/hwcomposer2.c
+grep -q hwc2_compat_display_set_brightness "$F" || sed -i \
+'s|\t\tif (enable \&\& change_backlight \&\&|\t\t/* DecemberOS: SDM inits new composer clients at brightness 0 and\n\t\t * DSPP-dims their output to black; one set_brightness after\n\t\t * power-on fixes it (see decemberos b182d86). */\n\t\tif (enable)\n\t\t\thwc2_compat_display_set_brightness(hwc2_output->hwc2_display, 1.0f);\n\n\t\tif (enable \&\& change_backlight \&\&|' "$F"
+grep -q hwc2_compat_display_set_brightness "$F" || { echo "FATAL: brightness patch anchor missing"; exit 1; }
+
+# drm backend + xwayland are NOT optional: phoc group/102 has unguarded
+# wlr/xwayland.h includes and calls drm-backend symbols.
+meson setup build --prefix=/usr/local -Dbuildtype=release \
+    -Dbackends=drm,libinput,hwcomposer -Drenderers=gles2,android \
+    -Dxwayland=enabled -Dexamples=false
+ninja -C build && ninja -C build install
+ldconfig
+
+echo "== phoc (droidian group/102) =="
+cd "$B" && rm -rf phoc
+git clone --depth 1 -b group/102/keypad-slide-lights https://github.com/droidian/phoc.git
+cd phoc
+meson setup build --prefix=/usr/local -Dbuildtype=release \
+    -Dembed-wlroots=disabled -Dman=false -Dxwayland=enabled
+ninja -C build && ninja -C build install
+ldconfig
+
+echo "== sanity =="
+export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
+ldd /usr/local/lib/aarch64-linux-gnu/libwlroots.so.12a | grep -E 'EGL|hwc2' | grep -q /usr/local/lib || {
+    echo "WARN: hybris libs not resolving to /usr/local — check LD_LIBRARY_PATH at runtime"; }
+/usr/local/bin/phoc --version
+echo "BUILD-WLROOTS-PHOC-OK — run via toggle/desktop-on (never phoc -E)"
