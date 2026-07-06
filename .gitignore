@@ -9,3 +9,65 @@ toolchain/
 decemberos-magisk-*.zip
 dist/
 artifacts/backups/
+
+# Standard ignores
+.DS_Store
+Thumbs.db
+*~
+*.swp
+*.swo
+*.swn
+*.tmp
+*.bak
+*.orig
+
+# C/C++
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.dylib
+*.exe
+*.out
+*.app
+compile_commands.json
+.ccls-cache/
+.clangd/
+
+# Java/Android
+*.class
+*.dex
+*.apk
+*.aar
+*.jar
+.gradle/
+build/
+local.properties
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs / Editors
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
+
+# Ctags/Cscope
+tags
+cscope.*
