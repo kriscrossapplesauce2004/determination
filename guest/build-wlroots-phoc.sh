@@ -36,6 +36,10 @@
 #    403dpi (guest/phoc.ini).
 #  - SDM DSPP-dims new composer clients to black: our wlroots patch below
 #    calls hwc2_compat_display_set_brightness(1.0) after power-on.
+#  - Input (§4): WLR_BACKENDS=hwcomposer,libinput + LIBSEAT_BACKEND=seatd,
+#    plus the udev-db faker + seatd from guest/setup-input.sh (udevd can't
+#    run in the container — ro /sys). PATCH 2 below adds the EVIOCGRAB
+#    handoff; desktop-on kills evgrab once phoc's socket is up.
 set -e
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export DEBIAN_FRONTEND=noninteractive
@@ -99,6 +103,111 @@ F=backend/hwcomposer/hwcomposer2.c
 grep -q hwc2_compat_display_set_brightness "$F" || sed -i \
 's|\t\tif (enable \&\& change_backlight \&\&|\t\t/* DecemberOS: SDM inits new composer clients at brightness 0 and\n\t\t * DSPP-dims their output to black; one set_brightness after\n\t\t * power-on fixes it (see decemberos b182d86). */\n\t\tif (enable)\n\t\t\thwc2_compat_display_set_brightness(hwc2_output->hwc2_display, 1.0f);\n\n\t\tif (enable \&\& change_backlight \&\&|' "$F"
 grep -q hwc2_compat_display_set_brightness "$F" || { echo "FATAL: brightness patch anchor missing"; exit 1; }
+
+# PATCH 2 (DecemberOS §4, 2026-07-06): EVIOCGRAB handoff in the libinput
+# backend. Android's EventHub (inside system_server) keeps every
+# /dev/input/event* open non-exclusively — without a grab, events reach
+# BOTH stacks. The Android-side evgrab holds the grab through the SF stop;
+# this patch makes the guest take its own grab (dup'd fd + detached
+# 100ms-retry thread) the moment libinput opens each node, so desktop-on
+# can kill evgrab once phoc is up and the guest acquires within a tick.
+# Grabs live on the open file description, so they vanish with phoc.
+python3 - <<'PYEOF'
+import pathlib, sys
+
+p = pathlib.Path('backend/libinput/backend.c')
+s = p.read_text()
+if 'dos_grab_evdev' in s:
+    print('grab patch: already applied')
+    sys.exit(0)
+
+inc_anchor = '#include "util/env.h"\n'
+assert inc_anchor in s, 'include anchor missing'
+s = s.replace(inc_anchor, inc_anchor + (
+    '\n'
+    '/* DecemberOS §4 input handoff */\n'
+    '#include <errno.h>\n'
+    '#include <linux/input.h>\n'
+    '#include <pthread.h>\n'
+    '#include <stdint.h>\n'
+    '#include <string.h>\n'
+    '#include <sys/ioctl.h>\n'
+    '#include <time.h>\n'
+    '#include <unistd.h>\n'
+), 1)
+
+helper = '''\
+/* DecemberOS §4: Android's EventHub (inside system_server) keeps
+ * /dev/input/event* open non-exclusively — without EVIOCGRAB every event
+ * is delivered to BOTH stacks (double input). During the handoff the
+ * Android-side evgrab daemon still holds the grab, so retry from a
+ * detached thread until desktop-on kills evgrab. The grab is taken on a
+ * dup'd fd: grabs belong to the open file description, which libinput's
+ * fd shares, so the grab lives exactly as long as libinput's device. */
+static void *dos_grab_thread(void *arg) {
+\tint fd = (int)(intptr_t)arg;
+\tstruct timespec ts = { .tv_sec = 0, .tv_nsec = 100 * 1000 * 1000 };
+\tfor (int i = 0; i < 300; i++) {
+\t\tif (ioctl(fd, EVIOCGRAB, (void *)1) == 0) {
+\t\t\tfprintf(stderr, "DecemberOS: EVIOCGRAB acquired (fd %d)\\n", fd);
+\t\t\tbreak;
+\t\t}
+\t\tif (errno != EBUSY) {
+\t\t\tfprintf(stderr, "DecemberOS: EVIOCGRAB failed (fd %d): %s\\n",
+\t\t\t\tfd, strerror(errno));
+\t\t\tbreak;
+\t\t}
+\t\tnanosleep(&ts, NULL);
+\t}
+\tclose(fd);
+\treturn NULL;
+}
+
+static void dos_grab_evdev(const char *path, int fd) {
+\tif (strncmp(path, "/dev/input/event", 16) != 0) {
+\t\treturn;
+\t}
+\tint gfd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+\tif (gfd < 0) {
+\t\treturn;
+\t}
+\tpthread_t t;
+\tpthread_attr_t attr;
+\tpthread_attr_init(&attr);
+\tpthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+\tif (pthread_create(&t, &attr, dos_grab_thread, (void *)(intptr_t)gfd) != 0) {
+\t\tclose(gfd);
+\t}
+\tpthread_attr_destroy(&attr);
+}
+
+'''
+fn_anchor = 'static int libinput_open_restricted(const char *path,'
+assert fn_anchor in s, 'open_restricted anchor missing'
+s = s.replace(fn_anchor, helper + fn_anchor, 1)
+
+droidian = '\treturn open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);'
+assert droidian in s, 'droidian-branch anchor missing'
+s = s.replace(droidian, (
+    '\tint fd = open(path, O_RDWR | O_CLOEXEC | O_NONBLOCK);\n'
+    '\tif (fd >= 0) {\n'
+    '\t\tdos_grab_evdev(path, fd);\n'
+    '\t}\n'
+    '\treturn fd;'
+), 1)
+
+sess = '\treturn dev->fd;\n#endif // WLR_HAS_DROIDIAN_EXTENSIONS\n}'
+assert sess in s, 'session-branch anchor missing'
+s = s.replace(sess, (
+    '\tdos_grab_evdev(path, dev->fd);\n'
+    '\treturn dev->fd;\n'
+    '#endif // WLR_HAS_DROIDIAN_EXTENSIONS\n}'
+), 1)
+
+p.write_text(s)
+print('grab patch: applied')
+PYEOF
+grep -q dos_grab_evdev backend/libinput/backend.c || { echo "FATAL: grab patch failed"; exit 1; }
 
 # drm backend + xwayland are NOT optional: phoc group/102 has unguarded
 # wlr/xwayland.h includes and calls drm-backend symbols.

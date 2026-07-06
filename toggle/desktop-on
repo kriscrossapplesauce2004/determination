@@ -78,9 +78,15 @@ echo 2048 > /sys/class/backlight/backlight/brightness 2>/dev/null
 #      - supervisor relaunches phoc only on DEATH, with fast-fail backoff;
 #        desktop-off clears desktop-mode first, so intentional teardown is
 #        not treated as a crash.
-#    Input note: phoc runs backend 'hwcomposer' only (no libinput backend
-#    yet — needs a seat; §4 guest-side input handoff is the next milestone),
-#    so the foot terminal is display-only for now.
+#    Input (§4, 2026-07-06): phoc now runs backends hwcomposer,libinput.
+#    The libinput backend needs (a) seatd (wlr_session via libseat), and
+#    (b) /run/udev/data entries so libinput accepts devices — udevd cannot
+#    run in the container (ro /sys), so dos-input-udevdb (guest/
+#    setup-input.sh) hand-writes them per boot. Our wlroots patch takes
+#    EVIOCGRAB on every node libinput opens (retrying while step 1's
+#    evgrab still holds); step 5d kills evgrab once phoc is up, completing
+#    the handoff with a <=100ms no-grab window. If setup-input.sh hasn't
+#    run yet, fall back to hwcomposer-only (display works, no input).
 BL=/sys/class/backlight/backlight/brightness
 CLOG="$DOS/log/compositor.log"
 : > "$CLOG"
@@ -96,11 +102,20 @@ CLOG="$DOS/log/compositor.log"
         echo "--- launch phoc (prior consecutive fast-fails: $fails) $(date)" >> "$CLOG"
         t0=$(date +%s)
         "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
-            export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
             export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
             export EGL_PLATFORM=hwcomposer HYBRIS_EGLPLATFORM=hwcomposer ANDROID_ROOT=/system TMPDIR=/tmp
-            export WLR_BACKENDS=hwcomposer XDG_RUNTIME_DIR=/run/user/0 LANG=C.UTF-8
+            export XDG_RUNTIME_DIR=/run/user/0 LANG=C.UTF-8
+            WLR_BACKENDS=hwcomposer
+            if [ -x /usr/local/sbin/dos-input-udevdb ]; then
+                dos-input-udevdb 2>/dev/null &&
+                systemctl start seatd 2>/dev/null &&
+                WLR_BACKENDS=hwcomposer,libinput
+            fi
+            export WLR_BACKENDS LIBSEAT_BACKEND=seatd
+            [ -f /usr/local/lib/dos-pidfd-shim.so ] &&
+                export LD_PRELOAD=/usr/local/lib/dos-pidfd-shim.so
             mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
             rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
             exec stdbuf -oL -eL /usr/local/bin/phoc -C /etc/phoc.ini
@@ -121,7 +136,33 @@ CLOG="$DOS/log/compositor.log"
     done
 ) &
 echo $! > "$DOS/run/compositor.pid"
-# Client launcher: wait for the wayland socket, keep one foot alive on it.
+
+# 5d. Input handoff (§4): step 1's evgrab blinded Android before SF went
+# down; phoc's patched libinput backend retries EVIOCGRAB every 100ms on
+# every node it opens. Once phoc's wayland socket exists, kill evgrab —
+# the guest acquires within a tick. Residual risk (accepted 2026-07-06):
+# a <=100ms release->grab gap, plus any phoc-crash window, where Android's
+# invisible UI could receive a touch. Keep fingers off the glass during
+# the toggle.
+(
+    i=0
+    while [ -f "$DOS/run/desktop-mode" ] && [ $i -lt 240 ]; do
+        if "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- \
+                /usr/bin/test -S /run/user/0/wayland-0 2>/dev/null; then
+            [ -f "$DOS/run/evgrab.pid" ] && kill "$(cat "$DOS/run/evgrab.pid")" 2>/dev/null
+            rm -f "$DOS/run/evgrab.pid"
+            echo "input handed to guest — evgrab released $(date)"
+            break
+        fi
+        i=$((i+1)); sleep 0.5
+    done
+) &
+
+# 5e. Session clients: phosh (mobile shell) + squeekboard (OSK) on the
+# phoc socket, sharing one dbus session bus. The pidfd shim is MANDATORY
+# for phosh: glib child-watch dies on this kernel's half-backported pidfd
+# (pidfd_open works, waitid(P_PIDFD) EINVAL) and app launching would
+# break. Falls back to a bare foot terminal if phosh isn't installed.
 (
     while [ -f "$DOS/run/desktop-mode" ]; do
         "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
@@ -132,6 +173,14 @@ echo $! > "$DOS/run/compositor.pid"
             done
             export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export WAYLAND_DISPLAY=wayland-0 LANG=C.UTF-8
+            export XDG_CURRENT_DESKTOP=Phosh XDG_SESSION_TYPE=wayland
+            [ -f /usr/local/lib/dos-pidfd-shim.so ] &&
+                export LD_PRELOAD=/usr/local/lib/dos-pidfd-shim.so
+            PHOSH=$(command -v phosh || true)
+            [ -x /usr/libexec/phosh ] && PHOSH=/usr/libexec/phosh
+            if [ -n "$PHOSH" ]; then
+                exec dbus-run-session -- /bin/sh -c "squeekboard & exec $PHOSH"
+            fi
             exec foot -- /bin/bash -l
         ' >> "$CLOG" 2>&1
         [ -f "$DOS/run/desktop-mode" ] || break
@@ -139,4 +188,4 @@ echo $! > "$DOS/run/compositor.pid"
     done
 ) &
 echo $! > "$DOS/run/client.pid"
-echo "desktop mode up (phoc + foot; log/compositor.log)"
+echo "desktop mode up (phoc + phosh session; log/compositor.log)"

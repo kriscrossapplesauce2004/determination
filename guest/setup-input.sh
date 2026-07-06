@@ -1,0 +1,122 @@
+#!/bin/sh
+# DecemberOS §4 guest-side input handoff + mobile shell — one script, all
+# gotchas encoded. Run INSIDE the container as root. Idempotent.
+#
+# WHAT THIS SETS UP (2026-07-06):
+#  - phosh 0.46 + squeekboard 1.43 from trixie as the real mobile session
+#    (Debian's phosh dep pulls Debian's phoc/wlroots — harmless, we run
+#    /usr/local/bin/phoc with LD_LIBRARY_PATH=/usr/local/... which wins).
+#  - seatd: wlroots' libinput backend (droidian-extensions OFF in our build)
+#    requires a wlr_session via libseat; seatd is the no-logind-session
+#    backend. Debian's libseat tries seatd first when the socket exists,
+#    but desktop-on still exports LIBSEAT_BACKEND=seatd to be explicit.
+#  - dos-input-udevdb: hand-written /run/udev/data entries. systemd-udevd
+#    NEVER runs in this container (ConditionPathIsReadWrite=/sys fails —
+#    the container's /sys is read-only), so libinput's udev backend sees no
+#    ID_INPUT_* properties and silently ignores every device. The hardware
+#    is static, so generating the db once per boot from udevadm's input_id
+#    builtin (which works daemon-less) is sufficient. Verified mapping on
+#    guacamoleb: event1 = "touchpanel" -> ID_INPUT_TOUCHSCREEN=1.
+#  - dos-pidfd-shim.so: THE glib child-watch fix. This 4.14 kernel
+#    BACKPORTS pidfd_open (syscall 434 returns a real fd — probed
+#    2026-07-06) but NOT waitid(P_PIDFD), which returns EINVAL. glib sees
+#    pidfd_open succeed, commits to the pidfd path, then child-watch
+#    dispatch dies on waitid — this is the real mechanism behind the
+#    "never phoc -E" rule and would break phosh's app launching. The shim
+#    interposes syscall()/pidfd_open() to return ENOSYS so glib takes its
+#    SIGCHLD fallback. LD_PRELOAD it into anything glib-spawn-based
+#    (desktop-on does this for the phosh session and phoc).
+set -e
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export DEBIAN_FRONTEND=noninteractive
+export TMPDIR=/tmp
+
+echo "== apt: phosh + squeekboard + input tools =="
+apt-get update -qq
+# xkb-data: libxkbcommon finds no keymaps without it (we install with
+# --no-install-recommends everywhere); fonts-cantarell: phosh's UI font.
+apt-get install -y -qq --no-install-recommends \
+    phosh squeekboard libinput-tools xkb-data fonts-cantarell
+
+echo "== seatd =="
+systemctl enable --now seatd
+systemctl --no-pager --quiet is-active seatd || { echo "FATAL: seatd not active"; exit 1; }
+
+echo "== dos-input-udevdb =="
+cat > /usr/local/sbin/dos-input-udevdb <<'EOF'
+#!/bin/sh
+# DecemberOS: hand-write /run/udev/data entries for input event nodes so
+# libinput's udev backend accepts devices WITHOUT a running udevd (udevd is
+# condition-blocked in this container: /sys is read-only). /run is tmpfs —
+# desktop-on re-runs this before each phoc launch. Only devices input_id
+# actually classifies get an entry; the rest stay invisible to libinput.
+set -e
+mkdir -p /run/udev/data
+for ev in /sys/class/input/event*; do
+    [ -e "$ev" ] || continue
+    props=$(udevadm test-builtin input_id "$ev" 2>/dev/null | grep '^ID_' || true)
+    [ -n "$props" ] || continue
+    printf '%s\n' "$props" | sed 's/^/E:/' > "/run/udev/data/c$(cat "$ev/dev")"
+done
+EOF
+chmod 755 /usr/local/sbin/dos-input-udevdb
+/usr/local/sbin/dos-input-udevdb
+echo "udev db entries:"; grep -l ID_INPUT /run/udev/data/c13:* | while read -r f; do
+    echo "  $f: $(tr '\n' ' ' < "$f")"
+done
+
+echo "== dos-pidfd-shim =="
+cat > /tmp/dos-pidfd-shim.c <<'EOF'
+/* DecemberOS: this 4.14 kernel backports pidfd_open(434) but NOT
+ * waitid(P_PIDFD) (EINVAL) — glib child-watch commits to the pidfd path
+ * and dies. Make pidfd_open fail ENOSYS so glib uses its SIGCHLD
+ * fallback. Interposes both the raw syscall() route glib uses and the
+ * glibc pidfd_open() wrapper for good measure. glibc-world only — the
+ * bionic side has its own linker and never sees LD_PRELOAD. */
+#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <stdint.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+
+#ifndef __NR_pidfd_open
+#define __NR_pidfd_open 434
+#endif
+
+long syscall(long number, ...)
+{
+    long a[6];
+    va_list ap;
+    va_start(ap, number);
+    for (int i = 0; i < 6; i++)
+        a[i] = va_arg(ap, long);
+    va_end(ap);
+
+    if (number == __NR_pidfd_open) {
+        errno = ENOSYS;
+        return -1;
+    }
+
+    static long (*real)(long, long, long, long, long, long, long);
+    if (!real)
+        real = (long (*)(long, long, long, long, long, long, long))
+            (uintptr_t)dlsym(RTLD_NEXT, "syscall");
+    return real(number, a[0], a[1], a[2], a[3], a[4], a[5]);
+}
+
+int pidfd_open(pid_t pid, unsigned int flags)
+{
+    (void)pid; (void)flags;
+    errno = ENOSYS;
+    return -1;
+}
+EOF
+gcc -shared -fPIC -O2 -o /usr/local/lib/dos-pidfd-shim.so /tmp/dos-pidfd-shim.c
+echo "shim installed: /usr/local/lib/dos-pidfd-shim.so"
+
+echo "== phosh binary location (Debian splits wrapper vs binary) =="
+dpkg -L phosh | grep -E 'bin/|libexec/' || true
+
+echo "SETUP-INPUT-OK"
