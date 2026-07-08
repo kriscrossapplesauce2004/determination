@@ -54,8 +54,13 @@ sleep 1
 # were reaching scanout but the light was off — the panel wasn't "dark", it
 # was unlit). Force it back on; desktop-off restores Android's own control.
 # ACTIVE node is backlight/ (max 4095); panel0-backlight is inert (2026-07-05
-# fill-run: frames visible with backlight/=2048 while panel0-backlight=0).
-echo 2048 > /sys/class/backlight/backlight/brightness 2>/dev/null
+# fill-run: frames visible while panel0-backlight=0).
+# BL_LEVEL: 1400/4095 (~34%). Lowered from 2048 for OLED burn-in — the idle
+# blank is disabled (broken wake path) so the panel stays lit the whole
+# session; lower luminance + the dark UI theme cut the burn-in rate. Still
+# very readable indoors. Bump it if you're outdoors.
+BL_LEVEL=1400
+echo "$BL_LEVEL" > /sys/class/backlight/backlight/brightness 2>/dev/null
 
 # 5. THE REAL COMPOSITOR (2026-07-06): phoc 0.47 (droidian group/102) on the
 #    droidian wlroots hwcomposer backend, built in-guest against upstream
@@ -71,8 +76,9 @@ echo 2048 > /sys/class/backlight/backlight/brightness 2>/dev/null
 #      - stale wayland-0 socket+lock must be removed pre-launch or a
 #        relaunched phoc silently binds wayland-1 and clients miss it.
 #      - backlight keeper: an SF stop zeroes the backlight; re-assert every
-#        2s. ACTIVE node is backlight/ (max 4095, we write 2048);
-#        panel0-backlight is inert (2026-07-05). phoc's wlroots also sets
+#        2s at BL_LEVEL (see 4b — ~34% for burn-in). ACTIVE node is
+#        backlight/ (max 4095); panel0-backlight is inert (2026-07-05).
+#        phoc's wlroots also sets
 #        composer-client brightness 1.0 after power-on (the SDM DSPP-dim
 #        fix, b182d86) — this keeper handles only the sysfs backlight.
 #      - supervisor relaunches phoc only on DEATH, with fast-fail backoff;
@@ -92,7 +98,7 @@ CLOG="$DOS/log/compositor.log"
 : > "$CLOG"
 (
     while [ -f "$DOS/run/desktop-mode" ]; do
-        echo 2048 > "$BL" 2>/dev/null
+        echo "$BL_LEVEL" > "$BL" 2>/dev/null
         sleep 2
     done
 ) &
