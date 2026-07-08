@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Translucent glass over the dark gradient. -->
+    <color name="card_glass">#A61C1418</color>
+</resources>

@@ -1,14 +1,20 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
+    android:viewportWidth="108"
+    android:viewportHeight="108">
     <!-- Black battle-box background. -->
     <path
         android:fillColor="#0A0A0A"
-        android:pathData="M0,0h24v24h-24z" />
-    <!-- The red SOUL (Determination). -->
-    <path
-        android:fillColor="#FF1717"
-        android:pathData="M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z" />
+        android:pathData="M0,0h108v108h-108z" />
+    <!-- The pixel SOUL, 13x11 grid scaled 6x and centred (15,21). -->
+    <group
+        android:translateX="15"
+        android:translateY="21"
+        android:scaleX="6"
+        android:scaleY="6">
+        <path
+            android:fillColor="#FF0000"
+            android:pathData="M2,0h3v1h-3z M8,0h3v1h-3z M1,1h5v1h-5z M7,1h5v1h-5z M0,2h13v1h-13z M0,3h13v1h-13z M0,4h13v1h-13z M1,5h11v1h-11z M2,6h9v1h-9z M3,7h7v1h-7z M4,8h5v1h-5z M5,9h3v1h-3z M6,10h1v1h-1z" />
+    </group>
 </vector>

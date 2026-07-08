@@ -4,9 +4,15 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
+import com.google.android.material.color.DynamicColors
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
@@ -29,7 +35,21 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Material You 3: apply the wallpaper-derived dynamic palette (Android 12+).
+        DynamicColors.applyToActivityIfAvailable(this)
+        // Edge-to-edge: draw behind the transparent system bars, then inset the
+        // scrolling column so content never hides under status/nav bars.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
+
+        val rootColumn = findViewById<LinearLayout>(R.id.rootColumn)
+        val basePadTop = rootColumn.paddingTop
+        val basePadBottom = rootColumn.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(rootColumn) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.updatePadding(top = basePadTop + bars.top, bottom = basePadBottom + bars.bottom)
+            insets
+        }
 
         statusText = findViewById(R.id.statusText)
         rootText = findViewById(R.id.rootText)

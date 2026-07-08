@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- The red SOUL — Determination. -->
-    <color name="det_primary">#FF1717</color>
-    <color name="det_soul">#FF1717</color>
+    <color name="det_soul">#FF0000</color>
     <color name="det_ink">#0A0A0A</color>
+    <!-- Translucent "glass" card surface (light theme); dark override in values-night. -->
+    <color name="card_glass">#CCFFFFFF</color>
 </resources>
