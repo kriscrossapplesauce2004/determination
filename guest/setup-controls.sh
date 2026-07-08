@@ -13,6 +13,10 @@
 # Run inside the container (lxc-attach ... -- /root/setup-controls.sh). No
 # network needed. Mirror of the on-device customiser like setup-input/polish.
 set -eu
+# lxc-attach hands this script a minimal PATH; systemctl / gsettings /
+# dbus-run-session / update-desktop-database all live in /usr/bin and were
+# silently skipped without this (found on first on-device run 2026-07-08).
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 CTRL=/mnt/det-control
 
 echo "== det-signal helper =="
