@@ -136,6 +136,53 @@ dbus-run-session -- /bin/sh -c '
     esac
 ' || echo "note: could not set phosh favorites (key absent?) — launcher still in app grid"
 
+echo "== battery translator (det-battery) =="
+# The OP7 'battery' power_supply node reports a stuck/garbage capacity on this
+# kernel (frozen charge_counter, bogus 41°C temp) — that's what UPower/phosh
+# read, so the Linux battery shows ~1%. The REAL gauge is the 'bms' node
+# (type=BMS, which UPower ignores). This daemon shadows battery/capacity with
+# the live bms value via a bind-mount that lives ONLY in the guest mount
+# namespace — Android's own (correct) reading is never touched.
+cat > /usr/local/sbin/det-battery <<'EOS'
+#!/bin/sh
+set -u
+BATT=$(readlink -f /sys/class/power_supply/battery 2>/dev/null)
+BMS=/sys/class/power_supply/bms/capacity
+CAP=/run/det-battery-capacity
+[ -n "$BATT" ] && [ -e "$BATT/capacity" ] && [ -r "$BMS" ] || {
+    echo "det-battery: battery/bms nodes not present — nothing to do"; exit 0; }
+
+seed=$(cat "$BMS" 2>/dev/null)
+case "$seed" in ''|*[!0-9]*) seed=$(cat "$BATT/capacity" 2>/dev/null) ;; esac
+echo "${seed:-50}" > "$CAP"
+# Shadow the broken node's capacity with our file (idempotent across restarts).
+if ! mountpoint -q "$BATT/capacity"; then
+    mount --bind "$CAP" "$BATT/capacity" || { echo "det-battery: bind failed"; exit 1; }
+fi
+echo "det-battery: shadowing $BATT/capacity <- bms (seed ${seed})"
+while :; do
+    c=$(cat "$BMS" 2>/dev/null)
+    case "$c" in ''|*[!0-9]*) ;; *) echo "$c" > "$CAP" ;; esac
+    sleep 30
+done
+EOS
+chmod 0755 /usr/local/sbin/det-battery
+cat > /etc/systemd/system/det-battery.service <<EOF
+[Unit]
+Description=Determination: mirror the real (bms) battery level into UPower's node
+After=local-fs.target
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/det-battery
+Restart=on-failure
+RestartSec=10
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable --now det-battery.service 2>/dev/null && echo "det-battery enabled + started" ||
+    echo "note: could not start det-battery.service (will start next boot)"
+
 echo "== done =="
 echo "Power menu (Power Off / Restart) + app-grid tiles now drive the host."
 echo "Requires the guest to be running under the lxc config that binds"
