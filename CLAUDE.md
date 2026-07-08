@@ -412,8 +412,34 @@ host node still 1). Bind-over-sysfs works here (privileged container). NOTE this
 means a low battery genuinely reads low on both — it is NOT purely cosmetic; the
 cell was actually near-empty. Wall-charge before heavy/desktop testing.
 
+**2026-07-08 late: companion Material-You pass + SESSION-MANAGER SHIM (logout
+== phone mode).** Both deployed to device; shim verified in isolation, live
+routing through phosh UI still to eyeball.
+- companion app: Material3 DynamicColors.DayNight (wallpaper palette on A12+),
+  edge-to-edge with transparent bars + window-inset padding, soul-tinted
+  gradient bg (light+dark), translucent "glass" MaterialCardView status,
+  adaptive margins (values-sw600dp), pixel-art red SOUL icon/header. Rebuilt +
+  reinstalled (com.determination.companion, versionName 0.2.0).
+- **det-session-manager** (guest/setup-controls.sh): phosh + squeekboard were
+  failing to register with org.gnome.SessionManager (we run phosh bare — no
+  gnome-session; `phoc -E` is banned on this kernel). New minimal gi/GDBus
+  service OWNS that name on phosh's session bus and routes the verbs to the
+  host control channel: Logout()->det-signal exit (**log out of desktop ==
+  hand display back to phone** — melissa's idea), Shutdown()->poweroff,
+  Reboot()->reboot. Full RegisterClient/ClientPrivate handshake + Inhibit/
+  CanShutdown stubs + props. desktop-on 5e launches it inside dbus-run-session
+  BEFORE phosh (`${SM:+$SM & sleep 0.3;}`). On-device isolation test (scratch
+  session bus) green: owns name, CanShutdown=true, RegisterClient returns a
+  client objectpath, EndSessionResponse acks. UNVERIFIED: whether phosh's
+  power menu surfaces a Logout affordance / routes Shutdown-Reboot through the
+  shim vs logind — needs a live desktop-mode tap-test. On-device desktop-on
+  lives at `/data/determination/bin/desktop-on` (toggle scripts deploy to
+  `.../bin/`, NOT `.../toggle/`).
+
 NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
-the panel; try the companion app's Enter Desktop Mode + QS tile (grant it su).
+the panel; confirm phosh registers with the session-manager shim (no more
+"org.gnome.SessionManager not provided" warnings) and that Logout/power route
+to the host; try the companion app's Enter Desktop Mode + QS tile (grant it su).
 Consider rebuilding lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink.
 Then: debug the phoc output-power wake path (power button); guest DNS
 flakiness root cause; audio stack (pipewire) → volume keys + calls-less
