@@ -54,6 +54,7 @@ Exec=det-signal exit
 Icon=system-log-out
 Terminal=false
 Categories=System;
+X-Purism-FormFactor=Workstation;Mobile;
 Keywords=phone;android;exit;desktop;determination;
 EOF
 cat > /usr/share/applications/determination-poweroff.desktop <<EOF
@@ -65,6 +66,7 @@ Exec=det-signal poweroff
 Icon=system-shutdown
 Terminal=false
 Categories=System;
+X-Purism-FormFactor=Workstation;Mobile;
 Keywords=power;shutdown;off;determination;
 EOF
 cat > /usr/share/applications/determination-reboot.desktop <<EOF
@@ -76,6 +78,7 @@ Exec=det-signal reboot
 Icon=system-reboot
 Terminal=false
 Categories=System;
+X-Purism-FormFactor=Workstation;Mobile;
 Keywords=reboot;restart;determination;
 EOF
 update-desktop-database /usr/share/applications 2>/dev/null || true
