@@ -24,8 +24,12 @@ EOF
 # one addition is the apex bionic dir, where libc.so actually lives on
 # Android 10+ (it is NOT on the default /vendor:/system:/odm path).
 cat > "$G/etc/profile.d/hybris.sh" <<'EOF'
-export EGL_PLATFORM=hwcomposer
-export HYBRIS_EGLPLATFORM=hwcomposer
+# Default to the wayland EGL platform: ordinary processes are Wayland
+# CLIENTS of phoc (GPU app buffers over android_wlegl). Only the
+# compositor itself needs hwcomposer, and desktop-on / the smoke scripts
+# export that explicitly.
+export EGL_PLATFORM=wayland
+export HYBRIS_EGLPLATFORM=wayland
 export ANDROID_ROOT=/system
 export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
 EOF

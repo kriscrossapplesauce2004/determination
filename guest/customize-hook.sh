@@ -35,8 +35,12 @@ printf 'Package: *\nPin: version *z4+git20250520205628*\nPin-Priority: 1001\n' \
 # at the real root. libc.so lives in the apex on Android 10+, which is not on
 # libhybris' default search path — add it explicitly.
 cat > "$R/etc/profile.d/hybris.sh" <<'EOF'
-export EGL_PLATFORM=hwcomposer
-export HYBRIS_EGLPLATFORM=hwcomposer
+# Default to the wayland EGL platform: ordinary processes are Wayland
+# CLIENTS of phoc (GPU app buffers over android_wlegl). Only the
+# compositor itself needs hwcomposer, and desktop-on / the smoke scripts
+# export that explicitly.
+export EGL_PLATFORM=wayland
+export HYBRIS_EGLPLATFORM=wayland
 export ANDROID_ROOT=/system
 export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
 EOF

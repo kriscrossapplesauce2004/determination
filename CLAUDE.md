@@ -436,6 +436,28 @@ routing through phosh UI still to eyeball.
   lives at `/data/determination/bin/desktop-on` (toggle scripts deploy to
   `.../bin/`, NOT `.../toggle/`).
 
+**2026-07-08: GPU APP BUFFERS designed + wired host-side (NOT yet
+device-tested — melissa asked to hold phone changes).** Full design:
+`docs/gpu-app-buffers.md`. Key finding: the zero-copy path already exists
+in what we ship — hybris wayland EGL platform (client side; our libhybris
+build already had `--enable-wayland`) + wlroots' server-side
+`android_wlegl` + EGLImage import in the android renderer. The old "dmabuf
+unavailable / clients are wl_shm" note was really missing WIRING, not a
+missing component. Changes: desktop-on 5e client session now exports
+`EGL_PLATFORM=wayland HYBRIS_EGLPLATFORM=wayland`, client
+`HYBRIS_LD_LIBRARY_PATH`, `GSK_RENDERER=ngl` (plain eglGetDisplay defaults
+to hwcomposer and would fight phoc for the composer; the vendor EGL must
+resolve in client processes too); /etc/profile.d/hybris.sh default flipped
+to wayland (setup-guest.sh + customize-hook.sh); build-wlroots-phoc.sh
+gained an eglplatform_wayland.so prereq check; NEW `guest/gpu-smoke.sh`
+(`prep` = phone mode, installs glmark2-es2-wayland + wayland-utils; bare =
+desktop-mode gate: android_wlegl global present, glmark2 shows vendor
+GL_RENDERER + FPS, GTK4 app maps HYBRIS libEGL under GDK_DEBUG=opengl).
+Deploy = push desktop-on to `/data/determination/bin/` + write the new
+profile.d file in the guest; NO rebuilds needed. ABI hazard (wlroots
+hand-mimics hybris' RemoteWindowBuffer layout) + the wayland-platform
+abort()-when-no-wlegl failure mode are documented in the doc.
+
 NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
 the panel; confirm phosh registers with the session-manager shim (no more
 "org.gnome.SessionManager not provided" warnings) and that Logout/power route

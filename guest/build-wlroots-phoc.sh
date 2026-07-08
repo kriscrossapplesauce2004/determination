@@ -82,6 +82,11 @@ nm -D /usr/local/lib/libhwc2.so.1 | grep -q hwc2_compat_display_set_brightness |
     echo "FATAL: libhwc2 lacks set_brightness wrapper — re-run guest/build-libhybris.sh"; exit 1; }
 grep -q hwc2_compat_display_set_brightness /usr/local/include/hybris/hwc2/hwc2_compatibility_layer.h || {
     echo "FATAL: installed hwc2 header lacks set_brightness decl — re-run guest/build-libhybris.sh"; exit 1; }
+# GPU app buffers: clients reach the GPU through hybris' wayland EGL
+# platform (android_wlegl); wlroots' android renderer serves the other
+# half. Without this plugin every app silently falls back to wl_shm.
+[ -f /usr/local/lib/libhybris/eglplatform_wayland.so ] || {
+    echo "FATAL: libhybris wayland EGL platform missing — re-run guest/build-libhybris.sh (--enable-wayland)"; exit 1; }
 
 echo "== libdroid (from source — do NOT apt install libdroid-dev) =="
 cd "$B" && rm -rf libdroid
