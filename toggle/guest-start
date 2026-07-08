@@ -1,25 +1,25 @@
 #!/system/bin/sh
 # Start the guest container headless (no display acquisition). Runs at boot
 # from service.sh; desktop-on then only performs the display/input handoff.
-# Installed to /data/decemberos/bin/.
+# Installed to /data/determination/bin/.
 
 set -u
-DOS=/data/decemberos
-LXC="$DOS/lxc/bin"  # static lxc build pushed alongside the rootfs
+DET=/data/determination
+LXC="$DET/lxc/bin"  # static lxc build pushed alongside the rootfs
 export PATH="$LXC:$PATH"
 
 # lxc-start pins the container rootfs here; must pre-exist or start fails.
-mkdir -p "$DOS/lxc/lib/lxc/rootfs" "$DOS/run" "$DOS/log"
+mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/log"
 # lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config —
 # keep a copy of the config at that path (the rootfs dir doubles as it).
 # Always refresh so config updates propagate.
-cp -f "$DOS/lxc/config" "$DOS/guest/config"
+cp -f "$DET/lxc/config" "$DET/guest/config"
 
 # /data is mounted nodev: device nodes inside the rootfs would be dead.
 # Bind-remount just the guest subtree with dev,exec,suid.
-if ! grep -q " $DOS/guest " /proc/mounts; then
-    mount --bind "$DOS/guest" "$DOS/guest"
-    mount -o remount,bind,dev,exec,suid "$DOS/guest" "$DOS/guest"
+if ! grep -q " $DET/guest " /proc/mounts; then
+    mount --bind "$DET/guest" "$DET/guest"
+    mount -o remount,bind,dev,exec,suid "$DET/guest" "$DET/guest"
 fi
 
 # --- Network: veth bridge + NAT out through whatever's up (wlan0/rmnet) ---
@@ -30,19 +30,19 @@ fi
 # and pref-9000/21000 rules were gone, nm_mdmprxy chains freshly on top).
 # One-shot setup therefore CANNOT keep the guest online.
 net_assert() {
-    ip link add decembr0 type bridge 2>/dev/null
-    ip addr add 192.168.117.1/24 dev decembr0 2>/dev/null
-    ip link set decembr0 up
+    ip link add determ0 type bridge 2>/dev/null
+    ip addr add 192.168.117.1/24 dev determ0 2>/dev/null
+    ip link set determ0 up
     echo 1 > /proc/sys/net/ipv4/ip_forward
 
     iptables -t nat -C POSTROUTING -s 192.168.117.0/24 -j MASQUERADE 2>/dev/null ||
         iptables -t nat -A POSTROUTING -s 192.168.117.0/24 -j MASQUERADE
     # Android's netd chains (oem_in/bw/fw/tetherctrl) precede everything;
     # explicit accepts for the guest segment at the very top.
-    iptables -C INPUT -i decembr0 -j ACCEPT 2>/dev/null ||
-        iptables -I INPUT 1 -i decembr0 -j ACCEPT
-    iptables -C OUTPUT -o decembr0 -j ACCEPT 2>/dev/null ||
-        iptables -I OUTPUT 1 -o decembr0 -j ACCEPT
+    iptables -C INPUT -i determ0 -j ACCEPT 2>/dev/null ||
+        iptables -I INPUT 1 -i determ0 -j ACCEPT
+    iptables -C OUTPUT -o determ0 -j ACCEPT 2>/dev/null ||
+        iptables -I OUTPUT 1 -o determ0 -j ACCEPT
     iptables -C FORWARD -s 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
         iptables -I FORWARD 1 -s 192.168.117.0/24 -j ACCEPT
     iptables -C FORWARD -d 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
@@ -55,28 +55,28 @@ net_assert() {
     ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
         ip rule add pref 9000 to 192.168.117.0/24 lookup main
     # Only valid once the wlan0 table exists (WiFi up) — harmless to retry.
-    ip rule list | grep -q "iif decembr0 lookup wlan0" ||
-        ip rule add pref 21000 iif decembr0 lookup wlan0 2>/dev/null
+    ip rule list | grep -q "iif determ0 lookup wlan0" ||
+        ip rule add pref 21000 iif determ0 lookup wlan0 2>/dev/null
 }
 net_assert
 
 # net-keeper: re-assert every 20s, forever (all checks are cheap no-ops
 # while the rules survive). Killed by nothing — it must outlive desktop
 # toggles; a reboot clears it with everything else.
-if ! kill -0 "$(cat "$DOS/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
+if ! kill -0 "$(cat "$DET/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
     (
         while :; do
             net_assert 2>/dev/null
             sleep 20
         done
     ) &
-    echo $! > "$DOS/run/net-keeper.pid"
+    echo $! > "$DET/run/net-keeper.pid"
 fi
 
-if ! lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING; then
-    lxc-start -P "$DOS" -n guest -f "$DOS/lxc/config" -l WARN -o "$DOS/log/lxc.log"
+if ! lxc-info -P "$DET" -n guest 2>/dev/null | grep -q RUNNING; then
+    lxc-start -P "$DET" -n guest -f "$DET/lxc/config" -l WARN -o "$DET/log/lxc.log"
     i=0
-    until lxc-info -P "$DOS" -n guest 2>/dev/null | grep -q RUNNING; do
+    until lxc-info -P "$DET" -n guest 2>/dev/null | grep -q RUNNING; do
         i=$((i+1)); [ $i -gt 20 ] && exit 1; sleep 0.5
     done
 fi
@@ -86,7 +86,7 @@ fi
 # every hwc2 validate returns NO_RESOURCES (found 2026-07-05). Plain misc
 # chardev, so mknod is fine (the binderfs ENXIO rule doesn't apply).
 BOOTID=$(cat /proc/sys/kernel/random/boot_id)
-lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
+lxc-attach -P "$DET" -n guest -- /bin/sh -c \
     "[ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }" \
     2>/dev/null
 
@@ -94,7 +94,7 @@ lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
 # terminals die with "failed to open PTY" (killed foot 2026-07-06).
 # lxc.pty.max in the config is NOT honored by our static LXC 4.0.12 build,
 # so force it post-start like the ashmem node above.
-lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
+lxc-attach -P "$DET" -n guest -- /bin/sh -c \
     "mount -o remount,gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null; \
      [ -e /dev/ptmx ] || ln -sf pts/ptmx /dev/ptmx" \
     2>/dev/null
@@ -104,6 +104,6 @@ lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
 # times out "waiting session to become active" and phoc can't add the
 # libinput backend (found 2026-07-06, first phosh run). Nothing else uses
 # VTs on this device (no fbcon), so the ioctls are harmless.
-lxc-attach -P "$DOS" -n guest -- /bin/sh -c \
+lxc-attach -P "$DET" -n guest -- /bin/sh -c \
     "for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
     2>/dev/null

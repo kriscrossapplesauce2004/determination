@@ -1,10 +1,10 @@
 #!/bin/sh
-# Build the guacamoleb kernel with the DecemberOS container fragment merged in.
+# Build the guacamoleb kernel with the Determination container fragment merged in.
 #
 # Base config: the RUNNING kernel's /proc/config.gz (artifacts/
 # kernel-config-full.txt from recon) — guaranteed parity with what crDroid
 # ships, rather than reconstructing their defconfig+fragment recipe. The only
-# delta is decemberos.config.
+# delta is determination.config.
 #
 # Toolchain: distro clang (tree has the ACK LLVM= backport) + GNU aarch64
 # binutils in ../toolchain/usr/bin (extracted Arch pkg, no root needed).
@@ -30,7 +30,7 @@ CROSS_COMPILE=aarch64-linux-gnu- CROSS_COMPILE_ARM32=arm-linux-gnueabi-"
 mkdir -p out
 cp "$BASECONFIG" out/.config
 # Merge the container-enable fragment on top of the running kernel's config.
-(cd src && KCONFIG_CONFIG="$PWD/../out/.config" scripts/kconfig/merge_config.sh -O "$PWD/../out" -m "$PWD/../out/.config" "$PWD/../decemberos.config")
+(cd src && KCONFIG_CONFIG="$PWD/../out/.config" scripts/kconfig/merge_config.sh -O "$PWD/../out" -m "$PWD/../out/.config" "$PWD/../determination.config")
 $KMAKE olddefconfig
 
 # Verify the merge actually took — a silently-dropped option here costs a
@@ -40,7 +40,7 @@ for opt in NAMESPACES USER_NS PID_NS IPC_NS NET_NS CGROUP_DEVICE CGROUP_PIDS POS
     grep -q "^CONFIG_$opt=y" out/.config || { echo "MERGE FAILED: CONFIG_$opt not set" >&2; exit 1; }
 done
 ! grep -q "^CONFIG_FRAMEBUFFER_CONSOLE=y" out/.config || { echo "MERGE FAILED: fbcon enabled — would fight SF for the panel" >&2; exit 1; }
-echo "config OK: all DecemberOS options present"
+echo "config OK: all Determination options present"
 
 time $KMAKE -j"$JOBS" Image.gz-dtb
 

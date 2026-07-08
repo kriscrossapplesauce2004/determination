@@ -1,4 +1,4 @@
-# DecemberOS sepolicy — bring-up rules, applied live by Magisk (magiskpolicy
+# Determination sepolicy — bring-up rules, applied live by Magisk (magiskpolicy
 # syntax). Deliberately scoped to the guest/toggle path; iterate here from
 # audit2allow output during bring-up, consolidate into a real policy module
 # before any release (spec §4).

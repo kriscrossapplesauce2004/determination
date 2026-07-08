@@ -3,10 +3,10 @@ tools/evgrab/evgrab-host
 kernel/src/
 kernel/out/
 guest/rootfs.tar.gz
-boot/decemberos-boot.img
+boot/determination-boot.img
 recon/report-*/
 toolchain/
-decemberos-magisk-*.zip
+determination-magisk-*.zip
 dist/
 artifacts/backups/
 

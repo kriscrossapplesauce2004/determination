@@ -1,6 +1,6 @@
 #!/system/bin/sh
-# DecemberOS guest customization — runs ON THE PHONE as root, against an
-# already-extracted rootfs at /data/decemberos/guest (the debootstrap-on-
+# Determination guest customization — runs ON THE PHONE as root, against an
+# already-extracted rootfs at /data/determination/guest (the debootstrap-on-
 # device path). Mirror of guest/customize-hook.sh — keep the two in sync.
 #
 # Prereqs pushed to /data/local/tmp: droidian.gpg (fetch from
@@ -8,7 +8,7 @@
 # — the packaged keyring debs are all stale; only git has the Jan/2025
 # staging signing key).
 set -e
-G=/data/decemberos/guest
+G=/data/determination/guest
 CH() { chroot "$G" /bin/sh -c "export PATH=/usr/sbin:/usr/bin:/sbin:/bin; $*"; }
 
 # Droidian staging repo (trixie suite) — key pushed alongside this script.
@@ -42,9 +42,9 @@ echo 'melissa ALL=(ALL) NOPASSWD: ALL' > "$G/etc/sudoers.d/melissa"
 chmod 440 "$G/etc/sudoers.d/melissa"
 
 # Hostname + hosts
-echo decemberos > "$G/etc/hostname"
-grep -q decemberos "$G/etc/hosts" 2>/dev/null || \
-    printf '127.0.0.1\tlocalhost\n127.0.1.1\tdecemberos\n' > "$G/etc/hosts"
+echo determination > "$G/etc/hostname"
+grep -q determination "$G/etc/hosts" 2>/dev/null || \
+    printf '127.0.0.1\tlocalhost\n127.0.1.1\tdetermination\n' > "$G/etc/hosts"
 
 # veth network inside the guest (lxc config assigns the address too; this
 # keeps it across systemd-networkd restarts)

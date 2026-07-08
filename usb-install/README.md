@@ -1,4 +1,4 @@
-# DecemberOS — kernel install (action zips + host script)
+# Determination — kernel install (action zips + host script)
 
 Three ways in, safest first:
 
@@ -25,45 +25,45 @@ readback; if the partition already holds the exact image it stops as a
 no-op. It scans all `magisk_patched-*.img` newest-first and takes the first
 one that passes, printing why others were rejected.
 
-**Dry run**: `touch /sdcard/Download/decemberos-dryrun`, then flash either
+**Dry run**: `touch /sdcard/Download/determination-dryrun`, then flash either
 zip — every check runs, a verified backup is taken, nothing is written to
 the partition. Delete the flag file to arm the real flash. (`host-flash.sh
 check` is the same idea from the PC.)
 
-The restore zip additionally backs up the current (DecemberOS) boot before
+The restore zip additionally backs up the current (Determination) boot before
 restoring, so the restore is itself undoable.
 
 ## What's on the drive (`dist/usb-payload/`)
 
 | File | What |
 |---|---|
-| `decemberos-boot.img` | stock boot image of the active slot with the DecemberOS kernel swapped in (NOT yet Magisk-patched) |
-| `decemberos-kernel-install.zip` | action zip: flashes the patched image to the active slot |
-| `decemberos-kernel-restore.zip` | action zip: flashes the embedded pristine boot dump back (stock kernel + root; slot-guarded) |
-| `decemberos-magisk-v*.zip` | the actual DecemberOS Magisk module (toggle scripts, evgrab, sepolicy) |
+| `determination-boot.img` | stock boot image of the active slot with the Determination kernel swapped in (NOT yet Magisk-patched) |
+| `determination-kernel-install.zip` | action zip: flashes the patched image to the active slot |
+| `determination-kernel-restore.zip` | action zip: flashes the embedded pristine boot dump back (stock kernel + root; slot-guarded) |
+| `determination-magisk-v*.zip` | the actual Determination Magisk module (toggle scripts, evgrab, sepolicy) |
 | `SHA256SUMS` | checksums for everything above |
 
 ## Install (3 steps, all in the Magisk app)
 
 1. **Patch**: Magisk → Install → *Select and Patch a File* → pick
-   `decemberos-boot.img` from the USB drive. Output appears as
+   `determination-boot.img` from the USB drive. Output appears as
    `/sdcard/Download/magisk_patched-XXXXX.img`.
 2. **Flash**: Magisk → Modules → *Install from storage* → pick
-   `decemberos-kernel-install.zip` from the drive. It finds the newest
+   `determination-kernel-install.zip` from the drive. It finds the newest
    `magisk_patched-*.img`, **verifies the kernel inside is really the
-   DecemberOS build** (refuses anything else), backs up the current boot
+   Determination build** (refuses anything else), backs up the current boot
    partition to the drive, flashes, and verifies the readback.
    It ends with an "abort" — **that is deliberate** (it's how an action zip
    avoids registering as a module). Read the log above it: if it says
    `flashed and verified`, it worked.
 3. **Reboot.** Check with any terminal / `adb shell`: `uname -a` must contain
-   `melissa@terra`. Then install the `decemberos-magisk-v*.zip` the same way
+   `melissa@terra`. Then install the `determination-magisk-v*.zip` the same way
    (Modules → Install from storage) — this one is a real module and stays.
 
 ## Undo
 
-Magisk → Modules → Install from storage → `decemberos-kernel-restore.zip`.
-Restores the exact pre-DecemberOS boot image of the slot it was dumped from
+Magisk → Modules → Install from storage → `determination-kernel-restore.zip`.
+Restores the exact pre-Determination boot image of the slot it was dumped from
 (stock crDroid kernel, still rooted; refuses to flash if the active slot
 does not match). Verified by embedded sha256 before and after writing.
 

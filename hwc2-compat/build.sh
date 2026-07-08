@@ -337,9 +337,9 @@ install() {
     # Into the guest rootfs (visible to the hybris linker via
     # HYBRIS_LD_LIBRARY_PATH, see guest/setup-guest.sh).
     "$ADB" push out/libhwc2_compat_layer.so /sdcard/Download/ >/dev/null
-    "$ADB" shell "su -c 'mkdir -p /data/decemberos/guest/usr/lib/android && \
-        cp /sdcard/Download/libhwc2_compat_layer.so /data/decemberos/guest/usr/lib/android/ && \
-        chmod 644 /data/decemberos/guest/usr/lib/android/libhwc2_compat_layer.so'"
+    "$ADB" shell "su -c 'mkdir -p /data/determination/guest/usr/lib/android && \
+        cp /sdcard/Download/libhwc2_compat_layer.so /data/determination/guest/usr/lib/android/ && \
+        chmod 644 /data/determination/guest/usr/lib/android/libhwc2_compat_layer.so'"
     echo "Installed to guest rootfs /usr/lib/android/."
     echo "Ensure HYBRIS_LD_LIBRARY_PATH includes /usr/lib/android in the guest."
 }

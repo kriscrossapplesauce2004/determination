@@ -1,23 +1,23 @@
 #!/system/bin/sh
-# DecemberOS internal-panel handoff, phone -> desktop (spec §4).
+# Determination internal-panel handoff, phone -> desktop (spec §4).
 # Single-client composer HAL: SF must release it before the guest compositor
 # can bind. The respawn fight is the real engineering here, not the stop.
-# Installed to /data/decemberos/bin/. Run as root.
+# Installed to /data/determination/bin/. Run as root.
 
 set -u
-DOS=/data/decemberos
-LOG=$DOS/log/toggle.log
+DET=/data/determination
+LOG=$DET/log/toggle.log
 exec >>"$LOG" 2>&1
 echo "--- desktop-on $(date)"
 
 # 0. Preconditions: guest running, not already in desktop mode.
-[ -f "$DOS/run/desktop-mode" ] && { echo "already in desktop mode"; exit 0; }
-mkdir -p "$DOS/run"
+[ -f "$DET/run/desktop-mode" ] && { echo "already in desktop mode"; exit 0; }
+mkdir -p "$DET/run"
 
 # 1. Input first: grab evdev nodes so Android stops seeing events *before* its
 #    UI disappears (avoids a window where touches land on invisible UI).
 #    evgrab holds EVIOCGRAB on every touchscreen/key node until killed.
-"$DOS/bin/evgrab" -a -p "$DOS/run/evgrab.pid" || { echo "evgrab failed"; exit 1; }
+"$DET/bin/evgrab" -a -p "$DET/run/evgrab.pid" || { echo "evgrab failed"; exit 1; }
 
 # 2. Stop SurfaceFlinger and its dependents-in-fact.
 stop bootanim
@@ -29,7 +29,7 @@ stop surfaceflinger
 #    suppressor loop re-asserting the stop; TODO replace with the Zygisk hook
 #    on system_server's SF-death handler once milestone 6 lands.
 (
-    while [ -f "$DOS/run/desktop-mode" ]; do
+    while [ -f "$DET/run/desktop-mode" ]; do
         [ "$(getprop init.svc.surfaceflinger)" = "running" ] && {
             echo "suppressor: SF respawned, re-stopping ($(date))"
             stop surfaceflinger
@@ -37,13 +37,13 @@ stop surfaceflinger
         sleep 1
     done
 ) &
-echo $! > "$DOS/run/suppressor.pid"
-touch "$DOS/run/desktop-mode"
+echo $! > "$DET/run/suppressor.pid"
+touch "$DET/run/desktop-mode"
 
 # 4. Wait for SF to actually release the composer client + GPU context.
 i=0
 while [ "$(getprop init.svc.surfaceflinger)" != "stopped" ]; do
-    i=$((i+1)); [ $i -gt 20 ] && { echo "SF didn't stop"; "$DOS/bin/desktop-off"; exit 1; }
+    i=$((i+1)); [ $i -gt 20 ] && { echo "SF didn't stop"; "$DET/bin/desktop-off"; exit 1; }
     sleep 0.5
 done
 # The composer HAL process itself keeps running (it's a vendor service; SF is
@@ -87,48 +87,48 @@ echo "$BL_LEVEL" > /sys/class/backlight/backlight/brightness 2>/dev/null
 #    Input (§4, 2026-07-06): phoc now runs backends hwcomposer,libinput.
 #    The libinput backend needs (a) seatd (wlr_session via libseat), and
 #    (b) /run/udev/data entries so libinput accepts devices — udevd cannot
-#    run in the container (ro /sys), so dos-input-udevdb (guest/
+#    run in the container (ro /sys), so det-input-udevdb (guest/
 #    setup-input.sh) hand-writes them per boot. Our wlroots patch takes
 #    EVIOCGRAB on every node libinput opens (retrying while step 1's
 #    evgrab still holds); step 5d kills evgrab once phoc is up, completing
 #    the handoff with a <=100ms no-grab window. If setup-input.sh hasn't
 #    run yet, fall back to hwcomposer-only (display works, no input).
 BL=/sys/class/backlight/backlight/brightness
-CLOG="$DOS/log/compositor.log"
+CLOG="$DET/log/compositor.log"
 : > "$CLOG"
 (
-    while [ -f "$DOS/run/desktop-mode" ]; do
+    while [ -f "$DET/run/desktop-mode" ]; do
         echo "$BL_LEVEL" > "$BL" 2>/dev/null
         sleep 2
     done
 ) &
 (
     fails=0
-    while [ -f "$DOS/run/desktop-mode" ]; do
+    while [ -f "$DET/run/desktop-mode" ]; do
         echo "--- launch phoc (prior consecutive fast-fails: $fails) $(date)" >> "$CLOG"
         t0=$(date +%s)
-        "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
+        "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /bin/sh -c '
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
             export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
             export EGL_PLATFORM=hwcomposer HYBRIS_EGLPLATFORM=hwcomposer ANDROID_ROOT=/system TMPDIR=/tmp
             export XDG_RUNTIME_DIR=/run/user/0 LANG=C.UTF-8
             WLR_BACKENDS=hwcomposer
-            if [ -x /usr/local/sbin/dos-input-udevdb ]; then
-                dos-input-udevdb 2>/dev/null &&
+            if [ -x /usr/local/sbin/det-input-udevdb ]; then
+                det-input-udevdb 2>/dev/null &&
                 systemctl start seatd 2>/dev/null &&
                 WLR_BACKENDS=hwcomposer,libinput
             fi
             export WLR_BACKENDS LIBSEAT_BACKEND=seatd
-            [ -f /usr/local/lib/dos-pidfd-shim.so ] &&
-                export LD_PRELOAD=/usr/local/lib/dos-pidfd-shim.so
+            [ -f /usr/local/lib/det-pidfd-shim.so ] &&
+                export LD_PRELOAD=/usr/local/lib/det-pidfd-shim.so
             mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
             rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
             exec stdbuf -oL -eL /usr/local/bin/phoc -C /etc/phoc.ini
         ' >> "$CLOG" 2>&1
         rc=$?
         dur=$(( $(date +%s) - t0 ))
-        [ -f "$DOS/run/desktop-mode" ] || { echo "phoc exited rc=$rc after ${dur}s — desktop mode off, stopping $(date)" >> "$CLOG"; break; }
+        [ -f "$DET/run/desktop-mode" ] || { echo "phoc exited rc=$rc after ${dur}s — desktop mode off, stopping $(date)" >> "$CLOG"; break; }
         if [ "$dur" -lt 5 ]; then
             fails=$((fails+1))
             back=$fails; [ "$back" -gt 10 ] && back=10
@@ -141,7 +141,7 @@ CLOG="$DOS/log/compositor.log"
         fi
     done
 ) &
-echo $! > "$DOS/run/compositor.pid"
+echo $! > "$DET/run/compositor.pid"
 
 # 5d. Input handoff (§4): step 1's evgrab blinded Android before SF went
 # down; phoc's patched libinput backend retries EVIOCGRAB every 100ms on
@@ -155,11 +155,11 @@ echo $! > "$DOS/run/compositor.pid"
 # up — evgrab kept the grabs and the session had no input. Wait as long as
 # desktop mode is on; the wlroots grab threads retry for 10min per device.
 (
-    while [ -f "$DOS/run/desktop-mode" ]; do
-        if "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- \
+    while [ -f "$DET/run/desktop-mode" ]; do
+        if "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- \
                 /usr/bin/test -S /run/user/0/wayland-0 2>/dev/null; then
-            [ -f "$DOS/run/evgrab.pid" ] && kill "$(cat "$DOS/run/evgrab.pid")" 2>/dev/null
-            rm -f "$DOS/run/evgrab.pid"
+            [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
+            rm -f "$DET/run/evgrab.pid"
             echo "input handed to guest — evgrab released $(date)"
             break
         fi
@@ -173,8 +173,8 @@ echo $! > "$DOS/run/compositor.pid"
 # (pidfd_open works, waitid(P_PIDFD) EINVAL) and app launching would
 # break. Falls back to a bare foot terminal if phosh isn't installed.
 (
-    while [ -f "$DOS/run/desktop-mode" ]; do
-        "$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /bin/sh -c '
+    while [ -f "$DET/run/desktop-mode" ]; do
+        "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /bin/sh -c '
             export XDG_RUNTIME_DIR=/run/user/0
             i=0
             until [ -S "$XDG_RUNTIME_DIR/wayland-0" ]; do
@@ -187,8 +187,8 @@ echo $! > "$DOS/run/compositor.pid"
             # OP7 notch panel for the qcom,sm8150 DT compatibles) — the
             # Debian one has no entry and the top bar ignores the notch.
             export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
-            [ -f /usr/local/lib/dos-pidfd-shim.so ] &&
-                export LD_PRELOAD=/usr/local/lib/dos-pidfd-shim.so
+            [ -f /usr/local/lib/det-pidfd-shim.so ] &&
+                export LD_PRELOAD=/usr/local/lib/det-pidfd-shim.so
             PHOSH=$(command -v phosh || true)
             [ -x /usr/libexec/phosh ] && PHOSH=/usr/libexec/phosh
             if [ -n "$PHOSH" ]; then
@@ -196,9 +196,9 @@ echo $! > "$DOS/run/compositor.pid"
             fi
             exec foot -- /bin/bash -l
         ' >> "$CLOG" 2>&1
-        [ -f "$DOS/run/desktop-mode" ] || break
+        [ -f "$DET/run/desktop-mode" ] || break
         sleep 2
     done
 ) &
-echo $! > "$DOS/run/client.pid"
+echo $! > "$DET/run/client.pid"
 echo "desktop mode up (phoc + phosh session; log/compositor.log)"

@@ -1,5 +1,5 @@
 #!/bin/sh
-# DecemberOS §4 guest-side input handoff + mobile shell — one script, all
+# Determination §4 guest-side input handoff + mobile shell — one script, all
 # gotchas encoded. Run INSIDE the container as root. Idempotent.
 #
 # WHAT THIS SETS UP (2026-07-06):
@@ -10,14 +10,14 @@
 #    requires a wlr_session via libseat; seatd is the no-logind-session
 #    backend. Debian's libseat tries seatd first when the socket exists,
 #    but desktop-on still exports LIBSEAT_BACKEND=seatd to be explicit.
-#  - dos-input-udevdb: hand-written /run/udev/data entries. systemd-udevd
+#  - det-input-udevdb: hand-written /run/udev/data entries. systemd-udevd
 #    NEVER runs in this container (ConditionPathIsReadWrite=/sys fails —
 #    the container's /sys is read-only), so libinput's udev backend sees no
 #    ID_INPUT_* properties and silently ignores every device. The hardware
 #    is static, so generating the db once per boot from udevadm's input_id
 #    builtin (which works daemon-less) is sufficient. Verified mapping on
 #    guacamoleb: event1 = "touchpanel" -> ID_INPUT_TOUCHSCREEN=1.
-#  - dos-pidfd-shim.so: THE glib child-watch fix. This 4.14 kernel
+#  - det-pidfd-shim.so: THE glib child-watch fix. This 4.14 kernel
 #    BACKPORTS pidfd_open (syscall 434 returns a real fd — probed
 #    2026-07-06) but NOT waitid(P_PIDFD), which returns EINVAL. glib sees
 #    pidfd_open succeed, commits to the pidfd path, then child-watch
@@ -50,10 +50,10 @@ echo "== seatd =="
 systemctl enable --now seatd
 systemctl --no-pager --quiet is-active seatd || { echo "FATAL: seatd not active"; exit 1; }
 
-echo "== dos-input-udevdb =="
-cat > /usr/local/sbin/dos-input-udevdb <<'EOF'
+echo "== det-input-udevdb =="
+cat > /usr/local/sbin/det-input-udevdb <<'EOF'
 #!/bin/sh
-# DecemberOS: hand-write /run/udev/data entries for input event nodes so
+# Determination: hand-write /run/udev/data entries for input event nodes so
 # libinput's udev backend accepts devices WITHOUT a running udevd (udevd is
 # condition-blocked in this container: /sys is read-only). /run is tmpfs —
 # desktop-on re-runs this before each phoc launch. Only devices input_id
@@ -67,8 +67,8 @@ for ev in /sys/class/input/event*; do
     printf '%s\n' "$props" | sed 's/^/E:/' > "/run/udev/data/c$(cat "$ev/dev")"
 done
 EOF
-chmod 755 /usr/local/sbin/dos-input-udevdb
-/usr/local/sbin/dos-input-udevdb
+chmod 755 /usr/local/sbin/det-input-udevdb
+/usr/local/sbin/det-input-udevdb
 echo "udev db entries:"; grep -l ID_INPUT /run/udev/data/c13:* | while read -r f; do
     echo "  $f: $(tr '\n' ' ' < "$f")"
 done
@@ -95,9 +95,9 @@ EOF
 # strip KEY_POWER — the node stays open+grabbed (Android must not see it
 # either), the button is simply inert while in desktop mode.
 
-echo "== dos-pidfd-shim =="
-cat > /tmp/dos-pidfd-shim.c <<'EOF'
-/* DecemberOS: this 4.14 kernel backports pidfd_open(434) but NOT
+echo "== det-pidfd-shim =="
+cat > /tmp/det-pidfd-shim.c <<'EOF'
+/* Determination: this 4.14 kernel backports pidfd_open(434) but NOT
  * waitid(P_PIDFD) (EINVAL) — glib child-watch commits to the pidfd path
  * and dies. Make pidfd_open fail ENOSYS so glib uses its SIGCHLD
  * fallback. Interposes both the raw syscall() route glib uses and the
@@ -143,8 +143,8 @@ int pidfd_open(pid_t pid, unsigned int flags)
     return -1;
 }
 EOF
-gcc -shared -fPIC -O2 -o /usr/local/lib/dos-pidfd-shim.so /tmp/dos-pidfd-shim.c
-echo "shim installed: /usr/local/lib/dos-pidfd-shim.so"
+gcc -shared -fPIC -O2 -o /usr/local/lib/det-pidfd-shim.so /tmp/det-pidfd-shim.c
+echo "shim installed: /usr/local/lib/det-pidfd-shim.so"
 
 echo "== phosh binary location (Debian splits wrapper vs binary) =="
 dpkg -L phosh | grep -E 'bin/|libexec/' || true

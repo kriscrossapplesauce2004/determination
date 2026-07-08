@@ -5,7 +5,7 @@
 # Usage: cycle-stress.sh [iterations]   (default 25)
 
 set -u
-DOS=/data/decemberos
+DET=/data/determination
 N="${1:-25}"
 
 fd_count() { ls "/proc/$(pidof "$1" | cut -d' ' -f1)/fd" 2>/dev/null | wc -l; }
@@ -19,9 +19,9 @@ echo "composer HAL pid=$(composer_pid) baseline fds=${BASE_FD:-?}"
 i=1
 while [ "$i" -le "$N" ]; do
     echo "== cycle $i/$N"
-    "$DOS/bin/desktop-on"  || { echo "FAIL: desktop-on, cycle $i"; exit 1; }
+    "$DET/bin/desktop-on"  || { echo "FAIL: desktop-on, cycle $i"; exit 1; }
     sleep 5
-    "$DOS/bin/desktop-off" || { echo "FAIL: desktop-off, cycle $i"; exit 1; }
+    "$DET/bin/desktop-off" || { echo "FAIL: desktop-off, cycle $i"; exit 1; }
     sleep 5
     [ "$(getprop init.svc.surfaceflinger)" = "running" ] || { echo "WEDGE: SF dead after cycle $i"; exit 1; }
     CP=$(composer_pid); FDS=$(ls "/proc/$CP/fd" | wc -l)

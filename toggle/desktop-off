@@ -1,17 +1,17 @@
 #!/system/bin/sh
-# DecemberOS handoff, desktop -> phone (spec §4). Reverse order of desktop-on:
+# Determination handoff, desktop -> phone (spec §4). Reverse order of desktop-on:
 # guest releases composer first, then SF restarts, then input is released.
-# Installed to /data/decemberos/bin/. Run as root.
+# Installed to /data/determination/bin/. Run as root.
 
 set -u
-DOS=/data/decemberos
-exec >>"$DOS/log/toggle.log" 2>&1
+DET=/data/determination
+exec >>"$DET/log/toggle.log" 2>&1
 echo "--- desktop-off $(date)"
 
 # 1. Kill the suppressor before restarting SF, or it'll fight us.
-rm -f "$DOS/run/desktop-mode"
-[ -f "$DOS/run/suppressor.pid" ] && kill "$(cat "$DOS/run/suppressor.pid")" 2>/dev/null
-rm -f "$DOS/run/suppressor.pid"
+rm -f "$DET/run/desktop-mode"
+[ -f "$DET/run/suppressor.pid" ] && kill "$(cat "$DET/run/suppressor.pid")" 2>/dev/null
+rm -f "$DET/run/suppressor.pid"
 
 # 2. Guest compositor must release the composer client *cleanly* — killing it
 #    mid-frame is how the HAL state machine wedges (spec risk register).
@@ -19,14 +19,14 @@ rm -f "$DOS/run/suppressor.pid"
 #    wlroots runs its display destroy). phoc's death also closes the evdev
 #    fds, which releases the guest's EVIOCGRABs (§4) — Android input is
 #    live from that moment even though SF is still coming back.
-"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM phosh 2>/dev/null
-"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM squeekboard 2>/dev/null
-"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM foot 2>/dev/null
+"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM phosh 2>/dev/null
+"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM squeekboard 2>/dev/null
+"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM foot 2>/dev/null
 sleep 1
-"$DOS/lxc/bin/lxc-attach" -P "$DOS" -n guest -- /usr/bin/pkill -TERM phoc 2>/dev/null
-[ -f "$DOS/run/compositor.pid" ] && kill "$(cat "$DOS/run/compositor.pid")" 2>/dev/null
-[ -f "$DOS/run/client.pid" ] && kill "$(cat "$DOS/run/client.pid")" 2>/dev/null
-rm -f "$DOS/run/compositor.pid" "$DOS/run/client.pid"
+"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM phoc 2>/dev/null
+[ -f "$DET/run/compositor.pid" ] && kill "$(cat "$DET/run/compositor.pid")" 2>/dev/null
+[ -f "$DET/run/client.pid" ] && kill "$(cat "$DET/run/client.pid")" 2>/dev/null
+rm -f "$DET/run/compositor.pid" "$DET/run/client.pid"
 sleep 2
 
 # 3. Restart SF; verify panel re-init (no dead/black transition).
@@ -65,6 +65,6 @@ fi
 # 4. Release the input grab last, once Android UI is back to receive events.
 #    Usually a no-op since §4: desktop-on already killed evgrab at the
 #    guest handoff (the guest's own grabs died with phoc in step 2).
-[ -f "$DOS/run/evgrab.pid" ] && kill "$(cat "$DOS/run/evgrab.pid")" 2>/dev/null
-rm -f "$DOS/run/evgrab.pid"
+[ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
+rm -f "$DET/run/evgrab.pid"
 echo "phone mode restored"

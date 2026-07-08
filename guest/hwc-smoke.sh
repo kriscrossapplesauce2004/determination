@@ -36,7 +36,7 @@ sleep 2
     done
 ) &
 BLKEEP=$!
-/data/decemberos/lxc/bin/lxc-attach -P /data/decemberos -n guest -- /bin/sh -c '
+/data/determination/lxc/bin/lxc-attach -P /data/determination -n guest -- /bin/sh -c '
     export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     export LD_LIBRARY_PATH=/usr/local/lib
     export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic

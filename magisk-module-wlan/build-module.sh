@@ -1,5 +1,5 @@
 #!/bin/sh
-# Package the DecemberOS kernel-modules overlay zip. Overlays
+# Package the Determination kernel-modules overlay zip. Overlays
 # /vendor/lib/modules via magic mount; /vendor on disk stays untouched.
 # The wlan module is shipped under both its build name (wlan.ko) and the
 # name OnePlus vendor init actually insmods (qca_cld3_wlan.ko).
@@ -22,7 +22,7 @@ cp "$WLAN" "$MODS/qca_cld3_wlan.ko"
 find ../kernel/out -name '*.ko' ! -path '*qcacld*' -exec cp {} "$MODS/" \;
 
 VER=$(sed -n 's/^version=//p' module.prop)
-OUT="$PWD/decemberos-kmods-$VER.zip"
+OUT="$PWD/determination-kmods-$VER.zip"
 rm -f "$OUT"
 (cd "$WORK" && python3 -c "
 import os, zipfile

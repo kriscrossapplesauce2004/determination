@@ -1,5 +1,5 @@
 #!/bin/sh
-# DecemberOS device recon (design spec §9). Run on the host with the phone on
+# Determination device recon (design spec §9). Run on the host with the phone on
 # USB, adb authorized, and root available (Magisk `adb root` or `su`).
 #
 # Goal: determine whether an existing SM8150/845-family libhybris port drops in

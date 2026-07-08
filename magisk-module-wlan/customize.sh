@@ -4,9 +4,9 @@
 
 case "$(uname -r)" in
 *g96adfa8256dc*)
-    ui_print "- Running on the DecemberOS kernel — modules will overlay on reboot" ;;
+    ui_print "- Running on the Determination kernel — modules will overlay on reboot" ;;
 *)
-    ui_print "! Not running the DecemberOS kernel right now."
+    ui_print "! Not running the Determination kernel right now."
     ui_print "! Installing anyway; the overlay stays dormant until that kernel boots."
     ;;
 esac

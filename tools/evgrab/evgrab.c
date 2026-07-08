@@ -1,5 +1,5 @@
 /*
- * evgrab — hold EVIOCGRAB on evdev nodes for DecemberOS desktop mode.
+ * evgrab — hold EVIOCGRAB on evdev nodes for Determination desktop mode.
  *
  * On modern Android there is no standalone inputflinger process to stop:
  * input is EventHub/InputReader inside system_server, reading

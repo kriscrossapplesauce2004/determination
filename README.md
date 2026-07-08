@@ -1,4 +1,4 @@
-# DecemberOS
+# Determination
 
 Android convergence layer for the OnePlus 7 (`guacamoleb`, SM8150 / Adreno 640).
 
@@ -26,7 +26,7 @@ Full rationale, topology decision, and risk register: see
 | `recon/` | §9 device recon — run first, with the phone attached |
 | `kernel/` | kconfig fragment (container enables) + fetch/build scripts for the downstream SM8150 kernel |
 | `boot/` | boot.img unpack/repack with the custom kernel; Magisk patching flow |
-| `magisk-module/` | the on-device DecemberOS Magisk module: container launch, boot hooks, sepolicy rules |
+| `magisk-module/` | the on-device Determination Magisk module: container launch, boot hooks, sepolicy rules |
 | `guest/` | Debian arm64 rootfs builder + LXC config (binder/kgsl/dmabuf `/dev`, `/vendor`, property area bind-mounts, libhybris) |
 | `toggle/` | §4 internal-panel handoff: SF stop + respawn suppression + compositor swap + input grab |
 | `tools/evgrab/` | small C daemon that holds `EVIOCGRAB` on evdev nodes during desktop mode |
@@ -55,14 +55,14 @@ Full rationale, topology decision, and risk register: see
       (crDroid 12.10/A16, HIDL composer 2.4, gralloc4, binderfs present,
       DP-alt works)
 - [x] Kernel built (crDroid 16.0 tree + running config + fragment, 3m13s),
-      `boot/decemberos-boot.img` repacked from the dumped boot_b and verified
-- [x] Module zip packaged with static aarch64 evgrab; `./dos` host helper
-- [x] Cable-free install path: `usb-install/` action zips + `./dos publish`
+      `boot/determination-boot.img` repacked from the dumped boot_b and verified
+- [x] Module zip packaged with static aarch64 evgrab; `./det` host helper
+- [x] Cable-free install path: `usb-install/` action zips + `./det publish`
       (flash via Magisk app + `dd`; rescue from a *bootloop* still needs a cable)
 - [x] **FLASHED AND BOOTING** (2026-07-02, via the USB-drive path): kernel
       `4.14.357-perf-g96adfa8256dc` live on device, PID/USER/IPC_NS confirmed.
       WiFi initially dead (stock `qca_cld3_wlan.ko` vermagic mismatch) — fixed
       by `magisk-module-wlan/` overlay rebuilt from the same tree. Full
-      hardware smoke test green. DecemberOS module installed. Milestone 1 done.
+      hardware smoke test green. Determination module installed. Milestone 1 done.
 - [ ] Guest rootfs + libhybris smoke test on guacamoleb
 - [ ] Toggle stable across repeated cycles

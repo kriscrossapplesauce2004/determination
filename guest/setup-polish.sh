@@ -1,5 +1,5 @@
 #!/bin/bash
-# DecemberOS guest polish: mobile apps, notch (gmobile panel JSON), phosh
+# Determination guest polish: mobile apps, notch (gmobile panel JSON), phosh
 # settings. Run INSIDE the container as root, in PHONE MODE (guest network
 # needs a stable Android framework — in desktop mode system_server
 # crash-loops and takes WiFi down, see CLAUDE.md §4 known issues).

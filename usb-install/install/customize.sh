@@ -1,9 +1,9 @@
 #!/system/bin/sh
-# DecemberOS kernel installer — an "action zip" for the Magisk app.
+# Determination kernel installer — an "action zip" for the Magisk app.
 #
 # Flow (all on the phone, no PC needed):
 #   1. Magisk app -> Install -> Select and Patch a File -> pick
-#      decemberos-boot.img from the USB drive / Download. Output lands in
+#      determination-boot.img from the USB drive / Download. Output lands in
 #      /sdcard/Download/magisk_patched-XXXXX.img.
 #   2. Magisk app -> Modules -> Install from storage -> pick THIS zip.
 #      It scans Download for magisk_patched-*.img (newest first) and flashes
@@ -13,7 +13,7 @@
 # Checks before a single byte is written to the partition:
 #   - image is a real Android boot image (ANDROID! magic)
 #   - image fits the partition
-#   - kernel inside is THIS exact DecemberOS build (full version banner,
+#   - kernel inside is THIS exact Determination build (full version banner,
 #     including build timestamp — a stale patched image from an older
 #     build fails here, not at boot)
 #   - ramdisk is Magisk-patched (flashing an unpatched image would boot
@@ -24,7 +24,7 @@
 #   - no-op guard: if the partition already holds this exact image, stop
 #
 # SAFE MODE / DRY RUN: create the flag file
-#     /sdcard/Download/decemberos-dryrun
+#     /sdcard/Download/determination-dryrun
 # (e.g. `touch` it from a terminal) and flash this zip. It runs every
 # check above INCLUDING taking + verifying the backup, then stops without
 # writing the boot partition. Delete the flag file to arm the real flash.
@@ -41,7 +41,7 @@ BANNER="@BANNER@"
 MARKER="melissa@terra"
 case "$BANNER" in @*) BANNER="$MARKER" ;; esac
 
-DRYFLAG=/sdcard/Download/decemberos-dryrun
+DRYFLAG=/sdcard/Download/determination-dryrun
 
 MB=/data/adb/magisk/magiskboot
 
@@ -69,7 +69,7 @@ else
 fi
 
 # --- pick a patched image: newest first, first one that passes ----------
-vdir=$TMPDIR/dos-verify
+vdir=$TMPDIR/det-verify
 img=""
 for cand in $(ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null); do
     ui_print "- Checking candidate: $cand"
@@ -88,7 +88,7 @@ for cand in $(ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null); do
         ui_print "    skip: no kernel inside"; continue
     fi
     if ! grep -qF "$BANNER" "$vdir/kernel" 2>/dev/null; then
-        ui_print "    skip: kernel is not this DecemberOS build"
+        ui_print "    skip: kernel is not this Determination build"
         ui_print "    (want: $BANNER)"; continue
     fi
     "$MB" cpio "$vdir/ramdisk.cpio" test >/dev/null 2>&1
@@ -105,12 +105,12 @@ for cand in $(ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null); do
     break
 done
 [ -n "$img" ] || fail "no usable magisk_patched-*.img in /sdcard/Download.
-    First patch decemberos-boot.img:
+    First patch determination-boot.img:
     Magisk app -> Install -> Select and Patch a File.
     (Candidates that were found but rejected are listed above.)"
 rm -rf "$vdir"
 ui_print "- Selected: $img"
-ui_print "- Verified: exact DecemberOS kernel build + Magisk-patched ramdisk"
+ui_print "- Verified: exact Determination kernel build + Magisk-patched ramdisk"
 
 want=$(sha256sum "$img" | cut -d' ' -f1)
 
@@ -126,7 +126,7 @@ fi
 ts=$(date +%Y%m%d-%H%M%S)
 bdst=""
 for d in /mnt/media_rw/*; do
-    [ -d "$d" ] && touch "$d/.dos-wtest" 2>/dev/null && rm -f "$d/.dos-wtest" && bdst="$d" && break
+    [ -d "$d" ] && touch "$d/.det-wtest" 2>/dev/null && rm -f "$d/.det-wtest" && bdst="$d" && break
 done
 [ -n "$bdst" ] || bdst=/sdcard/Download
 
@@ -136,7 +136,7 @@ if [ -n "$freek" ] && [ "$freek" -lt "$needk" ]; then
     fail "only ${freek}K free at $bdst — need ${needk}K for the backup"
 fi
 
-backup="$bdst/boot${slot}-before-decemberos-$ts.img"
+backup="$bdst/boot${slot}-before-determination-$ts.img"
 ui_print "- Backing up current boot$slot -> $backup"
 dd if="$part" of="$backup" bs=1048576 2>/dev/null || fail "backup dd failed"
 sync
@@ -168,18 +168,18 @@ sync
 got=$(head -c "$imgsize" "$part" | sha256sum | cut -d' ' -f1)
 if [ "$want" != "$got" ]; then
     fail "readback mismatch after flash — do NOT reboot.
-    Flash decemberos-kernel-restore.zip now (your verified
+    Flash determination-kernel-restore.zip now (your verified
     backup is at $backup)."
 fi
 
 ui_print ""
 ui_print "*******************************************"
-ui_print "  DecemberOS kernel flashed and verified."
+ui_print "  Determination kernel flashed and verified."
 ui_print "  Verified backup of the old boot:"
 ui_print "  $backup"
 ui_print "  Reboot now. After boot, uname -a should"
 ui_print "  contain: $MARKER"
-ui_print "  Undo anytime: decemberos-kernel-restore.zip"
+ui_print "  Undo anytime: determination-kernel-restore.zip"
 ui_print "*******************************************"
 ui_print ""
 abort "NOT AN ERROR — flash succeeded; this zip intentionally installs no module"

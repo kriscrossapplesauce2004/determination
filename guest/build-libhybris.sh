@@ -106,7 +106,7 @@ diff --git a/hybris/common/hooks.c b/hybris/common/hooks.c
 HOOKPATCH
 fi
 
-# test_hwcomposer is DecemberOS's TEMP §4 render placeholder: toggle/desktop-on
+# test_hwcomposer is Determination's TEMP §4 render placeholder: toggle/desktop-on
 # runs it as the stand-in "compositor" until sway/phoc lands. Upstream's demo
 # renders a FIXED frame count (`for (i=0; i<1020*60; ++i)`) then exits ~24s,
 # which tears the hwc2 display down; desktop-on needs it to render CONTINUOUSLY
@@ -153,7 +153,7 @@ HWCW="$SRC/hybris/egl/platforms/hwcomposer"
 if ! grep -q HWCNativeWindowSetBufferCount "$HWCW/hwcomposer.h"; then
     sed -i '/void HWCNativeWindowDestroy(struct ANativeWindow \*window);/a\
 \
-/* DecemberOS (droidian API parity): set swapchain depth. droidian wlroots\
+/* Determination (droidian API parity): set swapchain depth. droidian wlroots\
  * hwcomposer backend calls this for triple buffering. */\
 void HWCNativeWindowSetBufferCount(struct ANativeWindow *window, int cnt);' \
         "$HWCW/hwcomposer.h"

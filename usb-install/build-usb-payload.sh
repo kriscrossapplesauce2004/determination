@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build the two Magisk "action zips" (kernel install / kernel restore) and
 # stage the complete USB-drive payload into dist/usb-payload/. Copy that
-# folder to the drive (or `./dos publish` pushes it over adb) and the whole
+# folder to the drive (or `./det publish` pushes it over adb) and the whole
 # install is doable on the phone alone: patch, flash zip, reboot.
 
 set -eu
@@ -10,12 +10,12 @@ REPO=$(cd .. && pwd)
 DIST="$REPO/dist"
 PAYLOAD="$DIST/usb-payload"
 
-BOOTIMG="$REPO/boot/decemberos-boot.img"
+BOOTIMG="$REPO/boot/determination-boot.img"
 # Pristine dump of the boot slot the phone is currently on (override via env
 # after an OTA moves slots/versions). Slot is derived from the filename and
 # baked into the restore zip's slot guard.
 PRISTINE="${PRISTINE:-$REPO/artifacts/boot_a-crdroid-12.11.img}"
-MODZIP=$(ls "$REPO"/magisk-module/decemberos-magisk-v*.zip 2>/dev/null | sort -V | tail -n1)
+MODZIP=$(ls "$REPO"/magisk-module/determination-magisk-v*.zip 2>/dev/null | sort -V | tail -n1)
 
 [ -f "$BOOTIMG" ] || { echo "missing $BOOTIMG — run boot/repack.sh" >&2; exit 1; }
 [ -f "$PRISTINE" ] || { echo "missing pristine boot dump $PRISTINE" >&2; exit 1; }
@@ -46,7 +46,7 @@ mkdir -p "$PAYLOAD"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 
 # --- install zip: scripts only, tiny -----------------------------------
-# Bake the FULL version banner of the kernel inside decemberos-boot.img
+# Bake the FULL version banner of the kernel inside determination-boot.img
 # into the install zip — its identity check then pins this exact build
 # (including build timestamp), so a stale magisk_patched image from an
 # older build is rejected on the phone instead of discovered at boot.
@@ -61,8 +61,8 @@ case "$BANNER" in *[\|\&]*) echo "banner contains sed-unsafe chars: $BANNER" >&2
 mkdir -p "$WORK/install"
 sed "s|@BANNER@|$BANNER|" install/customize.sh > "$WORK/install/customize.sh"
 cp install/module.prop "$WORK/install/"
-mkzip "$PAYLOAD/decemberos-kernel-install.zip" "$WORK/install"
-echo "built decemberos-kernel-install.zip (pins: $BANNER)"
+mkzip "$PAYLOAD/determination-kernel-install.zip" "$WORK/install"
+echo "built determination-kernel-install.zip (pins: $BANNER)"
 
 # --- restore zip: embeds the pristine boot image, checksum baked in ----
 SHA=$(sha256sum "$PRISTINE" | cut -d' ' -f1)
@@ -70,11 +70,11 @@ SIZE=$(stat -c%s "$PRISTINE")
 mkdir -p "$WORK/restore"
 sed -e "s/@SHA256@/$SHA/" -e "s/@SIZE@/$SIZE/" -e "s/@SLOT@/$SLOT/" restore/customize.sh > "$WORK/restore/customize.sh"
 cp restore/module.prop "$WORK/restore/"
-mkzip "$PAYLOAD/decemberos-kernel-restore.zip" "$WORK/restore" "boot.img=$PRISTINE"
-echo "built decemberos-kernel-restore.zip (embeds pristine boot$SLOT ${PRISTINE##*/}, sha256 $SHA)"
+mkzip "$PAYLOAD/determination-kernel-restore.zip" "$WORK/restore" "boot.img=$PRISTINE"
+echo "built determination-kernel-restore.zip (embeds pristine boot$SLOT ${PRISTINE##*/}, sha256 $SHA)"
 
 # --- the rest of the drive ---------------------------------------------
-cp "$BOOTIMG" "$PAYLOAD/decemberos-boot.img"
+cp "$BOOTIMG" "$PAYLOAD/determination-boot.img"
 cp "$MODZIP" "$PAYLOAD/"
 cp README.md "$PAYLOAD/README-INSTALL.md" 2>/dev/null || true
 

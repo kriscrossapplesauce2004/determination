@@ -1,7 +1,7 @@
 #!/system/bin/sh
-# DecemberOS kernel RESTORE — flashes the embedded pristine boot image back.
+# Determination kernel RESTORE — flashes the embedded pristine boot image back.
 # The embedded boot.img is a dump of the active boot slot taken right before
-# the DecemberOS kernel install: stock crDroid kernel with the Magisk-patched
+# the Determination kernel install: stock crDroid kernel with the Magisk-patched
 # ramdisk — i.e. exactly the known-good state, root included. Which slot that
 # is gets baked in at zip build time (see @SLOT@ below).
 #
@@ -10,7 +10,7 @@
 # (taken and sha-verified first, so the restore itself is undoable),
 # no-op guard if the partition already matches, readback verify after.
 #
-# SAFE MODE / DRY RUN: create /sdcard/Download/decemberos-dryrun and flash
+# SAFE MODE / DRY RUN: create /sdcard/Download/determination-dryrun and flash
 # this zip — every check runs (including the backup) but the partition is
 # not written. Delete the flag file to arm the real restore.
 #
@@ -25,7 +25,7 @@ WANT_SHA=@SHA256@
 IMGSIZE=@SIZE@
 WANT_SLOT=@SLOT@
 
-DRYFLAG=/sdcard/Download/decemberos-dryrun
+DRYFLAG=/sdcard/Download/determination-dryrun
 
 fail() { ui_print ""; ui_print "!!! $1"; abort "aborting"; }
 
@@ -72,7 +72,7 @@ fi
 ts=$(date +%Y%m%d-%H%M%S)
 bdst=""
 for d in /mnt/media_rw/*; do
-    [ -d "$d" ] && touch "$d/.dos-wtest" 2>/dev/null && rm -f "$d/.dos-wtest" && bdst="$d" && break
+    [ -d "$d" ] && touch "$d/.det-wtest" 2>/dev/null && rm -f "$d/.det-wtest" && bdst="$d" && break
 done
 [ -n "$bdst" ] || bdst=/sdcard/Download
 
@@ -116,8 +116,8 @@ ui_print ""
 ui_print "*******************************************"
 ui_print "  Pristine boot restored and verified."
 ui_print "  Reboot: phone is back to plain crDroid"
-ui_print "  (with root). DecemberOS kernel removed."
-ui_print "  The DecemberOS boot you just replaced is"
+ui_print "  (with root). Determination kernel removed."
+ui_print "  The Determination boot you just replaced is"
 ui_print "  backed up at: $backup"
 ui_print "*******************************************"
 ui_print ""

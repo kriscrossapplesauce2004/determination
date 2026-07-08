@@ -1,14 +1,14 @@
-# DecemberOS guest container config (LXC).
+# Determination guest container config (LXC).
 # The guest must see: Android /dev (binder, kgsl, ion/dmabuf, dri, input),
 # the property area, and /vendor + /system libs — spec §1 implication chain.
 
-lxc.uts.name = decemberos
+lxc.uts.name = determination
 lxc.arch = aarch64
-lxc.rootfs.path = dir:/data/decemberos/guest
+lxc.rootfs.path = dir:/data/determination/guest
 lxc.init.cmd = /sbin/init
 
-# Android has no /etc/lxc conventions; keep everything under /data/decemberos.
-lxc.log.file = /data/decemberos/log/lxc.log
+# Android has no /etc/lxc conventions; keep everything under /data/determination.
+lxc.log.file = /data/determination/log/lxc.log
 lxc.log.level = WARN
 
 # --- Namespaces / privileges ---
@@ -75,7 +75,7 @@ lxc.cgroup.devices.allow = a *:* rwm
 
 # --- Network: veth into Android's connectivity, NAT'd by toggle/guest-start ---
 lxc.net.0.type = veth
-lxc.net.0.link = decembr0
+lxc.net.0.link = determ0
 lxc.net.0.flags = up
 lxc.net.0.ipv4.address = 192.168.117.2/24
 lxc.net.0.ipv4.gateway = 192.168.117.1

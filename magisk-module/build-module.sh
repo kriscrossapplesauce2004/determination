@@ -1,5 +1,5 @@
 #!/bin/sh
-# Package the DecemberOS Magisk module zip (install via Magisk app -> Modules
+# Package the Determination Magisk module zip (install via Magisk app -> Modules
 # -> Install from storage; no META-INF needed for app installs).
 # Pulls the device evgrab binary and toggle scripts in as payload.
 
@@ -20,7 +20,7 @@ cp ../tools/evgrab/evgrab \
 cp ../guest/lxc/config "$WORK/tools/lxc-config"
 
 VER=$(sed -n 's/^version=//p' module.prop)
-OUT="$PWD/decemberos-magisk-$VER.zip"
+OUT="$PWD/determination-magisk-$VER.zip"
 rm -f "$OUT"
 # python zipfile: no zip(1) dependency, deterministic enough for our use
 (cd "$WORK" && python3 -c "

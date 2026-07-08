@@ -41,7 +41,7 @@ sleep 2
     done
 ) &
 BLKEEP=$!
-/data/decemberos/lxc/bin/lxc-attach -P /data/decemberos -n guest -- /bin/sh -c '
+/data/determination/lxc/bin/lxc-attach -P /data/determination -n guest -- /bin/sh -c '
     export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
     export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
@@ -59,7 +59,7 @@ BLKEEP=$!
     done
     echo "WAYLAND SOCKET UP after ${i} half-seconds"
     export WAYLAND_DISPLAY=wayland-0
-    timeout 40 foot -- /bin/sh -c "echo DecemberOS: Debian $(cat /etc/debian_version) on $(uname -r); echo; cat /etc/os-release | head -2; exec /bin/bash" > /tmp/foot.out 2>&1
+    timeout 40 foot -- /bin/sh -c "echo Determination: Debian $(cat /etc/debian_version) on $(uname -r); echo; cat /etc/os-release | head -2; exec /bin/bash" > /tmp/foot.out 2>&1
     FOOT_RC=$?
     echo "FOOT-RC=$FOOT_RC (124=lived full 40s window = GOOD)"
     kill $PHOC 2>/dev/null

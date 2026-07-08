@@ -1,5 +1,5 @@
 #!/bin/sh
-# DecemberOS §3 finish: build the REAL guest compositor — phoc 0.47 on the
+# Determination §3 finish: build the REAL guest compositor — phoc 0.47 on the
 # droidian wlroots fork's hwcomposer backend — inside the trixie guest,
 # against OUR upstream libhybris in /usr/local (guest/build-libhybris.sh).
 # Run INSIDE the container as root. Non-destructive/idempotent-ish: safe to
@@ -97,14 +97,14 @@ cd wlroots
 
 # PATCH (upstream-able to droidian): SDM (qcom sm8150) starts every NEW
 # composer client at per-client brightness 0 and DSPP-dims its output to
-# pure black while validate/present succeed (decemberos b182d86). Call
+# pure black while validate/present succeed (determination b182d86). Call
 # setDisplayBrightness(1.0) once after successful power-on. Idempotent.
 F=backend/hwcomposer/hwcomposer2.c
 grep -q hwc2_compat_display_set_brightness "$F" || sed -i \
-'s|\t\tif (enable \&\& change_backlight \&\&|\t\t/* DecemberOS: SDM inits new composer clients at brightness 0 and\n\t\t * DSPP-dims their output to black; one set_brightness after\n\t\t * power-on fixes it (see decemberos b182d86). */\n\t\tif (enable)\n\t\t\thwc2_compat_display_set_brightness(hwc2_output->hwc2_display, 1.0f);\n\n\t\tif (enable \&\& change_backlight \&\&|' "$F"
+'s|\t\tif (enable \&\& change_backlight \&\&|\t\t/* Determination: SDM inits new composer clients at brightness 0 and\n\t\t * DSPP-dims their output to black; one set_brightness after\n\t\t * power-on fixes it (see determination b182d86). */\n\t\tif (enable)\n\t\t\thwc2_compat_display_set_brightness(hwc2_output->hwc2_display, 1.0f);\n\n\t\tif (enable \&\& change_backlight \&\&|' "$F"
 grep -q hwc2_compat_display_set_brightness "$F" || { echo "FATAL: brightness patch anchor missing"; exit 1; }
 
-# PATCH 2 (DecemberOS §4, 2026-07-06): EVIOCGRAB handoff in the libinput
+# PATCH 2 (Determination §4, 2026-07-06): EVIOCGRAB handoff in the libinput
 # backend. Android's EventHub (inside system_server) keeps every
 # /dev/input/event* open non-exclusively — without a grab, events reach
 # BOTH stacks. The Android-side evgrab holds the grab through the SF stop;
@@ -125,7 +125,7 @@ inc_anchor = '#include "util/env.h"\n'
 assert inc_anchor in s, 'include anchor missing'
 s = s.replace(inc_anchor, inc_anchor + (
     '\n'
-    '/* DecemberOS §4 input handoff */\n'
+    '/* Determination §4 input handoff */\n'
     '#include <errno.h>\n'
     '#include <linux/input.h>\n'
     '#include <pthread.h>\n'
@@ -137,7 +137,7 @@ s = s.replace(inc_anchor, inc_anchor + (
 ), 1)
 
 helper = '''\
-/* DecemberOS §4: Android's EventHub (inside system_server) keeps
+/* Determination §4: Android's EventHub (inside system_server) keeps
  * /dev/input/event* open non-exclusively — without EVIOCGRAB every event
  * is delivered to BOTH stacks (double input). During the handoff the
  * Android-side evgrab daemon still holds the grab, so retry from a
@@ -151,11 +151,11 @@ static void *dos_grab_thread(void *arg) {
 \t * version and left the session grabless (2026-07-06). */
 \tfor (int i = 0; i < 6000; i++) {
 \t\tif (ioctl(fd, EVIOCGRAB, (void *)1) == 0) {
-\t\t\tfprintf(stderr, "DecemberOS: EVIOCGRAB acquired (fd %d)\\n", fd);
+\t\t\tfprintf(stderr, "Determination: EVIOCGRAB acquired (fd %d)\\n", fd);
 \t\t\tbreak;
 \t\t}
 \t\tif (errno != EBUSY) {
-\t\t\tfprintf(stderr, "DecemberOS: EVIOCGRAB failed (fd %d): %s\\n",
+\t\t\tfprintf(stderr, "Determination: EVIOCGRAB failed (fd %d): %s\\n",
 \t\t\t\tfd, strerror(errno));
 \t\t\tbreak;
 \t\t}

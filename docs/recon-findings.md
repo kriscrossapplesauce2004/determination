@@ -40,7 +40,7 @@ NAT/MASQUERADE, `ASHMEM`, `OVERLAY_FS`, `FUSE_FS`, `SECCOMP_FILTER`, and
 binder contexts via a fresh binderfs instance in its IPC namespace (LXC config
 updated; the extra-binder-devices plan is dropped).
 
-Missing (what `kernel/decemberos.config` adds): **`PID_NS`** (hard LXC
+Missing (what `kernel/determination.config` adds): **`PID_NS`** (hard LXC
 requirement), `IPC_NS` (needed for the private binderfs instance), `USER_NS`,
 `CGROUP_DEVICE`, `CGROUP_PIDS`, `POSIX_MQUEUE`.
 

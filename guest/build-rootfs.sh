@@ -43,4 +43,4 @@ else
 fi
 
 echo "Rootfs: guest/$OUT"
-echo "Push:   adb push $OUT /data/decemberos/ && adb shell su -c 'mkdir -p /data/decemberos/guest && tar -xzf /data/decemberos/$OUT -C /data/decemberos/guest'"
+echo "Push:   adb push $OUT /data/determination/ && adb shell su -c 'mkdir -p /data/determination/guest && tar -xzf /data/determination/$OUT -C /data/determination/guest'"

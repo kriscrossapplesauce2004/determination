@@ -1,11 +1,11 @@
 #!/bin/sh
-# DecemberOS kernel install/restore driven from the PC over a USB cable —
+# Determination kernel install/restore driven from the PC over a USB cable —
 # the cable-era sibling of the on-phone action zips, with one safety layer
 # the zips cannot have: the pre-flash backup is ALSO pulled to this machine
 # (artifacts/backups/), so a copy survives anything that happens to the
 # phone's storage.
 #
-# The one step that stays manual is Magisk-patching decemberos-boot.img in
+# The one step that stays manual is Magisk-patching determination-boot.img in
 # the Magisk app (Install -> Select and Patch a File) — the app owns the
 # patch settings and we do not second-guess them from here.
 #
@@ -26,11 +26,11 @@ REPO=$(cd .. && pwd)
 export PATH="$REPO/toolchain/usr/bin:$PATH"
 
 ADB="${ADB:-$HOME/platform-tools/adb}"
-BOOTIMG="$REPO/boot/decemberos-boot.img"
+BOOTIMG="$REPO/boot/determination-boot.img"
 PRISTINE="${PRISTINE:-$REPO/artifacts/boot_a-crdroid-12.11.img}"
 MARKER="melissa@terra"
 DMB=/data/adb/magisk/magiskboot
-DWORK=/data/local/tmp/dos-hostflash
+DWORK=/data/local/tmp/det-hostflash
 
 die() { echo "!!! $*" >&2; exit 1; }
 rsh() { "$ADB" shell "su -c \"$*\""; }
@@ -58,7 +58,7 @@ if [ "$cmd" = verify ]; then
     # /proc/version, not uname -a: toybox uname omits the (builder@host) field
     un=$("$ADB" shell cat /proc/version)
     echo "$un"
-    echo "$un" | grep -q "$MARKER" || die "running kernel is NOT the DecemberOS build"
+    echo "$un" | grep -q "$MARKER" || die "running kernel is NOT the Determination build"
     bad=0
     for opt in PID_NS USER_NS IPC_NS CGROUP_DEVICE CGROUP_PIDS POSIX_MQUEUE \
                VT NF_TABLES CHECKPOINT_RESTORE BINFMT_MISC MACVLAN QCA_CLD_WLAN; do
@@ -68,8 +68,8 @@ if [ "$cmd" = verify ]; then
             echo "  MISSING: CONFIG_$opt"; bad=1
         fi
     done
-    [ "$bad" = 0 ] || die "running config is missing DecemberOS options"
-    echo "verify OK: DecemberOS kernel is running with all expected options"
+    [ "$bad" = 0 ] || die "running config is missing Determination options"
+    echo "verify OK: Determination kernel is running with all expected options"
     exit 0
 fi
 
@@ -142,7 +142,7 @@ echo "pinning build: $BANNER"
 battery
 
 img=$("$ADB" shell "ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null | head -n1" | tr -d '\r\n')
-[ -n "$img" ] || die "no magisk_patched-*.img in /sdcard/Download — patch decemberos-boot.img in the Magisk app first"
+[ -n "$img" ] || die "no magisk_patched-*.img in /sdcard/Download — patch determination-boot.img in the Magisk app first"
 echo "candidate: $img"
 
 imgsize=$(rsh "stat -c%s $img" | tr -d '\r\n')
@@ -150,13 +150,13 @@ imgsize=$(rsh "stat -c%s $img" | tr -d '\r\n')
 rsh "head -c 8 $img" | grep -q 'ANDROID!' || die "$img is not an Android boot image"
 
 rsh "rm -rf $DWORK && mkdir -p $DWORK && cd $DWORK && $DMB unpack $img" >/dev/null 2>&1 || die "magiskboot could not unpack $img on the device"
-rsh "grep -qF \\\"$BANNER\\\" $DWORK/kernel" || die "kernel inside $img is NOT this exact DecemberOS build
+rsh "grep -qF \\\"$BANNER\\\" $DWORK/kernel" || die "kernel inside $img is NOT this exact Determination build
     (want: $BANNER)
-    Re-patch boot/decemberos-boot.img in the Magisk app."
+    Re-patch boot/determination-boot.img in the Magisk app."
 rc=0; rsh "cd $DWORK && $DMB cpio ramdisk.cpio test" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 1 ] || die "ramdisk of $img is not Magisk-patched (magiskboot cpio test rc=$rc) — flashing would remove root"
 rsh "rm -rf $DWORK"
-echo "verified: exact DecemberOS kernel build + Magisk-patched ramdisk"
+echo "verified: exact Determination kernel build + Magisk-patched ramdisk"
 
 want=$(rsh "sha256sum $img" | cut -d' ' -f1)
 cur=$(rsh "head -c $imgsize $part | sha256sum" | cut -d' ' -f1)
@@ -165,7 +165,7 @@ if [ "$cur" = "$want" ]; then
     exit 0
 fi
 
-take_backup decemberos
+take_backup determination
 
 if [ "$cmd" = check ]; then
     echo
@@ -177,7 +177,7 @@ fi
 
 flash_and_verify "$img" "$want" "$imgsize"
 echo
-echo "DecemberOS kernel flashed. Backups: $backup (device), $hostbackup (here)."
+echo "Determination kernel flashed. Backups: $backup (device), $hostbackup (here)."
 echo "After reboot run: $0 verify"
 $REBOOT && "$ADB" reboot
 exit 0

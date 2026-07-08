@@ -1,6 +1,6 @@
 #!/bin/sh
 # Build static aarch64 LXC tools for the Android host side and (optionally)
-# push them to the phone. Produces the /data/decemberos/lxc/bin toolset that
+# push them to the phone. Produces the /data/determination/lxc/bin toolset that
 # guest-start / desktop-on / desktop-off exec.
 #
 # Toolchain: the repo's toolchain/usr/bin cross gcc + static glibc (same
@@ -42,9 +42,9 @@ cd "$WORK"
 cd "lxc-$LXCVER"
 
 [ -f Makefile ] || ./configure --host=aarch64-linux-gnu \
-    --prefix=/data/decemberos/lxc \
-    --with-config-path=/data/decemberos \
-    --with-runtime-path=/data/decemberos/run \
+    --prefix=/data/determination/lxc \
+    --with-config-path=/data/determination \
+    --with-runtime-path=/data/determination/run \
     --disable-shared --enable-static \
     --disable-capabilities --disable-seccomp --disable-apparmor \
     --disable-selinux --disable-openssl --disable-doc --disable-api-docs \
@@ -64,5 +64,5 @@ echo "Static LXC tools staged in $OUT"
 if [ "${1:-}" = "--push" ]; then
     "$ADB" shell "mkdir -p /data/local/tmp/lxcbin"
     for t in $TOOLS; do "$ADB" push "$OUT/$t" /data/local/tmp/lxcbin/; done
-    "$ADB" shell "su -c 'mkdir -p /data/decemberos/lxc/bin && cp -f /data/local/tmp/lxcbin/* /data/decemberos/lxc/bin/ && chmod 755 /data/decemberos/lxc/bin/* && rm -rf /data/local/tmp/lxcbin && /data/decemberos/lxc/bin/lxc-start --version'"
+    "$ADB" shell "su -c 'mkdir -p /data/determination/lxc/bin && cp -f /data/local/tmp/lxcbin/* /data/determination/lxc/bin/ && chmod 755 /data/determination/lxc/bin/* && rm -rf /data/local/tmp/lxcbin && /data/determination/lxc/bin/lxc-start --version'"
 fi
