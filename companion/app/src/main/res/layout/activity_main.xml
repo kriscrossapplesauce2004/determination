@@ -10,13 +10,27 @@
         android:orientation="vertical"
         android:padding="24dp">
 
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/app_name"
-            android:textSize="28sp"
-            android:textStyle="bold"
-            android:paddingBottom="4dp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingBottom="4dp">
+
+            <ImageView
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:src="@drawable/ic_soul"
+                android:contentDescription="@string/app_name"
+                android:layout_marginEnd="10dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/app_name"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
@@ -24,7 +38,7 @@
             android:text="@string/subtitle"
             android:textSize="14sp"
             android:alpha="0.7"
-            android:paddingBottom="20dp" />
+            android:paddingBottom="18dp" />
 
         <TextView
             android:id="@+id/rootText"
@@ -32,7 +46,7 @@
             android:layout_height="wrap_content"
             android:text="@string/checking"
             android:textSize="14sp"
-            android:paddingBottom="12dp" />
+            android:paddingBottom="10dp" />
 
         <TextView
             android:id="@+id/statusText"
@@ -45,28 +59,91 @@
             android:padding="16dp"
             android:background="#22000000" />
 
+        <TextView android:id="@+id/hdrDesktop" style="@style/DetSectionHeader" android:text="@string/sec_desktop" />
+
         <Button
             android:id="@+id/enterBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
             android:text="@string/enter_go" />
 
         <Button
             android:id="@+id/exitBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             style="?attr/materialButtonOutlinedStyle"
             android:text="@string/exit_go" />
 
         <Button
-            android:id="@+id/refreshBtn"
+            android:id="@+id/recoverBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            style="?attr/borderlessButtonStyle"
-            android:text="@string/refresh" />
+            android:layout_marginTop="6dp"
+            style="?attr/materialButtonOutlinedStyle"
+            android:text="@string/recover_go" />
+
+        <TextView android:id="@+id/hdrGuest" style="@style/DetSectionHeader" android:text="@string/sec_guest" />
+
+        <Button
+            android:id="@+id/restartGuestBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            style="?attr/materialButtonOutlinedStyle"
+            android:text="@string/restart_guest" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
+            android:baselineAligned="false">
+
+            <Button
+                android:id="@+id/rebootBtn"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                style="?attr/materialButtonOutlinedStyle"
+                android:text="@string/reboot_go" />
+
+            <Button
+                android:id="@+id/powerBtn"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                style="?attr/materialButtonOutlinedStyle"
+                android:text="@string/poweroff_go" />
+        </LinearLayout>
+
+        <TextView android:id="@+id/hdrDiag" style="@style/DetSectionHeader" android:text="@string/sec_diag" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <Button
+                android:id="@+id/logBtn"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="4dp"
+                style="?attr/borderlessButtonStyle"
+                android:text="@string/view_log" />
+
+            <Button
+                android:id="@+id/refreshBtn"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                style="?attr/borderlessButtonStyle"
+                android:text="@string/refresh" />
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

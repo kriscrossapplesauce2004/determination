@@ -48,6 +48,10 @@ object Root {
             $LXC/lxc-info -P $DET -n guest 2>/dev/null | grep -q RUNNING && echo "guest=running" || echo "guest=stopped"
             [ -e $DET/run/hostagent.pid ] && echo "agent=up" || echo "agent=down"
             echo "installed=${'$'}([ -x $BIN/desktop-on ] && echo yes || echo no)"
+            echo "ip=${'$'}($LXC/lxc-info -P $DET -n guest 2>/dev/null | awk '/IP:/{print ${'$'}2; exit}')"
+            echo "batt=${'$'}(cat /sys/class/power_supply/bms/capacity 2>/dev/null)"
+            echo "battmv=${'$'}(( ${'$'}(cat /sys/class/power_supply/bms/voltage_now 2>/dev/null || echo 0) / 1000 ))"
+            echo "battstat=${'$'}(cat /sys/class/power_supply/battery/status 2>/dev/null)"
         """.trimIndent()
         val r = run(script, 12)
         val m = HashMap<String, String>()
@@ -71,4 +75,31 @@ object Root {
 
     /** Return to phone mode (restarts SurfaceFlinger). */
     fun exitDesktop(): Result = run("$BIN/desktop-off", 30)
+
+    /**
+     * Recover a wedged desktop session without a full toggle: kill phoc; the
+     * desktop-on supervisor relaunches the whole stack (compositor + phosh +
+     * grabs) within ~10s. The go-to fix when the panel blanks or freezes.
+     */
+    fun recoverDesktop(): Result =
+        run("$LXC/lxc-attach -P $DET -n guest -- /usr/bin/pkill -TERM phoc", 15)
+
+    /** Stop + cold-start the guest container (guest-start is idempotent). */
+    fun restartGuest(): Result = run(
+        "$LXC/lxc-stop -P $DET -n guest -t 10 2>/dev/null; $BIN/guest-start", 40
+    )
+
+    /** Whole-phone power actions (best-effort clean teardown first). */
+    fun rebootPhone(): Result =
+        run("$BIN/desktop-off 2>/dev/null; svc power reboot || reboot", 20)
+
+    fun powerOff(): Result =
+        run("$BIN/desktop-off 2>/dev/null; svc power shutdown || reboot -p", 20)
+
+    /** Tail one of the on-device logs for the in-app viewer. */
+    fun tailLog(name: String, lines: Int = 60): String {
+        val safe = name.filter { it.isLetterOrDigit() || it == '.' || it == '-' || it == '_' }
+        val r = run("tail -n $lines $DET/log/$safe 2>/dev/null", 10)
+        return if (r.out.isBlank()) "(empty or not found: $safe)" else r.out
+    }
 }

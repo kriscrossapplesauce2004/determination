@@ -1,13 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Determination</string>
-    <string name="subtitle">Android ↔ Linux convergence control</string>
+    <string name="subtitle">Stay determined. Android ↔ Linux control.</string>
 
     <string name="checking">Checking…</string>
-    <string name="root_ok">Root: granted (Magisk)</string>
-    <string name="no_root">Root: not granted</string>
+    <string name="root_ok">● Root granted (Magisk)</string>
+    <string name="no_root">✕ Root not granted</string>
     <string name="no_root_hint">This app needs Magisk su. Open Magisk → Superuser and grant Determination (screen must be unlocked).</string>
     <string name="not_installed">Determination is not installed under /data/determination. Flash the kernel + Magisk module first.</string>
+
+    <string name="sec_desktop">Desktop</string>
+    <string name="sec_guest">Guest &amp; power</string>
+    <string name="sec_diag">Diagnostics</string>
 
     <string name="enter_title">Enter desktop mode?</string>
     <string name="enter_body">The phone UI will hand off to the Linux desktop on the panel. To come back, use “Exit to Phone Mode” inside the desktop, or the power menu.</string>
@@ -19,7 +23,24 @@
     <string name="exiting">Returning to phone mode…</string>
     <string name="exit_failed">Exit failed: %1$s</string>
 
-    <string name="refresh">Refresh status</string>
+    <string name="recover_go">Recover Desktop (restart phoc)</string>
+    <string name="recovering">Recovering the compositor…</string>
+
+    <string name="restart_guest">Restart Guest Container</string>
+    <string name="restarting_guest">Restarting the guest…</string>
+
+    <string name="reboot_go">Reboot</string>
+    <string name="poweroff_go">Power Off</string>
+    <string name="confirm_reboot_title">Reboot the phone?</string>
+    <string name="confirm_poweroff_title">Power off the phone?</string>
+    <string name="confirm_power_body">This affects the whole phone, not just the Linux guest.</string>
+    <string name="working">Working…</string>
+    <string name="action_failed">Failed: %1$s</string>
+
+    <string name="view_log">View Log</string>
+    <string name="refresh">Refresh</string>
+    <string name="log_pick_title">Which log?</string>
+    <string name="close">Close</string>
 
     <string name="tile_label">Desktop Mode</string>
     <string name="tile_active">Desktop: ON</string>

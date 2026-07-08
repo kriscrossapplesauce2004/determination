@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Determination red (the resolve of it). -->
-    <color name="det_primary">#C0392B</color>
-    <color name="det_ink">#101010</color>
+    <!-- The red SOUL — Determination. -->
+    <color name="det_primary">#FF1717</color>
+    <color name="det_soul">#FF1717</color>
+    <color name="det_ink">#0A0A0A</color>
 </resources>
