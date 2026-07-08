@@ -11,6 +11,8 @@
 #   det push-module       install/refresh the Magisk module zip on the phone
 #   det publish           push dist/usb-payload/ to the phone's USB drive
 #                         (falls back to /sdcard/Determination if no drive)
+#   det migrate           one-shot /data/decemberos -> /data/determination move
+#                         (run once when upgrading a DecemberOS-era device)
 
 set -eu
 cd "$(dirname "$0")"
@@ -77,6 +79,10 @@ publish)
         echo "no USB drive mounted — published to $dest instead"
     fi
     echo "next: usb-install/README.md (patch determination-boot.img in Magisk, flash install zip)" ;;
+migrate)
+    ensure
+    adb push migrate-to-determination.sh /sdcard/Download/migrate-to-determination.sh >/dev/null
+    adb shell su -c 'sh /sdcard/Download/migrate-to-determination.sh' </dev/null ;;
 *)
-    sed -n '5,11p' "$0"; exit 2 ;;
+    sed -n '6,15p' "$0"; exit 2 ;;
 esac
