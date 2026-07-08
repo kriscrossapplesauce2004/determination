@@ -384,12 +384,25 @@ bring-up gotchas, now fixed & encoded:
    trip. No wrapper jar committed (open in Studio or `gradle wrapper`). Build/run
    UNVERIFIED (no Android SDK on this box).
 
-NEXT: (07-08 remaining) LIVE PANEL TEST of the round-trip — enter desktop mode,
-tap "Exit to Phone Mode" on the panel + phosh power-menu Power Off/Restart
-(needs melissa at the glass; the wiring is proven safe from phone mode but the
-real handoff is unverified). BUILD the companion APK (no Android SDK on terra —
-open companion/ in Studio or install cmdline-tools+JDK17+platform-34). Consider
-rebuilding lxc/bin (build-lxc.sh) to drop the /data/decemberos compat symlink.
+Companion APK: **builds + installed** (`com.determination.companion`). No-root
+Android toolchain lives at `~/android-sdk` (JDK17 + cmdline-tools + platform-34
++ gradle-8.7, all gitignored); build = `~/android-sdk/gradle-8.7/bin/gradle
+--no-daemon assembleDebug` in `companion/` (needs `local.properties` sdk.dir).
+Phosh launcher gotcha: melissa's `app-filter-mode=adaptive` HIDES any .desktop
+without `X-Purism-FormFactor=...Mobile;` — every guest launcher must carry it.
+
+07-08 LIVE TEST was CUT SHORT by a **near-dead battery** (level 1%, 3.49V,
+trickle-charging on the data cable) — this is the same near-dead condition
+behind the past panics/reboots, so desktop-mode/heavy-guest testing must wait
+for a proper wall-charge. Desktop handoff itself came up clean (phosh ready
+0.65s, input handed to guest, host-side desktop-off recovered it); what's still
+unverified is the on-panel tap of the (now filter-fixed) Exit launcher + the
+phosh power-menu Power Off/Restart. In desktop mode the framework thrash also
+knocks out /sdcard (FUSE) — drop files elsewhere or work in phone mode.
+
+NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
+the panel; try the companion app's Enter Desktop Mode + QS tile (grant it su).
+Consider rebuilding lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink.
 Then: debug the phoc output-power wake path (power button); guest DNS
 flakiness root cause; audio stack (pipewire) → volume keys + calls-less
 phone basics; phosh polish (feedbackd, backgrounds); pstore into kernel
