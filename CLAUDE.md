@@ -391,14 +391,26 @@ Android toolchain lives at `~/android-sdk` (JDK17 + cmdline-tools + platform-34
 Phosh launcher gotcha: melissa's `app-filter-mode=adaptive` HIDES any .desktop
 without `X-Purism-FormFactor=...Mobile;` — every guest launcher must carry it.
 
-07-08 LIVE TEST was CUT SHORT by a **near-dead battery** (level 1%, 3.49V,
-trickle-charging on the data cable) — this is the same near-dead condition
-behind the past panics/reboots, so desktop-mode/heavy-guest testing must wait
-for a proper wall-charge. Desktop handoff itself came up clean (phosh ready
-0.65s, input handed to guest, host-side desktop-off recovered it); what's still
-unverified is the on-panel tap of the (now filter-fixed) Exit launcher + the
-phosh power-menu Power Off/Restart. In desktop mode the framework thrash also
-knocks out /sdcard (FUSE) — drop files elsewhere or work in phone mode.
+07-08 LIVE TEST was cut short: the desktop handoff came up clean (phosh ready
+0.65s, input handed to guest, host-side desktop-off recovered it), but the
+battery was genuinely low and the phone **died on plug-in** before the on-panel
+tap of the (now filter-fixed) Exit launcher + phosh power-menu Power Off/Restart
+could be confirmed — still UNVERIFIED. In desktop mode the framework thrash also
+knocks out /sdcard (FUSE) — drop files elsewhere (su stdin heredoc / guest /root)
+or work in phone mode.
+
+BATTERY GAUGE (07-08, important): the OP7 `battery` power_supply node reports a
+**stuck/garbage capacity** on this kernel — frozen `charge_counter=37000` and a
+bogus `temp=41.5C`, byte-identical across reboots (the OnePlus `oplus_chg`
+gauge-protect/AFI logic misfiring without vendor bits). The ACCURATE gauge is
+the `bms` node (type=BMS, moving counter, sane temp) — but UPower only honours
+`type=Battery`, so phosh reads the broken node and shows ~1%. Android has its
+own vendor path and reads correctly. Fix = `det-battery` (setup-controls.sh): a
+guest daemon that bind-mounts a file holding the live `bms` capacity over
+`battery/capacity` **in the guest mount ns only** (verified: guest node 1->7,
+host node still 1). Bind-over-sysfs works here (privileged container). NOTE this
+means a low battery genuinely reads low on both — it is NOT purely cosmetic; the
+cell was actually near-empty. Wall-charge before heavy/desktop testing.
 
 NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
 the panel; try the companion app's Enter Desktop Mode + QS tile (grant it su).
