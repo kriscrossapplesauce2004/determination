@@ -183,6 +183,11 @@ echo $! > "$DET/run/compositor.pid"
             export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export WAYLAND_DISPLAY=wayland-0 LANG=C.UTF-8
             export XDG_CURRENT_DESKTOP=Phosh XDG_SESSION_TYPE=wayland
+            # phosh grays out its Log Out button unless GDMSESSION=phosh
+            # (phosh_shell_started_by_display_manager: shell.c). We launch
+            # phosh bare (no display manager), so fake it — then Log Out
+            # calls SessionManager.Logout(1) -> our shim -> det-signal exit.
+            export GDMSESSION=phosh
             # /usr/local first: phosh must load OUR libgmobile (embeds the
             # OP7 notch panel for the qcom,sm8150 DT compatibles) — the
             # Debian one has no entry and the top bar ignores the notch.
