@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Determination red (the resolve of it). -->
+    <color name="det_primary">#C0392B</color>
+    <color name="det_ink">#101010</color>
+</resources>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Determination" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/det_primary</item>
+        <item name="colorPrimaryContainer">@color/det_primary</item>
+    </style>
+</resources>

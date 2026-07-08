@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/subtitle"
+            android:textSize="14sp"
+            android:alpha="0.7"
+            android:paddingBottom="20dp" />
+
+        <TextView
+            android:id="@+id/rootText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/checking"
+            android:textSize="14sp"
+            android:paddingBottom="12dp" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/checking"
+            android:fontFamily="monospace"
+            android:textSize="15sp"
+            android:lineSpacingExtra="4dp"
+            android:padding="16dp"
+            android:background="#22000000" />
+
+        <Button
+            android:id="@+id/enterBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/enter_go" />
+
+        <Button
+            android:id="@+id/exitBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            style="?attr/materialButtonOutlinedStyle"
+            android:text="@string/exit_go" />
+
+        <Button
+            android:id="@+id/refreshBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            style="?attr/borderlessButtonStyle"
+            android:text="@string/refresh" />
+
+    </LinearLayout>
+</ScrollView>
