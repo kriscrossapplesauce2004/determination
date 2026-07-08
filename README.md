@@ -28,7 +28,8 @@ Full rationale, topology decision, and risk register: see
 | `boot/` | boot.img unpack/repack with the custom kernel; Magisk patching flow |
 | `magisk-module/` | the on-device Determination Magisk module: container launch, boot hooks, sepolicy rules |
 | `guest/` | Debian arm64 rootfs builder + LXC config (binder/kgsl/dmabuf `/dev`, `/vendor`, property area bind-mounts, libhybris) |
-| `toggle/` | §4 internal-panel handoff: SF stop + respawn suppression + compositor swap + input grab |
+| `toggle/` | §4 internal-panel handoff: SF stop + respawn suppression + compositor swap + input grab; plus `det-hostagent` (guest→host control channel) |
+| `companion/` | native Android app: enter desktop mode + live status + Quick Settings tile (phone-side control) |
 | `tools/evgrab/` | small C daemon that holds `EVIOCGRAB` on evdev nodes during desktop mode |
 | `usb-install/` | cable-free install: Magisk action zips that flash/restore the kernel from a USB drive on the phone itself |
 | `zygisk/` | Zygisk/LSPosed module for `system_server` hooks (desktop-mode flags, summon UX) — milestone 6 |

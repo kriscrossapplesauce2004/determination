@@ -336,7 +336,46 @@ NO PSTORE in kernel #3 so the panic text is lost — add CONFIG_PSTORE +
 PSTORE_RAM/RAMOOPS to determination.config for kernel #4. Until then run a
 `dmesg -w` tap to a host file during risky/network-heavy guest work.
 
-NEXT: debug the phoc output-power wake path (power button); guest DNS
+**2026-07-08: RENAMED DecemberOS -> Determination (full sweep) + cable-free
+UX round-trip.** Not yet deployed/verified on-device — needs the migration +
+module reinstall below.
+1. RENAME. Repo-wide: brand, `/data/decemberos` -> `/data/determination`, the
+   `dos` CLI -> `det`, `$DOS` -> `$DET`, bridge `decembr0` -> `determ0`, guest
+   tool prefix `dos-` -> `det-`, Magisk module id `decemberos` -> `determination`,
+   `kernel/decemberos.config` -> `determination.config`. Historical `artifacts/`
+   evidence, committed binaries, and upstream/vendored trees left untouched (the
+   `DOS-*` log prefixes in `hwc2-compat/diag` stay — they pair with saved logs).
+   ON-DEVICE MIGRATION (run once, phone mode): `det migrate` (or
+   `migrate-to-determination.sh`) moves `/data/decemberos` -> `/data/determination`
+   in place (rootfs preserved), renames guest `dos-*` artifacts, flags the old
+   module for removal. THEN reinstall the new `determination-magisk-*.zip` and
+   reboot. The new lxc config needs a container restart to bind the control dir.
+2. GUEST->HOST CONTROL CHANNEL (the "leave desktop mode / power off from inside
+   phosh" gap — there's no root shell in the guest). `toggle/det-hostagent`
+   (root, launched single-instance by guest-start) watches
+   `/data/determination/run/control`, bind-mounted into the guest at
+   `/mnt/det-control` (lxc config). Guest drops `exit`/`reboot`/`poweroff`
+   command files; agent runs desktop-off / `svc power` accordingly.
+3. IN-DESKTOP TRIGGERS (`guest/setup-controls.sh`, run via `run_controls.sh`):
+   `det-signal` helper + three app-grid launchers (Exit to Phone / Power Off /
+   Restart) + systemd shutdown-hook units (`det-{poweroff,reboot}-signal.service`,
+   WantedBy the target, ordered `Before=umount.target` to dodge the shutdown
+   unmount race) that map phosh's NATIVE power menu onto host actions. Exit
+   launcher pinned to phosh favourites. UNVERIFIED on-device — the power-menu
+   path (systemd isolate -> our oneshot before unmount) especially needs a live
+   check; the app-grid launchers write the file while fully up so they're the
+   reliable core.
+4. ANDROID COMPANION APP (`companion/`, Kotlin/Material3, minSdk 26). Phone-side
+   ENTER: live status (mode/guest/SF/agent/kernel), one-tap Enter Desktop Mode
+   (launches desktop-on DETACHED via setsid so it survives the SF handoff killing
+   the app), a Quick Settings tile, Exit fallback. Shells to Magisk `su`, holds
+   no root. Enter (app) + exit/power (guest launchers) = full cable-free round
+   trip. No wrapper jar committed (open in Studio or `gradle wrapper`). Build/run
+   UNVERIFIED (no Android SDK on this box).
+
+NEXT: DEPLOY + VERIFY the 07-08 work on-device (migrate, reinstall module,
+reboot, run setup-controls, test the round trip + power menu, build/install the
+companion APK); debug the phoc output-power wake path (power button); guest DNS
 flakiness root cause; audio stack (pipewire) → volume keys + calls-less
 phone basics; phosh polish (feedbackd, backgrounds); pstore into kernel
 #4; then §5 external convergence. Android-side §4 stays proven
