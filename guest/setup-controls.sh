@@ -40,6 +40,199 @@ fi
 EOF
 chmod 0755 /usr/local/sbin/det-signal
 
+echo "== det-session-manager (org.gnome.SessionManager shim) =="
+# phosh + squeekboard both try to register with org.gnome.SessionManager and
+# fail ("The name org.gnome.SessionManager was not provided by any .service
+# files") because we run phosh BARE — no gnome-session (phosh-session would
+# `phoc -E gnome-session`, and `phoc -E` is banned on this kernel: glib
+# child-watch dies on the half-backported pidfd and phoc quits). This shim
+# owns the name on phosh's session bus so those clients register cleanly, and
+# it routes the session-manager verbs to the host control channel:
+#   Logout()   -> det-signal exit      (log out of the desktop == back to phone)
+#   Shutdown() -> det-signal poweroff
+#   Reboot()   -> det-signal reboot
+# Launched inside dbus-run-session by toggle/desktop-on (step 5e) BEFORE phosh.
+# Pure gi/GDBus (python3 + PyGObject + Gio typelib are all in the rootfs).
+install -d /usr/local/bin
+cat > /usr/local/bin/det-session-manager <<'EOS'
+#!/usr/bin/env python3
+# Determination: minimal org.gnome.SessionManager that maps session verbs onto
+# the guest->host control channel (/usr/local/sbin/det-signal). See setup-controls.sh.
+import os, signal, subprocess, sys
+import gi
+gi.require_version("Gio", "2.0")
+from gi.repository import Gio, GLib
+
+DET_SIGNAL = "/usr/local/sbin/det-signal"
+
+# Children (det-signal) are fire-and-forget; auto-reap so we never leak zombies.
+signal.signal(signal.SIGCHLD, signal.SIG_IGN)
+
+def host(action):
+    try:
+        subprocess.Popen([DET_SIGNAL, action],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sys.stderr.write("det-session-manager: -> host %s\n" % action)
+    except Exception as e:
+        sys.stderr.write("det-session-manager: det-signal %s failed: %s\n" % (action, e))
+    sys.stderr.flush()
+
+SM_XML = """
+<node>
+  <interface name="org.gnome.SessionManager">
+    <method name="RegisterClient">
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="s" name="client_startup_id" direction="in"/>
+      <arg type="o" name="client_id" direction="out"/>
+    </method>
+    <method name="UnregisterClient">
+      <arg type="o" name="client_id" direction="in"/>
+    </method>
+    <method name="Inhibit">
+      <arg type="s" name="app_id" direction="in"/>
+      <arg type="u" name="toplevel_xid" direction="in"/>
+      <arg type="s" name="reason" direction="in"/>
+      <arg type="u" name="flags" direction="in"/>
+      <arg type="u" name="cookie" direction="out"/>
+    </method>
+    <method name="Uninhibit"><arg type="u" name="cookie" direction="in"/></method>
+    <method name="IsInhibited">
+      <arg type="u" name="flags" direction="in"/>
+      <arg type="b" name="is_inhibited" direction="out"/>
+    </method>
+    <method name="GetClients"><arg type="ao" name="clients" direction="out"/></method>
+    <method name="GetInhibitors"><arg type="ao" name="inhibitors" direction="out"/></method>
+    <method name="IsAutostartConditionHandled">
+      <arg type="s" name="condition" direction="in"/>
+      <arg type="b" name="handled" direction="out"/>
+    </method>
+    <method name="Setenv">
+      <arg type="s" name="variable" direction="in"/>
+      <arg type="s" name="value" direction="in"/>
+    </method>
+    <method name="InitializationError">
+      <arg type="s" name="message" direction="in"/>
+      <arg type="b" name="fatal" direction="in"/>
+    </method>
+    <method name="CanShutdown"><arg type="b" name="is_available" direction="out"/></method>
+    <method name="IsSessionRunning"><arg type="b" name="running" direction="out"/></method>
+    <method name="Shutdown"/>
+    <method name="Reboot"/>
+    <method name="Logout"><arg type="u" name="mode" direction="in"/></method>
+    <property name="SessionName" type="s" access="read"/>
+    <property name="SessionIsActive" type="b" access="read"/>
+    <property name="InhibitedActions" type="u" access="read"/>
+    <property name="Renderer" type="s" access="read"/>
+    <signal name="ClientAdded"><arg type="o" name="id"/></signal>
+    <signal name="ClientRemoved"><arg type="o" name="id"/></signal>
+    <signal name="SessionRunning"/>
+    <signal name="SessionOver"/>
+  </interface>
+</node>
+"""
+
+CLIENT_XML = """
+<node>
+  <interface name="org.gnome.SessionManager.ClientPrivate">
+    <method name="EndSessionResponse">
+      <arg type="b" name="is_ok" direction="in"/>
+      <arg type="s" name="reason" direction="in"/>
+    </method>
+    <signal name="Stop"/>
+    <signal name="QueryEndSession"><arg type="u" name="flags"/></signal>
+    <signal name="EndSession"><arg type="u" name="flags"/></signal>
+    <signal name="CancelEndSession"/>
+  </interface>
+</node>
+"""
+
+class SM:
+    def __init__(self):
+        self.conn = None
+        self.clients = {}   # object_path -> registration id
+        self.n = 0
+        self.cookie = 0
+        self.sm_info = Gio.DBusNodeInfo.new_for_xml(SM_XML).interfaces[0]
+        self.cl_info = Gio.DBusNodeInfo.new_for_xml(CLIENT_XML).interfaces[0]
+
+    def on_method(self, conn, sender, path, iface, method, params, inv):
+        if method == "RegisterClient":
+            self.n += 1
+            cpath = "/org/gnome/SessionManager/Client%d" % self.n
+            try:
+                rid = conn.register_object(cpath, self.cl_info,
+                                           self.on_client_method, None, None)
+                self.clients[cpath] = rid
+            except Exception as e:
+                sys.stderr.write("register_object failed: %s\n" % e)
+            inv.return_value(GLib.Variant("(o)", (cpath,)))
+        elif method == "UnregisterClient":
+            cpath = params.unpack()[0]
+            rid = self.clients.pop(cpath, None)
+            if rid is not None:
+                conn.unregister_object(rid)
+            inv.return_value(None)
+        elif method == "Inhibit":
+            self.cookie += 1
+            inv.return_value(GLib.Variant("(u)", (self.cookie,)))
+        elif method == "Uninhibit" or method in ("Setenv", "InitializationError"):
+            inv.return_value(None)
+        elif method == "IsInhibited":
+            inv.return_value(GLib.Variant("(b)", (False,)))
+        elif method in ("GetClients", "GetInhibitors"):
+            inv.return_value(GLib.Variant("(ao)", (list(self.clients.keys())
+                                                   if method == "GetClients" else [],)))
+        elif method == "IsAutostartConditionHandled":
+            inv.return_value(GLib.Variant("(b)", (False,)))
+        elif method == "CanShutdown":
+            inv.return_value(GLib.Variant("(b)", (True,)))
+        elif method == "IsSessionRunning":
+            inv.return_value(GLib.Variant("(b)", (True,)))
+        elif method == "Logout":
+            host("exit"); inv.return_value(None)
+        elif method == "Shutdown":
+            host("poweroff"); inv.return_value(None)
+        elif method == "Reboot":
+            host("reboot"); inv.return_value(None)
+        else:
+            inv.return_error_literal("org.gnome.SessionManager.Error",
+                                     "unhandled: %s" % method)
+
+    def on_client_method(self, conn, sender, path, iface, method, params, inv):
+        # phosh calls EndSessionResponse; we drive teardown host-side, so ack.
+        inv.return_value(None)
+
+    def get_prop(self, conn, sender, path, iface, prop):
+        if prop == "SessionName":       return GLib.Variant("s", "phosh")
+        if prop == "SessionIsActive":   return GLib.Variant("b", True)
+        if prop == "InhibitedActions":  return GLib.Variant("u", 0)
+        if prop == "Renderer":          return GLib.Variant("s", "")
+        return None
+
+    def on_bus(self, conn, name):
+        self.conn = conn
+        conn.register_object("/org/gnome/SessionManager", self.sm_info,
+                             self.on_method, self.get_prop, None)
+
+    def on_acquired(self, conn, name):
+        sys.stderr.write("det-session-manager: owns %s\n" % name); sys.stderr.flush()
+
+    def on_lost(self, conn, name):
+        sys.stderr.write("det-session-manager: lost/failed name %s\n" % name)
+        sys.stderr.flush()
+
+def main():
+    sm = SM()
+    Gio.bus_own_name(Gio.BusType.SESSION, "org.gnome.SessionManager",
+                     Gio.BusNameOwnerFlags.REPLACE, sm.on_bus,
+                     sm.on_acquired, sm.on_lost)
+    GLib.MainLoop().run()
+
+if __name__ == "__main__":
+    main()
+EOS
+chmod 0755 /usr/local/bin/det-session-manager
+
 echo "== app-grid launchers =="
 install -d /usr/share/applications
 # NoDisplay=false so they appear in the phosh app grid. Categories=System so
@@ -184,6 +377,7 @@ systemctl enable --now det-battery.service 2>/dev/null && echo "det-battery enab
     echo "note: could not start det-battery.service (will start next boot)"
 
 echo "== done =="
+echo "Session manager shim installed: Logout->phone, Shutdown/Reboot->host."
 echo "Power menu (Power Off / Restart) + app-grid tiles now drive the host."
 echo "Requires the guest to be running under the lxc config that binds"
 echo "/mnt/det-control (restart the container / reboot after installing the"
