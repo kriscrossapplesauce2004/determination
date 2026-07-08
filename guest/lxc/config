@@ -71,6 +71,13 @@ lxc.mount.entry = /dev/dri dev/dri none rbind,create=dir,optional 0 0
 # EVIOCGRAB at toggle time (spec §4), not by mount games.
 lxc.mount.entry = /dev/input dev/input none rbind,create=dir,optional 0 0
 
+# --- Guest -> host control channel (spec §4 convenience) ---
+# The guest cannot run root actions on the Android side (leave desktop mode,
+# power off). It drops command files here; det-hostagent (root) watches the
+# host side and acts. /mnt is a plain rootfs dir systemd never remounts, so
+# the bind is stable (unlike /run, which systemd shadows with a tmpfs).
+lxc.mount.entry = /data/determination/run/control mnt/det-control none bind,create=dir 0 0
+
 lxc.cgroup.devices.allow = a *:* rwm
 
 # --- Network: veth into Android's connectivity, NAT'd by toggle/guest-start ---

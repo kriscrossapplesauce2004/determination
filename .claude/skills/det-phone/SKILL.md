@@ -39,10 +39,10 @@ det connect                # discover + connect over wireless adb
   with `det find` (`adb mdns services`). A USB cable is also connected now, so
   fastboot rescue exists; a kernel bootloop is no longer a dead phone.
 
-## The LXC guest (Debian trixie, name `determination`)
+## The LXC guest (Debian trixie — container `guest` at lxcpath `/data/determination`)
 
-- Guest shell: `det shell lxc-attach -n determination -- <cmd>` (confirm the
-  container name with `det shell lxc-ls` if unsure).
+- Guest shell: `det shell lxc-attach -P /data/determination -n guest -- <cmd>`
+  (the container is named `guest`; `-P /data/determination` is the lxcpath).
 - **File drop into the guest** (adb can't write guest rootfs paths directly):
   1. `adb push <file> /sdcard/Download/…`
   2. `su cp` it over an **existing** file inside the guest rootfs on `/data`

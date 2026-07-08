@@ -16,7 +16,7 @@ cp module.prop customize.sh post-fs-data.sh service.sh sepolicy.rule "$WORK/"
 mkdir -p "$WORK/tools"
 cp ../tools/evgrab/evgrab \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
-   ../toggle/cycle-stress.sh "$WORK/tools/"
+   ../toggle/det-hostagent ../toggle/cycle-stress.sh "$WORK/tools/"
 cp ../guest/lxc/config "$WORK/tools/lxc-config"
 
 VER=$(sed -n 's/^version=//p' module.prop)

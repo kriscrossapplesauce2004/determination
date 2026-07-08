@@ -1,0 +1,61 @@
+#!/system/bin/sh
+# Determination host agent (spec §4 convenience layer). Runs as root on the
+# Android side, launched by guest-start. Watches a control directory that is
+# bind-mounted into the guest (host /data/determination/run/control ==
+# guest /mnt/det-control) and executes host-privileged actions the guest asks
+# for — the only way to leave desktop mode / power the phone from INSIDE phosh,
+# where there is no root shell and Android's UI is grabbed away.
+#
+# Protocol: the guest drops an empty file named after the action; we consume
+# (remove) it, then act. Known actions:
+#   exit      -> desktop-off (return to phone mode)
+#   reboot    -> desktop-off (best-effort) then reboot
+#   poweroff  -> desktop-off (best-effort) then power off
+# Anything else is ignored (and cleared) so a typo can't wedge the loop.
+
+set -u
+DET=/data/determination
+CTRL="$DET/run/control"
+LOG="$DET/log/hostagent.log"
+mkdir -p "$CTRL" "$DET/log"
+exec >>"$LOG" 2>&1
+
+# Single instance (survives desktop toggles; only a reboot clears it).
+if kill -0 "$(cat "$DET/run/hostagent.pid" 2>/dev/null)" 2>/dev/null; then
+    exit 0
+fi
+echo $$ > "$DET/run/hostagent.pid"
+echo "--- det-hostagent up $(date)"
+
+power_off() { svc power shutdown 2>/dev/null || reboot -p 2>/dev/null || reboot -p; }
+reboot_now() { svc power reboot 2>/dev/null || reboot 2>/dev/null || reboot; }
+
+consume() { rm -f "$CTRL/$1" 2>/dev/null; }
+
+while :; do
+    if [ -e "$CTRL/exit" ]; then
+        consume exit
+        echo "cmd: exit -> desktop-off $(date)"
+        "$DET/bin/desktop-off"
+    elif [ -e "$CTRL/reboot" ]; then
+        consume reboot
+        echo "cmd: reboot $(date)"
+        "$DET/bin/desktop-off" 2>/dev/null
+        reboot_now
+    elif [ -e "$CTRL/poweroff" ]; then
+        consume poweroff
+        echo "cmd: poweroff $(date)"
+        "$DET/bin/desktop-off" 2>/dev/null
+        power_off
+    else
+        # Clear any stray/unknown request so it can't accumulate.
+        for f in "$CTRL"/*; do
+            [ -e "$f" ] || continue
+            case "$(basename "$f")" in
+                exit|reboot|poweroff) ;;
+                *) echo "ignoring unknown cmd: $(basename "$f")"; rm -f "$f" ;;
+            esac
+        done
+    fi
+    sleep 0.5
+done

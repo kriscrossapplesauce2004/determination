@@ -9,7 +9,9 @@ LXC="$DET/lxc/bin"  # static lxc build pushed alongside the rootfs
 export PATH="$LXC:$PATH"
 
 # lxc-start pins the container rootfs here; must pre-exist or start fails.
-mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/log"
+# run/control is the bind source for the guest->host channel (lxc config binds
+# it to guest /mnt/det-control); it must exist before lxc-start.
+mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/run/control" "$DET/log"
 # lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config —
 # keep a copy of the config at that path (the rootfs dir doubles as it).
 # Always refresh so config updates propagate.
@@ -107,3 +109,10 @@ lxc-attach -P "$DET" -n guest -- /bin/sh -c \
 lxc-attach -P "$DET" -n guest -- /bin/sh -c \
     "for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
     2>/dev/null
+
+# Guest -> host control agent: lets phosh (desktop mode) trigger exit-to-phone /
+# reboot / poweroff, none of which the guest can do itself. Single-instance
+# (own pidfile guard); must outlive desktop toggles like net-keeper.
+if [ -x "$DET/bin/det-hostagent" ]; then
+    "$DET/bin/det-hostagent" &
+fi

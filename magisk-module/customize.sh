@@ -7,7 +7,7 @@ ui_print "- Determination $(grep_prop version "$MODPATH/module.prop")"
 DET=/data/determination
 mkdir -p "$DET/bin" "$DET/log" "$DET/run" "$DET/lxc"
 
-for f in evgrab guest-start desktop-on desktop-off cycle-stress.sh; do
+for f in evgrab guest-start desktop-on desktop-off det-hostagent cycle-stress.sh; do
     [ -f "$MODPATH/tools/$f" ] || abort "! missing $f in zip"
     cp -f "$MODPATH/tools/$f" "$DET/bin/$f"
     chmod 0755 "$DET/bin/$f"
