@@ -337,8 +337,19 @@ PSTORE_RAM/RAMOOPS to determination.config for kernel #4. Until then run a
 `dmesg -w` tap to a host file during risky/network-heavy guest work.
 
 **2026-07-08: RENAMED DecemberOS -> Determination (full sweep) + cable-free
-UX round-trip.** Not yet deployed/verified on-device — needs the migration +
-module reinstall below.
+UX round-trip. DEPLOYED + verified on-device** (migrated, module v0.2.0
+installed, guest RUNNING under new paths, control channel round-trips). Two
+bring-up gotchas, now fixed & encoded:
+- The static LXC binaries have `/data/decemberos/run` **baked in**
+  (`--with-runtime-path`); `/run` is read-only on Android so post-migration
+  lxc-start died `Failed to create lock for guest`. Fix: guest-start aliases
+  `/data/decemberos -> /data/determination` (persists on /data). Proper fix =
+  rebuild lxc/bin via guest/build-lxc.sh (already retargeted); then the symlink
+  is redundant. The guest rootfs is `/data/determination/guest` **directly**
+  (no `rootfs/` subdir — run_polish.sh's path was wrong; run_controls.sh drops
+  into the guest's /root instead).
+- `lxc-attach` hands scripts a **minimal PATH** (no /usr/bin) — setup-controls.sh
+  must `export PATH=...` or systemctl/gsettings/dbus-run-session silently no-op.
 1. RENAME. Repo-wide: brand, `/data/decemberos` -> `/data/determination`, the
    `dos` CLI -> `det`, `$DOS` -> `$DET`, bridge `decembr0` -> `determ0`, guest
    tool prefix `dos-` -> `det-`, Magisk module id `decemberos` -> `determination`,
@@ -373,9 +384,13 @@ module reinstall below.
    trip. No wrapper jar committed (open in Studio or `gradle wrapper`). Build/run
    UNVERIFIED (no Android SDK on this box).
 
-NEXT: DEPLOY + VERIFY the 07-08 work on-device (migrate, reinstall module,
-reboot, run setup-controls, test the round trip + power menu, build/install the
-companion APK); debug the phoc output-power wake path (power button); guest DNS
+NEXT: (07-08 remaining) LIVE PANEL TEST of the round-trip — enter desktop mode,
+tap "Exit to Phone Mode" on the panel + phosh power-menu Power Off/Restart
+(needs melissa at the glass; the wiring is proven safe from phone mode but the
+real handoff is unverified). BUILD the companion APK (no Android SDK on terra —
+open companion/ in Studio or install cmdline-tools+JDK17+platform-34). Consider
+rebuilding lxc/bin (build-lxc.sh) to drop the /data/decemberos compat symlink.
+Then: debug the phoc output-power wake path (power button); guest DNS
 flakiness root cause; audio stack (pipewire) → volume keys + calls-less
 phone basics; phosh polish (feedbackd, backgrounds); pstore into kernel
 #4; then §5 external convergence. Android-side §4 stays proven
