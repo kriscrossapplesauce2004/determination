@@ -19,7 +19,9 @@
 #      android_wlegl is missing — that counts as a loud FAIL, not a crash
 #      mystery.
 #   4. A GTK4 app (gnome-calculator) maps HYBRIS libEGL (/usr/local/lib),
-#      and GDK_DEBUG=opengl shows an EGL context, no cairo fallback.
+#      launched with GSK_DEBUG=renderer (NOT GDK_DEBUG=opengl: that path
+#      used to abort via the epoxy device-query bug; fixed, but the maps
+#      check is what actually proves the hybris EGL path).
 # Evidence goes to stdout — capture to artifacts/ on the host (mind the
 # su quoting rule: the whole chain in ONE quoted arg):
 #   adb push guest/gpu-smoke.sh /data/local/tmp/
@@ -94,7 +96,7 @@ $LXC /bin/sh -c '
 
     echo "== 4. GTK4 app on the GPU path (gnome-calculator) =="
     if command -v gnome-calculator >/dev/null; then
-        GDK_DEBUG=opengl timeout 15 gnome-calculator > /tmp/gtkgl.out 2>&1 &
+        GSK_DEBUG=renderer timeout 15 gnome-calculator > /tmp/gtkgl.out 2>&1 &
         GPID=$!
         sleep 6
         APP=$(pgrep -n gnome-calculat || true)
@@ -110,10 +112,24 @@ $LXC /bin/sh -c '
             echo "GTK4-EGL: FAIL — calculator not running (crashed? /tmp/gtkgl.out below)"; fail=1
         fi
         wait $GPID 2>/dev/null
-        echo "-- GDK opengl debug (first 25 relevant lines):"
+        echo "-- GSK renderer debug (first 25 relevant lines):"
         grep -iE "egl|opengl|renderer|context|fallback|cairo" /tmp/gtkgl.out | head -25
     else
         echo "SKIP: gnome-calculator not installed (guest/setup-polish.sh)"
+    fi
+
+    echo "== 5. GSK shader draws land pixels (struct-varying fix regression) =="
+    if command -v gtk4-rendernode-tool >/dev/null; then
+        NODE=/tmp/gpusmoke-text.node
+        printf "color { bounds: 0 0 128 48; color: rgb(255,255,255); }\ntext { color: rgb(0,0,0); font: \"Sans 20px\"; offset: 8 32; glyphs: \"Hi 123\"; }\n" > "$NODE"
+        if GSK_RENDERER=ngl timeout 40 gtk4-rendernode-tool render "$NODE" /tmp/gpusmoke-text.png >/tmp/gpusmoke-node.out 2>&1 \
+           && python3 -c "import sys; from PIL import Image; sys.exit(0 if len(Image.open(sys.argv[1]).convert(sys.argv[2]).getcolors(100000)) > 10 else 1)" /tmp/gpusmoke-text.png RGBA 2>/dev/null; then
+            echo "GSK-DRAW: OK (ngl text render has real pixels)"
+        else
+            echo "GSK-DRAW: FAIL — ngl render blank or errored (Adreno struct-varying fix regressed? see /tmp/gpusmoke-node.out)"; fail=1
+        fi
+    else
+        echo "SKIP: gtk4-rendernode-tool not installed (apt install libgtk-4-bin)"
     fi
 
     echo "== VERDICT =="

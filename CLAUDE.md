@@ -458,6 +458,38 @@ profile.d file in the guest; NO rebuilds needed. ABI hazard (wlroots
 hand-mimics hybris' RemoteWindowBuffer layout) + the wayland-platform
 abort()-when-no-wlegl failure mode are documented in the doc.
 
+**2026-07-10: GPU APP BUFFERS WORK — the white-window bug is DEAD.** Root
+cause of "apps launch to a white screen": the Adreno 640 blob (V@0502)
+mishandles STRUCT VARYINGS matched by name across stages — a `flat in
+Rect/RoundedRect` read as a whole struct (function arg) yields zeros
+(sometimes a hard link failure), while per-field access works. Every GSK
+fragment shader ends in `rect_coverage(_rect,_pos)` → alpha=0 → NO GSK
+shader draw ever landed pixels (all previously-visible app content was
+glClear/occlusion output). Fix: custom `glShaderSource` in the hybris
+glesv2 wrapper rewrites GSK fragment sources (detects unexpanded
+`PASS_FLAT(n) Rect/RoundedRect NAME;` decls — GTK sends macros unexpanded)
+to rebuild structs from fields (`_rect` → `Rect(_rect.bounds)`); opt-out
+`HYBRIS_NO_GSK_VARYING_FIX=1`. Deployed in-guest (glesv2 rebuilt+installed)
+AND encoded in `guest/build-libhybris.sh` along with the two other GTK4
+blockers from 07-09: the epoxy `EGL_EXT_device_query` abort (display ext
+string filter) and the `eglSwapBuffersWithDamageKHR` override (GDK prefers
+the KHR name; without it windows never map). Verified on device:
+`gtk4-rendernode-tool` ngl == cairo reference (texture + text nodes),
+gnome-calculator renders real widgets on the panel. Evidence chain +
+bisect log: `artifacts/guest-gsk-struct-varying-fix-20260710.txt`, calc
+screenshot `artifacts/guest-gsk-fix-calc-20260710.png`. gpu-smoke.sh:
+check 4 no longer uses GDK_DEBUG=opengl; NEW check 5 = ngl text-node
+render must have >10 colors (regression gate for this fix). Debug tooling
+that cracked it (kept in guest /root): libglspy.so GL-call spy (soname-
+patched over hybris libEGL/GLESv2 in /root/spy; needs
+GDK_GL_DISABLE=buffer-storage — the spy breaks glBufferStorageEXT
+forwarding) + texprobe4/5 (verbatim-GSK-shader probes, phone-mode
+surfaceless). Headless repro recipe: `gtk4-rendernode-tool render x.node
+out.png` in desktop mode. apitrace: dead end on hybris, don't retry.
+STILL OPEN on this front: full gpu-smoke gate re-run (glmark2/zero-copy
+numbers), matrix flat varyings (mat3/mat4) unverified — revisit if
+colormatrix/cicp nodes misrender.
+
 NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
 the panel; confirm phosh registers with the session-manager shim (no more
 "org.gnome.SessionManager not provided" warnings) and that Logout/power route

@@ -1,0 +1,23 @@
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+== 1. hybris wayland EGL platform plugin ==
+-rwxr-xr-x. 1 root root 293888 Jul  4 01:32 /usr/local/lib/libhybris/eglplatform_wayland.so
+PLATFORM-PLUGIN: OK
+== 2. compositor serves android_wlegl ==
+ANDROID-WLEGL-GLOBAL: OK
+== 3. pure EGL/GLES wayland client (glmark2-es2-wayland) ==
+    GL_RENDERER:    Adreno (TM) 640
+    GL_VERSION:     OpenGL ES 3.2 V@0502.0 (GIT@2f950bf, I802c3b73eb, 1623716683) (Date:06/14/21)
+[build] duration=5: FPS: 303 FrameTime: 3.302 ms
+[texture] duration=5: FPS: 274 FrameTime: 3.658 ms
+                                  glmark2 Score: 287 
+GLMARK2: OK rc=0 (vendor GPU renderer in a wayland client)
+== 4. GTK4 app on the GPU path (gnome-calculator) ==
+GTK4-EGL: FAIL — calculator not running (crashed? /tmp/gtkgl.out below)
+-- GDK opengl debug (first 25 relevant lines):
+No provider of eglQueryDisplayAttribEXT found.  Requires one of:
+    EGL_EXT_device_base
+    EGL_EXT_device_query
+    EGL_KHR_display_reference
+    EGL_NV_stream_metadata
+== VERDICT ==
+GPU-SMOKE: FAILURES (see above)

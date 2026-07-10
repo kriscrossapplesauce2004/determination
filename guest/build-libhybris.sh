@@ -144,6 +144,76 @@ if ! grep -q "hwc2_compat_display_set_brightness" "$SRC/hybris/tests/test_common
 ' "$SRC/hybris/tests/test_common.cpp"
 fi
 
+# Device-query extension filter (2026-07-08, GPU app buffers; upstream-able):
+# GTK4/GDK sees EGL_EXT_device_query in the DISPLAY extension string (the
+# vendor driver advertises it) and calls eglQueryDisplayAttribEXT for its
+# software-renderer check — but libepoxy resolves that entrypoint against
+# the CLIENT extension list (no display is current yet), where hybris
+# advertises none of the device extensions, and abort()s the app:
+#   "No provider of eglQueryDisplayAttribEXT found."
+# hybris cannot service the device-query entrypoints from the glibc side
+# anyway, so advertising them is a lie; strip the family from the string
+# eglplatformcommon returns. Fixes every epoxy-based toolkit (GTK4 first
+# among them) on every device whose vendor driver advertises the family.
+if ! grep -q "hybris_filter_display_extensions" \
+        "$SRC/hybris/egl/egl.c"; then
+    python3 - "$SRC/hybris/egl/platforms/common/eglplatformcommon.cpp" "$SRC/hybris/egl/egl.c" <<'PYEOF'
+import sys, pathlib
+
+strip_code = '''\
+/* hybris_filter_display_extensions: the glibc side cannot service the
+		 * device-query entrypoints (eglQueryDisplayAttribEXT & co.), and
+		 * epoxy-based toolkits (GTK4) abort when a display advertises them
+		 * but no client-side provider resolves. Do not advertise what we
+		 * cannot deliver. */
+		{
+			static const char *drop[] = {
+				"EGL_EXT_device_base",
+				"EGL_EXT_device_query",
+				"EGL_KHR_display_reference",
+				"EGL_NV_stream_metadata",
+				NULL
+			};
+			for (int i = 0; drop[i]; i++) {
+				char *p = eglextensionsbuf;
+				size_t l = strlen(drop[i]);
+				while ((p = strstr(p, drop[i])) != NULL) {
+					int at_start = (p == eglextensionsbuf || p[-1] == ' ');
+					int at_end = (p[l] == ' ' || p[l] == '\\0');
+					if (at_start && at_end) {
+						char *rest = p + l + (p[l] == ' ' ? 1 : 0);
+						memmove(p, rest, strlen(rest) + 1);
+					} else {
+						p += l;
+					}
+				}
+			}
+		}
+		ret = eglextensionsbuf;'''
+
+for f in sys.argv[1:]:
+    p = pathlib.Path(f)
+    s = p.read_text()
+    if 'eglplatformcommon.cpp' in f:
+        anchor = '''		snprintf(eglextensionsbuf, 2046, "%s %s", ret,
+			"EGL_HYBRIS_native_buffer2 EGL_HYBRIS_WL_acquire_native_buffer EGL_WL_bind_wayland_display"
+		);
+		ret = eglextensionsbuf;'''
+    else:
+        anchor = '''		snprintf(eglextensionsbuf, 2046, "%s %s", ret,
+			"EGL_EXT_client_extensions EGL_EXT_platform_wayland EGL_KHR_platform_wayland"
+		);
+		ret = eglextensionsbuf;'''
+    
+    if anchor not in s:
+        print(f'anchor not found in {f} or already patched')
+        continue
+    s = s.replace(anchor, anchor.replace('ret = eglextensionsbuf;', strip_code), 1)
+    p.write_text(s)
+    print(f'device-query filter: applied to {f}')
+PYEOF
+fi
+
 # HWCNativeWindowSetBufferCount (2026-07-06, droidian API parity): the
 # droidian wlroots hwcomposer backend calls it (triple buffering); upstream
 # libhybris lacks it. setBufferCount is protected, so the C wrapper goes
@@ -167,6 +237,177 @@ extern "C" void HWCNativeWindowSetBufferCount(struct ANativeWindow *window, int 
     window->perform(window, NATIVE_WINDOW_SET_BUFFER_COUNT, cnt);
 }
 EOF
+fi
+
+# KHR swap-with-damage override (2026-07-09; upstream-able): vendors
+# advertise EGL_KHR_swap_buffers_with_damage, but hybris only overrides the
+# EXT name — eglGetProcAddress(eglSwapBuffersWithDamageKHR) hands out the
+# raw vendor entrypoint, which skips the ws finishSwap wayland attach+commit,
+# so client windows never map (GTK4/GDK prefers the KHR name). Alias the KHR
+# name onto the EXT wrapper (identical semantics).
+if ! grep -q "eglSwapBuffersWithDamageKHR, _my_eglSwapBuffersWithDamageEXT" \
+        "$SRC/hybris/egl/egl.c"; then
+    sed -i 's|\(.*OVERRIDE_MY(glEGLImageTargetTexture2DOES),\)|\t/* KHR variant: vendors advertise EGL_KHR_swap_buffers_with_damage; without\n\t * this override eglGetProcAddress hands out the raw vendor entrypoint,\n\t * which skips the ws finishSwap wayland attach+commit - windows never map\n\t * (GTK4 prefers the KHR name). Same semantics as the EXT variant. */\n\tOVERRIDE_TO(eglSwapBuffersWithDamageKHR, _my_eglSwapBuffersWithDamageEXT),\n\1|' \
+        "$SRC/hybris/egl/egl.c"
+fi
+
+# GSK struct-varying fix (2026-07-10; upstream-able as a driver quirk): the
+# Adreno GLES blob (A640 V@0502) mishandles struct varyings matched by name
+# across shader stages — a "flat in Rect/RoundedRect" read as a whole struct
+# (function argument) yields zeros, though per-field access works; sometimes
+# the link fails outright ("input _rect not declared in output from previous
+# stage").  GTK4 GSK ends every fragment path in rect_coverage(_rect,_pos),
+# so alpha=0 and NO GSK shader draw ever produced pixels ("apps launch to a
+# white screen" — only glClear/occlusion output was visible).  The custom
+# glShaderSource below rewrites GSK fragment sources to rebuild the struct
+# from its fields at each use site (proven correct on-device 2026-07-10,
+# artifacts/guest-gsk-struct-varying-fix-20260710.txt).  Runtime opt-out:
+# HYBRIS_NO_GSK_VARYING_FIX=1; debug: HYBRIS_GSK_VARYING_FIX_DEBUG=1.
+if ! grep -q "_gskfix_rewrite" "$SRC/hybris/glesv2/glesv2.c"; then
+    python3 - "$SRC/hybris/glesv2/glesv2.c" <<'GSKFIXEOF'
+#!/usr/bin/env python3
+# Patch libhybris glesv2.c: rewrite GSK fragment shaders to work around the
+# Adreno struct-varying miscompilation. Idempotent.
+import sys
+
+SRC = sys.argv[1]
+MACRO_LINE = "HYBRIS_IMPLEMENT_VOID_FUNCTION4(glesv2, glShaderSource, GLuint, GLsizei, const GLchar *const *, const GLint *);"
+
+IMPL = r"""
+/* Determination: Adreno struct-varying miscompilation workaround.
+ * The Adreno GLES blob (seen on A640 V@0502) mishandles struct varyings
+ * matched by name across stages: a "flat in Rect/RoundedRect" read as a
+ * whole struct (e.g. passed into a function) yields zeros, while per-field
+ * access works; sometimes linking fails outright with "input not declared
+ * in output from previous stage".  GTK4's GSK shaders end every fragment
+ * path in rect_coverage(_rect, _pos), so alpha becomes 0 and no GSK draw
+ * produces pixels.  Rebuilding the struct from its fields at each use site
+ * compiles correctly, so rewrite GSK fragment sources before handing them
+ * to the driver.  Disable with HYBRIS_NO_GSK_VARYING_FIX=1. */
+#include <string.h>
+#include <stdio.h>
+
+struct _gskfix_name { char name[64]; int rr; };
+
+static int _gskfix_word(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+           (c >= '0' && c <= '9') || c == '_';
+}
+
+static int _gskfix_collect(const char *src, struct _gskfix_name *out, int max)
+{
+    /* declarations look like: PASS_FLAT(1) Rect _rect;  (macros unexpanded) */
+    const char *p = src;
+    int n = 0;
+    while (n < max && (p = strstr(p, "PASS_FLAT("))) {
+        p += 10;
+        while (*p && *p != ')') p++;
+        if (*p) p++;
+        while (*p == ' ') p++;
+        int rr = -1;
+        if (!strncmp(p, "RoundedRect ", 12)) { rr = 1; p += 12; }
+        else if (!strncmp(p, "Rect ", 5)) { rr = 0; p += 5; }
+        if (rr < 0) continue;
+        while (*p == ' ') p++;
+        int i = 0;
+        while (_gskfix_word(*p) && i < 63) out[n].name[i++] = *p++;
+        out[n].name[i] = 0;
+        out[n].rr = rr;
+        if (i) n++;
+    }
+    return n;
+}
+
+static char *_gskfix_rewrite(const char *src, int *nsub)
+{
+    struct _gskfix_name nm[16];
+    if (!strstr(src, "#define GSK_FRAGMENT_SHADER")) return NULL;
+    int nn = _gskfix_collect(src, nm, 16);
+    if (!nn) return NULL;
+    size_t slen = strlen(src);
+    char *out = malloc(slen * 8 + 1024);
+    if (!out) return NULL;
+    const char *p = src;
+    char *o = out;
+    *nsub = 0;
+    while (*p) {
+        int matched = 0;
+        if (_gskfix_word(*p) && (p == src || !_gskfix_word(p[-1]))) {
+            int k;
+            for (k = 0; k < nn; k++) {
+                size_t l = strlen(nm[k].name);
+                if (!strncmp(p, nm[k].name, l) && !_gskfix_word(p[l])) {
+                    /* skip the declaration itself: preceding token ends "Rect" */
+                    const char *q = p;
+                    while (q > src && (q[-1] == ' ' || q[-1] == '\t')) q--;
+                    if (q - src >= 4 && !strncmp(q - 4, "Rect", 4)) break;
+                    if (nm[k].rr)
+                        o += sprintf(o, "RoundedRect(%s.bounds,%s.corner_widths,%s.corner_heights)",
+                                     nm[k].name, nm[k].name, nm[k].name);
+                    else
+                        o += sprintf(o, "Rect(%s.bounds)", nm[k].name);
+                    p += l;
+                    (*nsub)++;
+                    matched = 1;
+                    break;
+                }
+            }
+        }
+        if (!matched) *o++ = *p++;
+    }
+    *o = 0;
+    return out;
+}
+
+void glShaderSource(GLuint shader, GLsizei count, const GLchar *const *string, const GLint *length)
+{
+    static void (*f)(GLuint, GLsizei, const GLchar *const *, const GLint *) FP_ATTRIB = NULL;
+    HYBRIS_DLSYSM(glesv2, &f, "glShaderSource");
+    if (getenv("HYBRIS_NO_GSK_VARYING_FIX") || count < 1 || !string) {
+        f(shader, count, string, length);
+        return;
+    }
+    size_t tot = 0;
+    GLsizei i;
+    for (i = 0; i < count; i++)
+        tot += (length && length[i] >= 0) ? (size_t)length[i] : strlen(string[i]);
+    char *cat = malloc(tot + 1);
+    if (!cat) { f(shader, count, string, length); return; }
+    char *c = cat;
+    for (i = 0; i < count; i++) {
+        size_t l = (length && length[i] >= 0) ? (size_t)length[i] : strlen(string[i]);
+        memcpy(c, string[i], l);
+        c += l;
+    }
+    *c = 0;
+    int nsub = 0;
+    char *fixed = _gskfix_rewrite(cat, &nsub);
+    if (fixed && nsub) {
+        if (getenv("HYBRIS_GSK_VARYING_FIX_DEBUG"))
+            fprintf(stderr, "libhybris: GSK struct-varying fix: shader %u, %d substitutions\n",
+                    (unsigned)shader, nsub);
+        const GLchar *one = fixed;
+        f(shader, 1, &one, NULL);
+    } else {
+        f(shader, count, string, length);
+    }
+    free(cat);
+    free(fixed);
+}
+"""
+
+src = open(SRC).read()
+if "_gskfix_rewrite" in src:
+    print("gskfix: already patched")
+    sys.exit(0)
+if MACRO_LINE not in src:
+    print("gskfix: ERROR macro line not found", file=sys.stderr)
+    sys.exit(1)
+src = src.replace(MACRO_LINE, "/* Determination: replaced by custom glShaderSource below. */" + IMPL)
+open(SRC, "w").write(src)
+print("gskfix: patched", SRC)
+GSKFIXEOF
 fi
 
 cd "$SRC/hybris"

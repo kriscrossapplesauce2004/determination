@@ -1,0 +1,70 @@
+GSK "apps launch to a white screen" — ROOT CAUSE + FIX (2026-07-10)
+====================================================================
+
+SYMPTOM: every GTK4 app under GSK_RENDERER=ngl drew a blank/white window.
+Reframed earlier: NO GSK shader draw produced pixels at all; everything
+visible was glClear output (GSK occlusion pass turns opaque full-bounds
+colors into clears).
+
+ROOT CAUSE: the Adreno 640 GLES blob ("OpenGL ES 3.2 V@0502.0, Date:06/14/21")
+mishandles STRUCT VARYINGS matched by name across shader stages.
+A `flat in Rect _rect;` (struct Rect { vec4 bounds; }) read as a WHOLE
+struct — i.e. passed into a function — yields zeros, while per-field access
+(_rect.bounds) reads correctly. In one variant the link failed outright:
+  "Error: input _rect not declared in output from previous stage."
+Every GSK fragment shader ends in  alpha = rect_coverage(_rect, _pos);
+so alpha == 0 and every draw was invisible.
+
+EVIDENCE CHAIN (all probes phone-mode surfaceless unless noted):
+1. GL spy shim (guest /root/spy: libglspy.so soname-patched over hybris
+   libEGL/libGLESv2) captured the real gtk4-rendernode-tool texture-node
+   run: exact GSK stream, UBO/vertex uploads correct, program linked ok,
+   glDrawArraysInstanced(TRIANGLES,0,6,1) -> glGetError 0, center pixel
+   unchanged (255,255,255,255). Draw lands nothing, silently.
+2. texprobe4: the VERBATIM dumped GSK convert shaders (from GDK_DEBUG=
+   gl-debug GSK_DEBUG=shaders) + exact stream reproduce DRAW-MISSING in
+   ALL context setups (config+pbuffer, config+surfaceless, no-config+
+   surfaceless, no-config shared pair). -> shader, not context.
+3. Bisect (texprobe5, verbatim GSK vertex shader throughout):
+   B verbatim-vs + trivial-fs           DRAW-OK    (geometry/UBO/MVP fine)
+   C hardcoded-pos-vs + verbatim-fs     DRAW-MISSING (fragment side)
+   E fs outputs vec4(alpha, texel.a, texel.r, 1) -> (0,255,255,255):
+     coverage==0, texture sampling PERFECT
+   H fs outputs _rect.bounds fields     -> (223,223,255,255) = (56,56)/64,
+     (8,8)/8: _rect ARRIVES CORRECT via field access
+   I local Rect -> rect_coverage        DRAW-OK    (function itself fine)
+   J fwidth(_pos) visualize             correct (1,1)
+   K1 copy _rect to local, then coverage   DRAW-OK   <- workaround
+   K2 _rect passed directly (control)      LINK FAIL "input _rect not
+      declared in output from previous stage"
+   K3 rect_coverage(Rect(_rect.bounds),..) DRAW-OK   <- workaround
+4. Fix validated end-to-end via spy glShaderSource rewrite, desktop mode:
+   gtk4-rendernode-tool ngl renders now match cairo reference:
+     texture node: center (255,0,0,255) red square   (was pure white)
+     text node:    112 colors                        (was pure white)
+5. PRODUCTION FIX: custom glShaderSource in libhybris glesv2 wrapper
+   (guest source patched + rebuilt + installed; encoded idempotently in
+   guest/build-libhybris.sh). Detects GSK fragment sources
+   (#define GSK_FRAGMENT_SHADER + unexpanded "PASS_FLAT(n) Rect/RoundedRect
+   NAME;" decls — GTK sends the macros unexpanded, the GLSL compiler
+   expands them) and rewrites every use of the varying to rebuild the
+   struct from fields: NAME -> Rect(NAME.bounds) /
+   RoundedRect(NAME.bounds,NAME.corner_widths,NAME.corner_heights).
+   Opt-out: HYBRIS_NO_GSK_VARYING_FIX=1. Debug: HYBRIS_GSK_VARYING_FIX_DEBUG=1.
+6. FINAL VERIFY (no spy, plain session env, buffer-storage active):
+   final-texture.png center (255,0,0,255); final-text.png 112 colors;
+   gnome-calculator on the panel renders its headerbar (Undo / Keyboard
+   mode selector / menu) + squeekboard — see
+   artifacts/guest-gsk-fix-calc-20260710.png. Previously: all-white window.
+
+NOTES / FOLLOW-UPS:
+- Upstream: GTK could avoid struct varyings (flatten to vec4s) — this is a
+  driver bug GTK-side workaround candidate; libhybris quirk is our carry.
+- The spy's glBufferStorageEXT forwarding breaks GTK's mapped-buffer path
+  (glMapBufferRange -> NULL -> segfault): spy captures need
+  GDK_GL_DISABLE=buffer-storage. Production path unaffected.
+- apitrace is unusable on hybris (its libGL.so.1 dlopen redirect makes
+  epoxy think desktop GL exists; process dies before tracing).
+- Matrix flat varyings (mat3 _mat convertcicp, mat4 _color_matrix) not yet
+  observed broken; only struct types rewritten. Revisit if colormatrix/cicp
+  nodes misrender.

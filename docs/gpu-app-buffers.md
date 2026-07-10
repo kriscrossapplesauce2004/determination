@@ -124,11 +124,29 @@ Evidence convention: tee output to `artifacts/guest-gpu-smoke-<date>.txt`.
 ## Status
 
 - 2026-07-08: designed + wired host-side (desktop-on 5e env, profile.d
-  default, build prereq check, smoke script). **Not yet run on device** —
-  awaiting go-ahead. Expected first-run risks: GTK4/epoxy entrypoint
-  quirks (hybris does export `eglCreatePlatformWindowSurface` and
-  advertises `EGL_EXT_platform_wayland`, so none anticipated), buffer
-  format mismatches (RGBA vs RGBX), fence-less glitches under load.
+  default, build prereq check, smoke script).
+- 2026-07-09/10: deployed and debugged on device. Three real blockers were
+  found and fixed, all encoded in `guest/build-libhybris.sh`:
+  1. **epoxy abort** — the display advertises `EGL_EXT_device_query` but no
+     client-side provider resolves; epoxy `abort()`s every GTK4 app. Fixed
+     by stripping the device-query family from the display extension string.
+     (This is also why `GDK_DEBUG=opengl` "aborts by design" — it was this.)
+  2. **KHR swap** — GDK prefers `eglSwapBuffersWithDamageKHR`, which the
+     hybris wayland platform didn't override (only the EXT variant); frames
+     never reached the compositor. Fixed with an `OVERRIDE_TO` alias.
+  3. **Adreno struct-varying miscompilation** — the A640 blob (V@0502)
+     returns zeros when a `flat in Rect/RoundedRect` varying is read as a
+     whole struct; every GSK fragment shader ends in
+     `rect_coverage(_rect, _pos)`, so alpha=0 and **no GSK draw produced
+     pixels** ("apps launch to a white screen"). Fixed by a custom
+     `glShaderSource` in the hybris glesv2 wrapper that rewrites GSK
+     fragment sources to rebuild struct varyings from their fields
+     (`_rect` → `Rect(_rect.bounds)`). Opt-out
+     `HYBRIS_NO_GSK_VARYING_FIX=1`. Full evidence chain:
+     `artifacts/guest-gsk-struct-varying-fix-20260710.txt`.
+- Verified 2026-07-10: `gtk4-rendernode-tool` ngl output matches cairo
+  reference (texture + text nodes); gnome-calculator renders real widgets
+  on the panel (`artifacts/guest-gsk-fix-calc-20260710.png`).
 
 ## Upstream candidates from this work
 

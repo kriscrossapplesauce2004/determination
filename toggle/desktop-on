@@ -192,18 +192,20 @@ echo $! > "$DET/run/compositor.pid"
             # OP7 notch panel for the qcom,sm8150 DT compatibles) — the
             # Debian one has no entry and the top bar ignores the notch.
             export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
-            # GPU app buffers (2026-07-08): clients do GLES through hybris'
-            # wayland EGL platform — gralloc buffers shared zero-copy over
-            # the android_wlegl protocol; phoc's android renderer imports
-            # them as EGLImages (GL_TEXTURE_EXTERNAL_OES). LD_LIBRARY_PATH
-            # above already puts hybris libEGL/libGLESv2 ahead of glvnd/
-            # Mesa. EGL_PLATFORM=wayland is load-bearing: a plain
-            # eglGetDisplay() otherwise takes the configure-time default
-            # (hwcomposer) and fights phoc for the composer HAL.
+            # GPU app buffers (2026-07-08): clients do GLES through the
+            # hybris wayland EGL platform — gralloc buffers shared
+            # zero-copy over the android_wlegl protocol; the phoc android
+            # renderer imports them as EGLImages (GL_TEXTURE_EXTERNAL_OES).
+            # LD_LIBRARY_PATH above already puts hybris libEGL/libGLESv2
+            # ahead of glvnd/Mesa. EGL_PLATFORM=wayland is load-bearing: a
+            # plain eglGetDisplay() otherwise takes the configure-time
+            # default (hwcomposer) and fights phoc for the composer HAL.
             # HYBRIS_LD_LIBRARY_PATH: the bionic side (vendor EGL, apex
             # libc) must resolve in CLIENT processes too, not just phoc.
-            # GSK_RENDERER=ngl: skip GTK4's vulkan probe (no hybris vulkan
-            # platform installed) and force the GLES renderer.
+            # GSK_RENDERER=ngl skips the GTK4 vulkan probe (no hybris
+            # vulkan platform installed) and forces the GLES renderer.
+            # NO APOSTROPHES IN THIS BLOCK — it is a single-quoted sh -c
+            # string (one broke the session launcher on first deploy).
             export EGL_PLATFORM=wayland HYBRIS_EGLPLATFORM=wayland
             export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
             export ANDROID_ROOT=/system GSK_RENDERER=ngl
