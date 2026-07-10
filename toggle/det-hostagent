@@ -18,6 +18,9 @@ DET=/data/determination
 CTRL="$DET/run/control"
 LOG="$DET/log/hostagent.log"
 mkdir -p "$CTRL" "$DET/log"
+# Rotate the append-forever log once it passes ~256K (keep the newest half).
+[ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 262144 ] &&
+    tail -c 131072 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
 exec >>"$LOG" 2>&1
 
 # Single instance (survives desktop toggles; only a reboot clears it).
@@ -30,32 +33,48 @@ echo "--- det-hostagent up $(date)"
 power_off() { svc power shutdown 2>/dev/null || reboot -p 2>/dev/null || reboot -p; }
 reboot_now() { svc power reboot 2>/dev/null || reboot 2>/dev/null || reboot; }
 
-consume() { rm -f "$CTRL/$1" 2>/dev/null; }
+# Sweep the control dir: consume every pending file, act on the known ones.
+scan() {
+    for f in "$CTRL"/*; do
+        [ -e "$f" ] || continue
+        cmd=${f##*/}
+        rm -f "$f" 2>/dev/null
+        case "$cmd" in
+            exit)
+                echo "cmd: exit -> desktop-off $(date)"
+                "$DET/bin/desktop-off" ;;
+            reboot)
+                echo "cmd: reboot $(date)"
+                "$DET/bin/desktop-off" 2>/dev/null
+                reboot_now ;;
+            poweroff)
+                echo "cmd: poweroff $(date)"
+                "$DET/bin/desktop-off" 2>/dev/null
+                power_off ;;
+            *) echo "ignoring unknown cmd: $cmd" ;;
+        esac
+    done
+}
+
+# Event-driven wait (2026-07-10): the old loop slept 0.5s forever — ~170k
+# fork+exec of `sleep` a day for a channel that fires a few times a session.
+# toybox inotifyd blocks until something is CREATED in $CTRL (`:n`) and runs
+# PROG per event; it does NOT exit on its own (verified: PROG rc and a
+# `| head -1` reader both leave it running to the timeout), so PROG kills
+# its parent — first event tears the wait down instantly (rc 143). timeout
+# caps the wait at 15s as a safety rescan (covers the rare create-between-
+# scan-and-watch race). Command latency ~instant; idle cost is 2 short-lived
+# procs per 15s. Falls back to plain polling if inotifyd is ever absent.
+WAKE="$DET/run/.hostagent-wake"
+if command -v inotifyd >/dev/null 2>&1; then
+    printf '#!/system/bin/sh\nkill $PPID\n' > "$WAKE" && chmod 755 "$WAKE"
+    wait_event() { timeout 15 inotifyd "$WAKE" "$CTRL":n >/dev/null 2>&1; }
+else
+    echo "no inotifyd — falling back to 2s polling"
+    wait_event() { sleep 2; }
+fi
 
 while :; do
-    if [ -e "$CTRL/exit" ]; then
-        consume exit
-        echo "cmd: exit -> desktop-off $(date)"
-        "$DET/bin/desktop-off"
-    elif [ -e "$CTRL/reboot" ]; then
-        consume reboot
-        echo "cmd: reboot $(date)"
-        "$DET/bin/desktop-off" 2>/dev/null
-        reboot_now
-    elif [ -e "$CTRL/poweroff" ]; then
-        consume poweroff
-        echo "cmd: poweroff $(date)"
-        "$DET/bin/desktop-off" 2>/dev/null
-        power_off
-    else
-        # Clear any stray/unknown request so it can't accumulate.
-        for f in "$CTRL"/*; do
-            [ -e "$f" ] || continue
-            case "$(basename "$f")" in
-                exit|reboot|poweroff) ;;
-                *) echo "ignoring unknown cmd: $(basename "$f")"; rm -f "$f" ;;
-            esac
-        done
-    fi
-    sleep 0.5
+    scan
+    wait_event
 done

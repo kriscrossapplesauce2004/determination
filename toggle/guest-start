@@ -86,6 +86,11 @@ if ! kill -0 "$(cat "$DET/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
     echo $! > "$DET/run/net-keeper.pid"
 fi
 
+# Rotate the append-forever lxc log once it passes ~256K (keep the newest half).
+[ "$(stat -c %s "$DET/log/lxc.log" 2>/dev/null || echo 0)" -gt 262144 ] &&
+    tail -c 131072 "$DET/log/lxc.log" > "$DET/log/lxc.log.tmp" &&
+    mv "$DET/log/lxc.log.tmp" "$DET/log/lxc.log"
+
 if ! lxc-info -P "$DET" -n guest 2>/dev/null | grep -q RUNNING; then
     lxc-start -P "$DET" -n guest -f "$DET/lxc/config" -l WARN -o "$DET/log/lxc.log"
     i=0
@@ -94,31 +99,26 @@ if ! lxc-info -P "$DET" -n guest 2>/dev/null | grep -q RUNNING; then
     done
 fi
 
-# ashmem: modern libcutils opens /dev/ashmem<boot_id> — a per-boot name the
-# static lxc config can't carry. Without it composer FMQ creation fails and
-# every hwc2 validate returns NO_RESOURCES (found 2026-07-05). Plain misc
-# chardev, so mknod is fine (the binderfs ENXIO rule doesn't apply).
+# Post-start in-guest fixups, ONE lxc-attach (each attach is a full
+# fork+setns round trip — three of them was pure startup latency):
+# - ashmem: modern libcutils opens /dev/ashmem<boot_id> — a per-boot name the
+#   static lxc config can't carry. Without it composer FMQ creation fails and
+#   every hwc2 validate returns NO_RESOURCES (found 2026-07-05). Plain misc
+#   chardev, so mknod is fine (the binderfs ENXIO rule doesn't apply).
+# - devpts: the inherited mount has ptmxmode=000 and no /dev/ptmx, so
+#   terminals die with "failed to open PTY" (killed foot 2026-07-06).
+#   lxc.pty.max in the config is NOT honored by our static LXC 4.0.12 build.
+# - VT nodes: kernel #3 has CONFIG_VT, so seatd binds seat0 to VTs and needs
+#   /dev/tty0 for its activation handshake — without it every libseat client
+#   times out "waiting session to become active" and phoc can't add the
+#   libinput backend (found 2026-07-06, first phosh run). Nothing else uses
+#   VTs on this device (no fbcon), so the ioctls are harmless.
 BOOTID=$(cat /proc/sys/kernel/random/boot_id)
 lxc-attach -P "$DET" -n guest -- /bin/sh -c \
-    "[ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }" \
-    2>/dev/null
-
-# devpts: the inherited mount has ptmxmode=000 and no /dev/ptmx, so
-# terminals die with "failed to open PTY" (killed foot 2026-07-06).
-# lxc.pty.max in the config is NOT honored by our static LXC 4.0.12 build,
-# so force it post-start like the ashmem node above.
-lxc-attach -P "$DET" -n guest -- /bin/sh -c \
-    "mount -o remount,gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null; \
-     [ -e /dev/ptmx ] || ln -sf pts/ptmx /dev/ptmx" \
-    2>/dev/null
-
-# VT nodes: kernel #3 has CONFIG_VT, so seatd binds seat0 to VTs and needs
-# /dev/tty0 for its activation handshake — without it every libseat client
-# times out "waiting session to become active" and phoc can't add the
-# libinput backend (found 2026-07-06, first phosh run). Nothing else uses
-# VTs on this device (no fbcon), so the ioctls are harmless.
-lxc-attach -P "$DET" -n guest -- /bin/sh -c \
-    "for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
+    "[ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }; \
+     mount -o remount,gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null; \
+     [ -e /dev/ptmx ] || ln -sf pts/ptmx /dev/ptmx; \
+     for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
     2>/dev/null
 
 # Guest -> host control agent: lets phosh (desktop mode) trigger exit-to-phone /

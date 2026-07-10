@@ -7,6 +7,9 @@
 set -u
 DET=/data/determination
 LOG=$DET/log/toggle.log
+# Rotate the append-forever log once it passes ~256K (keep the newest half).
+[ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 262144 ] &&
+    tail -c 131072 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
 exec >>"$LOG" 2>&1
 echo "--- desktop-on $(date)"
 
@@ -28,12 +31,18 @@ stop surfaceflinger
 #    init `stop` is honoured but doesn't survive those. Bring-up approach: a
 #    suppressor loop re-asserting the stop; TODO replace with the Zygisk hook
 #    on system_server's SF-death handler once milestone 6 lands.
+#    The same loop doubles as the backlight keeper (see 4b): every SF stop —
+#    including the suppressor's own re-stops — zeroes the panel backlight, so
+#    re-asserting both in one loop is not just cheaper, it's more correct.
+BL_LEVEL=1400
+BL=/sys/class/backlight/backlight/brightness
 (
     while [ -f "$DET/run/desktop-mode" ]; do
         [ "$(getprop init.svc.surfaceflinger)" = "running" ] && {
             echo "suppressor: SF respawned, re-stopping ($(date))"
             stop surfaceflinger
         }
+        echo "$BL_LEVEL" > "$BL" 2>/dev/null
         sleep 1
     done
 ) &
@@ -58,9 +67,9 @@ sleep 1
 # BL_LEVEL: 1400/4095 (~34%). Lowered from 2048 for OLED burn-in — the idle
 # blank is disabled (broken wake path) so the panel stays lit the whole
 # session; lower luminance + the dark UI theme cut the burn-in rate. Still
-# very readable indoors. Bump it if you're outdoors.
-BL_LEVEL=1400
-echo "$BL_LEVEL" > /sys/class/backlight/backlight/brightness 2>/dev/null
+# very readable indoors. Bump it if you're outdoors. (BL_LEVEL/BL are set at
+# step 3 — the suppressor loop doubles as the keeper.)
+echo "$BL_LEVEL" > "$BL" 2>/dev/null
 
 # 5. THE REAL COMPOSITOR (2026-07-06): phoc 0.47 (droidian group/102) on the
 #    droidian wlroots hwcomposer backend, built in-guest against upstream
@@ -75,12 +84,12 @@ echo "$BL_LEVEL" > /sys/class/backlight/backlight/brightness 2>/dev/null
 #      - stdbuf -oL or compositor.log stays empty (block-buffered stdout).
 #      - stale wayland-0 socket+lock must be removed pre-launch or a
 #        relaunched phoc silently binds wayland-1 and clients miss it.
-#      - backlight keeper: an SF stop zeroes the backlight; re-assert every
-#        2s at BL_LEVEL (see 4b — ~34% for burn-in). ACTIVE node is
-#        backlight/ (max 4095); panel0-backlight is inert (2026-07-05).
-#        phoc's wlroots also sets
-#        composer-client brightness 1.0 after power-on (the SDM DSPP-dim
-#        fix, b182d86) — this keeper handles only the sysfs backlight.
+#      - backlight keeper: an SF stop zeroes the backlight; the step-3
+#        suppressor loop re-asserts BL_LEVEL every 1s (see 4b — ~34% for
+#        burn-in). ACTIVE node is backlight/ (max 4095); panel0-backlight
+#        is inert (2026-07-05). phoc's wlroots also sets composer-client
+#        brightness 1.0 after power-on (the SDM DSPP-dim fix, b182d86) —
+#        the keeper handles only the sysfs backlight.
 #      - supervisor relaunches phoc only on DEATH, with fast-fail backoff;
 #        desktop-off clears desktop-mode first, so intentional teardown is
 #        not treated as a crash.
@@ -93,15 +102,8 @@ echo "$BL_LEVEL" > /sys/class/backlight/backlight/brightness 2>/dev/null
 #    evgrab still holds); step 5d kills evgrab once phoc is up, completing
 #    the handoff with a <=100ms no-grab window. If setup-input.sh hasn't
 #    run yet, fall back to hwcomposer-only (display works, no input).
-BL=/sys/class/backlight/backlight/brightness
 CLOG="$DET/log/compositor.log"
 : > "$CLOG"
-(
-    while [ -f "$DET/run/desktop-mode" ]; do
-        echo "$BL_LEVEL" > "$BL" 2>/dev/null
-        sleep 2
-    done
-) &
 (
     fails=0
     while [ -f "$DET/run/desktop-mode" ]; do
@@ -154,16 +156,24 @@ echo $! > "$DET/run/compositor.pid"
 # >120s to come healthy (seatd VT fix applied live) and a capped loop gave
 # up — evgrab kept the grabs and the session had no input. Wait as long as
 # desktop mode is on; the wlroots grab threads retry for 10min per device.
+# The socket is checked through /proc/<guest-init>/root (the guest's /run
+# is a container-ns tmpfs, but host root sees it via the init process's
+# root link — verified 2026-07-10) — no lxc-attach fork per tick, so the
+# poll can be tight (0.3s) and the no-input window after phoc binds its
+# socket is that much shorter. lxc-info re-resolves the pid only if the
+# container restarted mid-wait.
 (
+    GPID=""
     while [ -f "$DET/run/desktop-mode" ]; do
-        if "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- \
-                /usr/bin/test -S /run/user/0/wayland-0 2>/dev/null; then
+        [ -n "$GPID" ] && [ -d "/proc/$GPID/root" ] ||
+            GPID=$("$DET/lxc/bin/lxc-info" -P "$DET" -n guest -p 2>/dev/null | awk '{print $2}')
+        if [ -n "$GPID" ] && [ -S "/proc/$GPID/root/run/user/0/wayland-0" ]; then
             [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
             rm -f "$DET/run/evgrab.pid"
             echo "input handed to guest — evgrab released $(date)"
             break
         fi
-        sleep 1
+        sleep 0.3
     done
 ) &
 
@@ -178,7 +188,7 @@ echo $! > "$DET/run/compositor.pid"
             export XDG_RUNTIME_DIR=/run/user/0
             i=0
             until [ -S "$XDG_RUNTIME_DIR/wayland-0" ]; do
-                i=$((i+1)); [ $i -gt 40 ] && exit 9; sleep 0.5
+                i=$((i+1)); [ $i -gt 100 ] && exit 9; sleep 0.2
             done
             export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             export WAYLAND_DISPLAY=wayland-0 LANG=C.UTF-8

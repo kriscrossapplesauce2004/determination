@@ -6,6 +6,10 @@
 
 MODDIR=${0%/*}
 DET=/data/determination
+# Rotate the append-forever log once it passes ~256K (keep the newest half).
+[ "$(stat -c %s "$DET/log/service.log" 2>/dev/null || echo 0)" -gt 262144 ] &&
+    tail -c 131072 "$DET/log/service.log" > "$DET/log/service.log.tmp" &&
+    mv "$DET/log/service.log.tmp" "$DET/log/service.log"
 exec >>"$DET/log/service.log" 2>&1
 echo "--- service $(date)"
 

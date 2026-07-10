@@ -19,15 +19,29 @@ rm -f "$DET/run/suppressor.pid"
 #    wlroots runs its display destroy). phoc's death also closes the evdev
 #    fds, which releases the guest's EVIOCGRABs (§4) — Android input is
 #    live from that moment even though SF is still coming back.
-"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM phosh 2>/dev/null
-"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM squeekboard 2>/dev/null
-"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM foot 2>/dev/null
-sleep 1
+"$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /bin/sh -c \
+    'pkill -TERM phosh; pkill -TERM squeekboard; pkill -TERM foot; true' 2>/dev/null
+# Guest pids are visible from the host pid ns (host root, init ns), so poll
+# for the clients actually exiting instead of a fixed sleep — typically
+# ~0.3s, capped at 1.5s (previously a flat 1s that raced slow teardowns).
+i=0
+while pgrep -x phosh >/dev/null 2>&1 || pgrep -x foot >/dev/null 2>&1; do
+    i=$((i+1)); [ $i -gt 15 ] && { echo "WARN: clients still up after 1.5s — proceeding"; break; }
+    sleep 0.1
+done
 "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/bin/pkill -TERM phoc 2>/dev/null
 [ -f "$DET/run/compositor.pid" ] && kill "$(cat "$DET/run/compositor.pid")" 2>/dev/null
 [ -f "$DET/run/client.pid" ] && kill "$(cat "$DET/run/client.pid")" 2>/dev/null
 rm -f "$DET/run/compositor.pid" "$DET/run/client.pid"
-sleep 2
+# Same for phoc: it must be GONE (composer client released) before SF binds,
+# but waiting a flat 2s was the single biggest chunk of exit latency. Poll to
+# 3s max; then a short beat for the composer HAL to drop the client state.
+i=0
+while pgrep -x phoc >/dev/null 2>&1; do
+    i=$((i+1)); [ $i -gt 30 ] && { echo "WARN: phoc still alive after 3s — SF may fight it"; break; }
+    sleep 0.1
+done
+sleep 0.5
 
 # 3. Restart SF; verify panel re-init (no dead/black transition).
 start surfaceflinger

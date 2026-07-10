@@ -490,6 +490,36 @@ STILL OPEN on this front: full gpu-smoke gate re-run (glmark2/zero-copy
 numbers), matrix flat varyings (mat3/mat4) unverified — revisit if
 colormatrix/cicp nodes misrender.
 
+**2026-07-10 late: PERF/QoL PASS — deployed to device (toggles pushed to
+`/data/determination/bin`, hostagent restarted + probe-verified, guest trim
+run; the faster desktop-on/off path itself is NOT yet exercised — needs the
+next real toggle).** What changed:
+- `desktop-off`: fixed `sleep 1`+`sleep 2` replaced with bounded 0.1s polls
+  (guest pids are visible to host `pgrep` — init pid ns); 3 client-kill
+  lxc-attaches collapsed to 1. Typical exit is ~2s faster.
+- `desktop-on`: suppressor + backlight keeper merged into ONE 1s loop (also
+  more correct: every SF re-stop re-zeroes the BL); 5d wayland-socket watch
+  now tests `/proc/<guest-init>/root/run/user/0/wayland-0` from the host
+  (verified visible) at 0.3s instead of forking lxc-attach every 1s — faster
+  input handoff; 5e client socket wait 0.2s ticks.
+- `det-hostagent`: event-driven via toybox `inotifyd` — PROG must `kill $PPID`
+  (inotifyd exits neither on PROG rc nor on a `|head -1` reader; measured) with
+  a 15s timeout safety rescan; idle cost fell from 2 forks/s to 2 per 15s,
+  command latency ~instant. Polling fallback kept.
+- `guest-start`: 3 post-start fixup attaches (ashmem/devpts/VT) merged into 1.
+- Log rotation (keep newest 128K past 256K) in desktop-on/hostagent/
+  guest-start(lxc.log)/service.sh — lxc.log was 673K and growing.
+- NEW `guest/setup-trim.sh` (+`run_trim.sh`): masks apt-daily{,-upgrade}
+  (unattended apt traffic == the 07-06 instability correlate), e2scrub_all,
+  fstrim; disables avahi+cron; caps journald 32M; apt no-recommends default +
+  dpkg path-excludes for man/doc; purged existing doc/man/apt-cache —
+  **reclaimed 722 MB**. `systemctl reset-failed` needed after `mask --now`
+  (cosmetic "degraded" otherwise). Guest verified `running`, 8 services.
+- `det` CLI: new `det guest [cmd]` (lxc-attach shell), `det on`/`det off`
+  (setsid-detached toggles), `det log [name] [n]`.
+The lxc-attach "Unsupported config key lxc.seccomp" warning is baked into the
+static binary (no seccomp support), NOT from our configs — cosmetic, ignore.
+
 NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
 the panel; confirm phosh registers with the session-manager shim (no more
 "org.gnome.SessionManager not provided" warnings) and that Logout/power route
