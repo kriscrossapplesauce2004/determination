@@ -574,12 +574,52 @@ Phone note: QUSB_BULK on USB after a flat battery looks exactly like the
 crashdump panic signature (05c6:900e) — check battery before assuming
 panic (07-11: it was just an empty battery).
 
+**2026-07-11 evening: KERNEL #4 FLASHED + WAKE VERIFIED + DNS re-tested; the
+desktop-mode crash-loop is NOT actually fixed (milestone-6 covered only half).**
+Evidence: `artifacts/kernel4-flash-wake-dns-20260711.txt`.
+- KERNEL #4 flashed (readback-verified): `4.14.357-perf-g96adfa8256dc … #2 …
+  Sat Jul 11 18:41:53 BST 2026` (distro clang 22). pstore attached, mounted at
+  `/sys/fs/pstore` (empty — no panic captured). lxc/bin (data/determination
+  paths) + guest-start deployed together; guest RUNNING.
+- WAKE PATH VERIFIED (melissa: "Both work"): wake-smoke.sh all PASS + live
+  power-button blank/wake confirmed. det-session-manager plays gsd-power;
+  KEY_POWER quirk removed. Milestone-1 wake item DONE.
+- DNS RE-TEST PASS (phone mode): resolv.conf 1.1.1.1/8.8.8.8 + timeout:2
+  attempts:3; gateway/egress/`deb.debian.org` all 0% loss.
+- **CRASH-LOOP REGRESSION — the important finding.** The milestone-6 Zygisk
+  hook is NOT a complete fix. It only suppresses SF *restart* (`ctl.restart
+  surfaceflinger`). There is a SECOND, unsolved failure mode: system_server
+  kills *itself*. Its `android.display` thread blocks 60s in
+  `SurfaceControl.nativeApplyTransaction` (BLAST sync to the stopped SF) →
+  framework **Watchdog** kills system_server → it reboots → WindowManager init
+  re-applies a transaction to the still-stopped SF → blocks → killed again.
+  Self-sustaining ~78s loop (60s watchdog + ~18s reinit); wlan0 goes DOWN and
+  stays down → guest offline in desktop mode. Reproduced on kernel #4 even on
+  a CLEAN single entry (3 rolls in 195s). Verified this boot: hook IS mapped
+  into system_server (grep-c determination /proc/<ss>/maps = 3), suppressor
+  log shows 0 re-stops → SF suppression genuinely works; the kill is
+  system_server's own Watchdog, which the hook does nothing about. The NFC
+  (`phNxpNciHal_close` abort) + audio (`~BatteryListenerImpl` join NULL-deref
+  via `adev_close`) tombstones are COLLATERAL — vendor binderDied handlers
+  crashing after system_server dies. Why 07-11 MORNING (18:17, kernel #3)
+  looked green: system_server was never killed once in the ~2min observed
+  (stayed up from boot, never issued the blocking transaction); once killed
+  even once while SF is stopped, no self-recovery. `det off` (restore SF)
+  always breaks the loop — end-of-session state clean (phone mode, SF running,
+  wlan0 up, system_server stable). **Real fix (task #5):** neuter the framework
+  Watchdog's self-kill while the desktop-mode marker exists (hook the kill/exit
+  path in the Zygisk module) OR keep SF able to ack transactions — risky
+  (kill/exit hook in system_server), device-test carefully. Until then guest
+  networking stays PHONE-MODE ONLY and long desktop sessions are unsafe.
+
 NEXT (full prioritized list + the universality goal: `docs/north-star.md`):
-deploy+verify the above (wake path, kernel #4 flash, lxc bins); audio stack
-(pipewire) → volume keys + calls-less phone basics; phosh polish
-(feedbackd, backgrounds); pstore into kernel #4; consider rebuilding
-lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink; then §5
-external convergence. Full desktop-off regression after each session.
+**FIRST: fix the desktop-mode system_server self-kill (task #5) — it gates
+soak, desktop-mode DNS, and everything §5.** Then audio stack (pipewire) →
+volume keys + calls-less phone basics; phosh polish (feedbackd, backgrounds);
+consider rebuilding lxc/bin (build-lxc.sh, already retargeted — drop the
+/data/decemberos symlink); Ctrl+Alt+F2 compositor-VT (external-keyboard
+console; fbcon is impossible by design); then §5 external convergence. Full
+desktop-off regression after each session.
 
 NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,
 libtls-padding0) and the runtime mounts/iptables/ip-rules do NOT persist a

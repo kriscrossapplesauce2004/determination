@@ -1,0 +1,82 @@
+Kernel #4 flash + wake verify + DNS re-test + desktop-mode crash-loop finding
+Session: Sat Jul 11 2026 (evening/late), all on-device via `det`
+
+=====================================================================
+1. KERNEL #4 — FLASHED + VERIFIED
+=====================================================================
+/proc/version:
+  Linux version 4.14.357-perf-g96adfa8256dc (melissa@terra)
+  (clang version 22.1.6, LLD 22.1.6) #2 SMP PREEMPT Sat Jul 11 18:41:53 BST 2026
+  (#2 = kernel #4; distro clang 22)
+pstore/ramoops attached (config-only enable; DT ramoops node already shipped):
+  pstore /sys/fs/pstore pstore rw,seclabel,nosuid,nodev,noexec,noatime 0 0
+  /sys/fs/pstore present, empty (no panic captured — clean).
+Flash was readback-verified (host-flash.sh) against the exact banner; all
+Determination config options + PSTORE/PSTORE_RAM/PSTORE_PMSG present.
+
+=====================================================================
+2. WAKE PATH — VERIFIED (melissa: "Both work")
+=====================================================================
+guest/wake-smoke.sh in desktop mode: ALL PASS (screensaver active/inactive
+round trip over org.gnome.ScreenSaver SetActive true->false; panel blanked
+and came back lit). Live power-button blank/wake also confirmed by melissa.
+Fix in play: det-session-manager plays gsd-power (AddUserActiveWatch ->
+WatchFired -> SetActive(false)); KEY_POWER quirk removed from setup-input.sh.
+
+=====================================================================
+3. GUEST DNS RE-TEST — PASS (PHONE MODE, the supported path)
+=====================================================================
+/etc/resolv.conf: nameserver 1.1.1.1 / 8.8.8.8 / options timeout:2 attempts:3
+gateway 192.168.117.1 : 2/2, 0% loss, ~0.35ms
+egress 1.1.1.1        : 3/3, 0% loss, ~36ms
+DNS deb.debian.org    : resolves (fastly), ping-by-name 2/2 0% loss ~52ms
+(Desktop-mode DNS NOT re-tested — blocked by the crash-loop below, which
+takes wlan0 down. Phone mode is the supported path per det-phone skill.)
+
+=====================================================================
+4. DESKTOP-MODE system_server CRASH-LOOP — REPRODUCED ON KERNEL #4
+   (milestone-6 Zygisk hook does NOT cover this failure mode)
+=====================================================================
+Symptom: within ~60-75s of SF stop (SF genuinely `stopped`, no restart),
+system_server is Watchdog-killed, then enters a self-sustaining ~78s reboot
+loop. Observed pids rolling on a CLEAN single entry (no screen toggling):
+  t=60s  ss=8099 hold      wlan0=up
+  t=75s  ss killed         wlan0=down
+  t=90s  ss=16975          wlan0=down
+  t=165s ss=19925 (roll 3) wlan0=down
+  => 3 rolls in ~195s; wlan0 down and STAYS down (guest offline).
+phoc(15750)/phosh(16009) unaffected the whole time — this is purely Android.
+
+Root cause (from Watchdog trace + crash buffer):
+  - system_server android.display thread blocks 60s in
+    SurfaceControl.nativeApplyTransaction (BLAST sync) waiting on the
+    stopped SF -> Watchdog "*** WATCHDOG KILLING SYSTEM PROCESS *** Blocked
+    in handler on display thread (android.display) for 60s".
+  - On restart, WindowManager init re-applies a transaction to the still-
+    stopped SF (crash buf: WindowContainer.setInitialSurfaceControlProperties
+    -> SurfaceControl.nativeCreate -> DEAD_OBJECT) -> blocks -> killed again.
+    ~60s watchdog + ~18s reinit = ~78s beat.
+  - NFC/audio HAL tombstones are COLLATERAL: buggy vendor binderDied handlers
+    (nfc_nci_nxp_snxxx phNxpNciHal_close abort; libbatterylistener
+    ~BatteryListenerImpl std::thread::join NULL deref via adev_close) firing
+    because their client (system_server) died. Not the cause.
+
+Zygisk hook verification (this boot): mapped into system_server (grep -c
+determination /proc/<ss>/maps = 3), suppressor log shows 0 re-stops -> SF
+suppression IS working. The hook only prevents SF from being *restarted*;
+it does nothing about system_server killing *itself*.
+
+Why 2026-07-11 morning (18:17, kernel #3) looked stable: system_server was
+never killed once (stayed up from boot, display state already initialized,
+never issued the blocking transaction in the ~2min observed). Once killed
+even once while SF is stopped, recovery is impossible without restoring SF.
+
+Recovery confirmed reliable: `det off` -> SF running -> system_server stable
+-> wlan0 up; crash cadence stops the instant SF returns. End-of-session
+state: phone mode, SF=running, wlan0=up, system_server stable.
+
+NEXT (see CLAUDE.md / task): real fix = stop system_server self-killing in
+desktop mode — candidate is neutering the framework Watchdog kill for self
+while the desktop-mode marker exists (hook kill()/exit path in the Zygisk
+module), OR keeping SF able to ack transactions. Risky (kill/exit hook in
+system_server) — device-test carefully.
