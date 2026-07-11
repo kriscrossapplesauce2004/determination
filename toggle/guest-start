@@ -13,16 +13,12 @@ export PATH="$LXC:$PATH"
 # it to guest /mnt/det-control); it must exist before lxc-start.
 mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/run/control" "$DET/log"
 
-# Migration compat: the static LXC binaries in lxc/bin were compiled with a
-# baked-in runtime/lock path of /data/decemberos/run (--with-runtime-path).
-# /run is read-only on Android so LXC can't fall back, and it can't be rewritten
-# in a prebuilt binary. Until lxc/bin is rebuilt via guest/build-lxc.sh (now
-# configured for /data/determination), alias the old tree to the new one so the
-# lock path resolves. Harmless once the binaries are rebuilt. Guard: never
-# clobber a real directory.
-if [ ! -e /data/decemberos ]; then
-    ln -sfn /data/determination /data/decemberos
-fi
+# 2026-07-11: lxc/bin rebuilt with --with-runtime-path=/data/determination/run
+# (guest/build-lxc.sh) — the /data/decemberos compat symlink is gone. Deploy
+# this script and the new binaries TOGETHER: old binaries + no symlink =
+# "Failed to create lock for guest". Clean up a leftover symlink (never a
+# real directory).
+[ -L /data/decemberos ] && rm -f /data/decemberos
 # lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config —
 # keep a copy of the config at that path (the rootfs dir doubles as it).
 # Always refresh so config updates propagate.
