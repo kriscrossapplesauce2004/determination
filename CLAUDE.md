@@ -545,8 +545,37 @@ on `$ZYGISK_ENABLED`). Also ReZygisk requires BOTH ABI .so files present
 silently skipped. The shell suppressor loop in desktop-on is kept as
 fallback + backlight keeper. NDK at `~/android-sdk/ndk/27.2.12479018`.
 
+**2026-07-11 (north-star session, ALL HOST-SIDE — nothing deployed, phone
+battery died mid-session and is charging):**
+1. WAKE PATH ROOT CAUSE (no device needed — pure source read of phosh 0.46
+   + phoc + droidian wlroots): phosh has NO internal unblank path. Blank is
+   phosh-internal (power button XF86PowerOff / idle → wlr-output-power OFF)
+   but the ONLY caller that can pass active=false is the
+   org.gnome.ScreenSaver.SetActive DBus method — that's gsd-power's job,
+   and we run phosh bare. The phoc hwcomposer re-enable was likely never
+   REQUESTED, not broken. Fix: det-session-manager (setup-controls.sh) now
+   plays gsd-power: ActiveChanged(true) → IdleMonitor.AddUserActiveWatch →
+   WatchFired → SetActive(false); KEY_POWER quirk REMOVED from
+   setup-input.sh. Deploy = rerun both setup scripts in guest, restart
+   session. Test = guest/wake-smoke.sh (DBus blank/unblank round trip in
+   desktop mode, isolates compositor path from the watcher) then a live
+   button test. Watch: the desktop-on backlight keeper writes BL 1400/s —
+   check it doesn't re-light a blanked panel (add a blanked-marker to the
+   control channel if it does). If wake proves good, idle-delay 0
+   (setup-polish.sh) can be relaxed.
+2. KERNEL #4 BUILT with pstore (determination.config + build.sh verify):
+   sm8150.dtsi already had the ramoops node (8MB @ 0xa1600000) and our dtb
+   ships with the kernel — config-only change. boot/determination-boot.img
+   repacked from the committed pristine 12.11 image. NOT FLASHED.
+3. lxc/bin REBUILT (dist/lxc-bin) with /data/determination paths;
+   guest-start compat symlink replaced with cleanup. Deploy bins +
+   guest-start TOGETHER or lxc-start fails on the lock path.
+Phone note: QUSB_BULK on USB after a flat battery looks exactly like the
+crashdump panic signature (05c6:900e) — check battery before assuming
+panic (07-11: it was just an empty battery).
+
 NEXT (full prioritized list + the universality goal: `docs/north-star.md`):
-debug the phoc output-power wake path (power button); audio stack
+deploy+verify the above (wake path, kernel #4 flash, lxc bins); audio stack
 (pipewire) → volume keys + calls-less phone basics; phosh polish
 (feedbackd, backgrounds); pstore into kernel #4; consider rebuilding
 lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink; then §5
