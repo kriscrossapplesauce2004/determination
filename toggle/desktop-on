@@ -29,8 +29,8 @@ stop surfaceflinger
 # 3. Suppress re-start. Known re-issuers of `start surfaceflinger`:
 #    system_server SF-death handling, bootanim, class_restart. An explicit
 #    init `stop` is honoured but doesn't survive those. Bring-up approach: a
-#    suppressor loop re-asserting the stop; TODO replace with the Zygisk hook
-#    on system_server's SF-death handler once milestone 6 lands.
+#    suppressor loop re-asserting the stop. The Zygisk hook (milestone 6)
+#    handles this in-process now; the loop is a fallback + backlight keeper.
 #    The same loop doubles as the backlight keeper (see 4b): every SF stop —
 #    including the suppressor's own re-stops — zeroes the panel backlight, so
 #    re-asserting both in one loop is not just cheaper, it's more correct.

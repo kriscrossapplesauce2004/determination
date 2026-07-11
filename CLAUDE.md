@@ -386,8 +386,10 @@ bring-up gotchas, now fixed & encoded:
 
 Companion APK: **builds + installed** (`com.determination.companion`). No-root
 Android toolchain lives at `~/android-sdk` (JDK17 + cmdline-tools + platform-34
-+ gradle-8.7, all gitignored); build = `~/android-sdk/gradle-8.7/bin/gradle
---no-daemon assembleDebug` in `companion/` (needs `local.properties` sdk.dir).
++ gradle-8.7 + NDK 27.2, all gitignored); build = `~/android-sdk/gradle-8.7/bin/
+gradle --no-daemon assembleDebug` in `companion/` (needs `local.properties`
+sdk.dir). Zygisk module build = `cd zygisk && ndk-build NDK_PROJECT_PATH=.
+APP_BUILD_SCRIPT=jni/Android.mk NDK_APPLICATION_MK=jni/Application.mk`.
 Phosh launcher gotcha: melissa's `app-filter-mode=adaptive` HIDES any .desktop
 without `X-Purism-FormFactor=...Mobile;` — every guest launcher must carry it.
 
@@ -520,16 +522,34 @@ next real toggle).** What changed:
 The lxc-attach "Unsupported config key lxc.seccomp" warning is baked into the
 static binary (no seccomp support), NOT from our configs — cosmetic, ignore.
 
-NEXT: (07-08 remaining, once charged) tap-test the Exit launcher + power menu on
-the panel; confirm phosh registers with the session-manager shim (no more
-"org.gnome.SessionManager not provided" warnings) and that Logout/power route
-to the host; try the companion app's Enter Desktop Mode + QS tile (grant it su).
-Consider rebuilding lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink.
-Then: debug the phoc output-power wake path (power button); guest DNS
-flakiness root cause; audio stack (pipewire) → volume keys + calls-less
-phone basics; phosh polish (feedbackd, backgrounds); pstore into kernel
-#4; then §5 external convergence. Android-side §4 stays proven
-(2026-07-03 round trip); full desktop-off regression after each session.
+**2026-07-11: §4 SIGNED OFF by melissa — milestone 4 complete.** The 07-08
+verification backlog (Exit launcher / power menu tap-tests, session-manager
+shim routing, companion Enter) is confirmed done; treat the cable-free round
+trip as verified. EXCEPTION: the companion **QS tile** is unconfirmed — the
+phone rebooted mid-test (2026-07-11); re-check opportunistically.
+
+**2026-07-11: MILESTONE 6 COMPLETE — Zygisk SF-death hook VERIFIED on device.**
+`zygisk/jni/main.cpp`: PLT-hooks `__system_property_set` in system_server
+(libgui, libcutils, libandroid_runtime, libutils); suppresses
+`ctl.start`/`ctl.restart` for `surfaceflinger` while
+`/data/determination/run/desktop-mode` exists. Result: system_server pid
+stayed stable during desktop mode (no crash-loop), zero suppressor re-stops,
+WiFi stayed UP, guest networking 3/3 pings 0% loss. Evidence:
+`artifacts/guest-zygisk-sf-hook-20260711.txt`. Module v0.3.0
+(versionCode=6) deployed; NDK 27.2 build, both arm64 + armeabi-v7a .so.
+ReZygisk gotcha: the phone runs **ReZygisk** (standalone Zygisk), NOT
+Magisk's native Zygisk — native Zygisk MUST stay disabled (`zygisk=0` in
+Magisk settings) or ReZygisk skips all module loading (service.sh exits
+on `$ZYGISK_ENABLED`). Also ReZygisk requires BOTH ABI .so files present
+(arm64-v8a + armeabi-v7a) — if the 32-bit one is missing the module is
+silently skipped. The shell suppressor loop in desktop-on is kept as
+fallback + backlight keeper. NDK at `~/android-sdk/ndk/27.2.12479018`.
+
+NEXT: debug the phoc output-power wake path (power button); audio stack
+(pipewire) → volume keys + calls-less phone basics; phosh polish
+(feedbackd, backgrounds); pstore into kernel #4; consider rebuilding
+lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink; then §5
+external convergence. Full desktop-off regression after each session.
 
 NOTE: the running guest's apt state (gdb, linkerconfig, the z4 downgrade,
 libtls-padding0) and the runtime mounts/iptables/ip-rules do NOT persist a

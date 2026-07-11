@@ -1,0 +1,16 @@
+Zygisk SF-death hook verification — Sat Jul 11 18:17:41 BST 2026
+
+ReZygisk state.json modules: determination, playintegrityfix, zygisk_shamiko
+Desktop mode entered at ~18:15, checked at 18:17
+system_server pid: 1986 (STABLE — no restarts)
+system_server crashes: 0
+Suppressor re-stops: 0 (Zygisk hook caught all ctl.restart requests)
+SF state: stopped (stayed stopped)
+wlan0: up (WiFi stayed alive throughout)
+Guest ping: 3/3, 0% loss, ~31ms
+Guest DNS: working (deb.debian.org resolved)
+Phoc+phosh: running on panel
+
+Previous behavior (pre-Zygisk): system_server crash-looped every ~50s,
+each restart reprogrammed netd (flushing iptables/ip-rules), bounced WiFi
+until wlan0 stayed DOWN. Guest lost all connectivity in desktop mode.

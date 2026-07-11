@@ -1,6 +1,6 @@
 id=determination
 name=Determination
-version=v0.2.0
-versionCode=5
+version=v0.3.0
+versionCode=6
 author=melissa
 description=Android convergence layer: LXC glibc desktop guest with libhybris display acquisition. Requires the Determination custom kernel.

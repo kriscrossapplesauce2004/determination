@@ -9,6 +9,8 @@ toolchain/
 determination-magisk-*.zip
 dist/
 artifacts/backups/
+zygisk/libs/
+zygisk/obj/
 
 # Standard ignores
 .DS_Store

@@ -65,5 +65,14 @@ Full rationale, topology decision, and risk register: see
       WiFi initially dead (stock `qca_cld3_wlan.ko` vermagic mismatch) — fixed
       by `magisk-module-wlan/` overlay rebuilt from the same tree. Full
       hardware smoke test green. Determination module installed. Milestone 1 done.
-- [ ] Guest rootfs + libhybris smoke test on guacamoleb
-- [ ] Toggle stable across repeated cycles
+- [x] Guest rootfs + libhybris smoke test on guacamoleb (2026-07-04, TLS wall
+      cleared with upstream libhybris; `test_hwcomposer` GLES 3.2 on the panel)
+- [x] wlroots on the panel: phoc + phosh + squeekboard live, touch-verified
+      (2026-07-06/07); GPU app buffers zero-copy path working (2026-07-10)
+- [x] Toggle round trip cable-free: companion app Enter, guest launchers /
+      phosh power menu Exit, verified on-device (2026-07-11) — milestone 4 done
+      (QS tile still unconfirmed — a reboot interrupted that test)
+- [x] Milestone 6: Zygisk hook on system_server's SF-death handling —
+      verified on device 2026-07-11: system_server stable, WiFi stays up,
+      guest networking alive throughout desktop mode
+- [ ] Milestone 5: external convergence (DP-alt, KWin, summon UX)
