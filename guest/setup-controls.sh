@@ -53,6 +53,19 @@ echo "== det-session-manager (org.gnome.SessionManager shim) =="
 #   Reboot()   -> det-signal reboot
 # Launched inside dbus-run-session by toggle/desktop-on (step 5e) BEFORE phosh.
 # Pure gi/GDBus (python3 + PyGObject + Gio typelib are all in the rootfs).
+#
+# It ALSO plays gsd-power's unblank role (2026-07-11, the power-button wake
+# fix). phosh can blank on its own (XF86PowerOff / idle -> wlr-output-power
+# OFF) but has NO internal unblank path: the only code that can pass
+# active=false is the org.gnome.ScreenSaver.SetActive DBus method, which
+# gnome-settings-daemon's power plugin normally calls when the user becomes
+# active again. We run phosh bare — nobody called it, so the screen never
+# came back ("power kills the session"). The shim now mirrors gsd-power:
+#   ScreenSaver ActiveChanged(true)  -> IdleMonitor.AddUserActiveWatch()
+#   IdleMonitor WatchFired(our id)   -> ScreenSaver.SetActive(false)
+# The active watch is phosh-side ext-idle-notify with timeout 0: it fires on
+# the next input event (power key, touch), which phoc sees regardless of
+# output power state.
 install -d /usr/local/bin
 cat > /usr/local/bin/det-session-manager <<'EOS'
 #!/usr/bin/env python3
@@ -146,6 +159,74 @@ CLIENT_XML = """
 </node>
 """
 
+SS_NAME = "org.gnome.ScreenSaver"
+SS_PATH = "/org/gnome/ScreenSaver"
+IM_NAME = "org.gnome.Mutter.IdleMonitor"
+IM_PATH = "/org/gnome/Mutter/IdleMonitor/Core"
+
+class WakeWatcher:
+    """gsd-power's unblank role. phosh blanks by itself but the only unblank
+    entry point it has is the org.gnome.ScreenSaver.SetActive(false) DBus
+    method — normally called by gsd-power's user-active watch. Without this,
+    a blank (power button or idle) is permanent: phoc's output re-enable is
+    never requested. Mirror gsd-power: when the screensaver goes active,
+    register a user-active watch with phosh's IdleMonitor (ext-idle-notify
+    timeout 0 under the hood); when it fires on the next key/touch, call
+    SetActive(false). Active watches are one-shot on the phosh side."""
+
+    def __init__(self, conn):
+        self.conn = conn
+        self.watch_id = None
+        conn.signal_subscribe(SS_NAME, SS_NAME, "ActiveChanged", SS_PATH,
+                              None, Gio.DBusSignalFlags.NONE,
+                              self.on_active_changed)
+        conn.signal_subscribe(IM_NAME, IM_NAME, "WatchFired", IM_PATH,
+                              None, Gio.DBusSignalFlags.NONE,
+                              self.on_watch_fired)
+        sys.stderr.write("det-session-manager: wake watcher armed\n")
+        sys.stderr.flush()
+
+    def log(self, msg):
+        sys.stderr.write("det-session-manager: wake: %s\n" % msg)
+        sys.stderr.flush()
+
+    def call(self, name, path, iface, method, params, cb=None):
+        def done(conn, res):
+            try:
+                ret = conn.call_finish(res)
+            except Exception as e:
+                self.log("%s failed: %s" % (method, e))
+                return
+            if cb:
+                cb(ret)
+        self.conn.call(name, path, iface, method, params, None,
+                       Gio.DBusCallFlags.NONE, -1, None, done)
+
+    def on_active_changed(self, conn, sender, path, iface, sig, params):
+        active = params.unpack()[0]
+        self.log("screensaver active=%s" % active)
+        if active and self.watch_id is None:
+            def got(ret):
+                self.watch_id = ret.unpack()[0]
+                self.log("active watch %d registered" % self.watch_id)
+            self.call(IM_NAME, IM_PATH, IM_NAME, "AddUserActiveWatch",
+                      None, got)
+        elif not active and self.watch_id is not None:
+            # Unblanked by someone else (e.g. DBus SetActive) — drop our watch
+            # so stray input later doesn't fire a stale unblank.
+            wid, self.watch_id = self.watch_id, None
+            self.call(IM_NAME, IM_PATH, IM_NAME, "RemoveWatch",
+                      GLib.Variant("(u)", (wid,)))
+
+    def on_watch_fired(self, conn, sender, path, iface, sig, params):
+        wid = params.unpack()[0]
+        if wid != self.watch_id:
+            return
+        self.watch_id = None
+        self.log("user active while blanked -> SetActive(false)")
+        self.call(SS_NAME, SS_PATH, SS_NAME, "SetActive",
+                  GLib.Variant("(b)", (False,)))
+
 class SM:
     def __init__(self):
         self.conn = None
@@ -213,6 +294,7 @@ class SM:
         self.conn = conn
         conn.register_object("/org/gnome/SessionManager", self.sm_info,
                              self.on_method, self.get_prop, None)
+        self.wake = WakeWatcher(conn)
 
     def on_acquired(self, conn, name):
         sys.stderr.write("det-session-manager: owns %s\n" % name); sys.stderr.flush()
@@ -377,7 +459,9 @@ systemctl enable --now det-battery.service 2>/dev/null && echo "det-battery enab
     echo "note: could not start det-battery.service (will start next boot)"
 
 echo "== done =="
-echo "Session manager shim installed: Logout->phone, Shutdown/Reboot->host."
+echo "Session manager shim installed: Logout->phone, Shutdown/Reboot->host,"
+echo "wake watcher (blank -> next key/touch unblanks; needs setup-input.sh"
+echo "rerun to un-quirk KEY_POWER)."
 echo "Power menu (Power Off / Restart) + app-grid tiles now drive the host."
 echo "Requires the guest to be running under the lxc config that binds"
 echo "/mnt/det-control (restart the container / reboot after installing the"

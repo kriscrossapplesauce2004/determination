@@ -84,16 +84,15 @@ cat > /etc/libinput/local-overrides.quirks <<'EOF'
 [OnePlus 7 touchpanel]
 MatchName=touchpanel
 AttrEventCode=-ABS_MT_WIDTH_MAJOR;-ABS_MT_PRESSURE
-
-[OnePlus 7 power key inert in desktop mode]
-MatchName=qpnp_pon
-AttrEventCode=-KEY_POWER
 EOF
-# Power key: pressing it makes phosh blank the screen, and phoc's output
-# RE-ENABLE through the hwcomposer backend doesn't come back (2026-07-06
-# first light: "power button kills it"). Until that wake path is fixed,
-# strip KEY_POWER — the node stays open+grabbed (Android must not see it
-# either), the button is simply inert while in desktop mode.
+# Power key (history): 2026-07-06..11 KEY_POWER was quirked inert here
+# because a blank was permanent — "power button kills it". Root cause was
+# NOT the phoc hwcomposer backend: phosh has no internal unblank path at
+# all; unblanking is gsd-power's job (ScreenSaver.SetActive(false) on user
+# activity) and we run phosh bare. det-session-manager (setup-controls.sh)
+# now plays that role, so the quirk is gone: power press blanks via phosh,
+# next press/touch wakes via the active watch. The qpnp_pon node stays
+# open+grabbed by phoc either way (Android must not see the key).
 
 echo "== det-pidfd-shim =="
 cat > /tmp/det-pidfd-shim.c <<'EOF'
