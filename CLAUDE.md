@@ -545,7 +545,8 @@ on `$ZYGISK_ENABLED`). Also ReZygisk requires BOTH ABI .so files present
 silently skipped. The shell suppressor loop in desktop-on is kept as
 fallback + backlight keeper. NDK at `~/android-sdk/ndk/27.2.12479018`.
 
-NEXT: debug the phoc output-power wake path (power button); audio stack
+NEXT (full prioritized list + the universality goal: `docs/north-star.md`):
+debug the phoc output-power wake path (power button); audio stack
 (pipewire) → volume keys + calls-less phone basics; phosh polish
 (feedbackd, backgrounds); pstore into kernel #4; consider rebuilding
 lxc/bin (build-lxc.sh) to drop the /data/decemberos symlink; then §5

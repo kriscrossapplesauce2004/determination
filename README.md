@@ -71,7 +71,7 @@ Full rationale, topology decision, and risk register: see
       (2026-07-06/07); GPU app buffers zero-copy path working (2026-07-10)
 - [x] Toggle round trip cable-free: companion app Enter, guest launchers /
       phosh power menu Exit, verified on-device (2026-07-11) — milestone 4 done
-      (QS tile still unconfirmed — a reboot interrupted that test)
+      (QS tile confirmed)
 - [x] Milestone 6: Zygisk hook on system_server's SF-death handling —
       verified on device 2026-07-11: system_server stable, WiFi stays up,
       guest networking alive throughout desktop mode
