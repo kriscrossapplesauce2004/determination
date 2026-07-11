@@ -43,7 +43,16 @@ connect)
     ensure && adb devices | sed -n 2p ;;
 shell)
     ensure; shift
-    if [ $# -gt 0 ]; then adb shell su -c "$*"; else adb shell su; fi ;;
+    if [ $# -gt 0 ]; then
+        # adb re-joins argv with spaces, so `adb shell su -c "$*"` reaches the
+        # remote shell UNQUOTED: everything after the first ;/&&/| ran as the
+        # shell user (the exact CLAUDE.md quoting trap — this helper shipped
+        # with it from day one, found 2026-07-11 masquerading as a "degraded
+        # boot"). Single-quote the whole chain for the remote shell, escaping
+        # embedded single quotes.
+        esc=$(printf '%s' "$*" | sed "s/'/'\\\\''/g")
+        adb shell "su -c '$esc'"
+    else adb shell su; fi ;;
 guest)
     ensure; shift
     G=/data/determination
