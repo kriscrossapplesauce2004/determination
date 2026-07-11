@@ -1,0 +1,45 @@
+Guest networking hardening — verification log (2026-07-11, phone mode)
+
+BASELINE PROBE (guest, via /root/netprobe.sh):
+  gw-ok / inet-ok / dns-ok, lookups ~30ms via static 1.1.1.1
+  resolv.conf: single nameserver, systemd-resolved inactive
+  DEFECT FOUND: eth0 has only link-local IPv6, no v6 default route, but
+  resolvers return AAAA records -> dual-stack clients try unreachable v6
+  first.  ping -6 2606:4700:4700::1111 = FAIL (no route).
+
+FIX 1 — guest resolver/IPv6 hygiene (live + setup-guest.sh/customize-hook.sh):
+  /etc/resolv.conf: 1.1.1.1 + 8.8.8.8, options timeout:2 attempts:3
+  /etc/gai.conf:    precedence ::ffff:0:0/96 100   (prefer IPv4)
+  eth0.network:     second DNS= (inert until resolved ever runs)
+  VERIFIED: getent ahosts deb.debian.org now returns 151.101.2.132 (v4) first
+  (was 2a04:4e42::644 v6 first).
+
+FIX 2 — net-keeper hardening (toggle/guest-start, deployed to
+/data/determination/bin, keeper restarted as pid 21679):
+  a) fixed ineffective 'lookup wlan0' grep (ip rule prints table NUMBER);
+     now matches on pref+iif.
+  b) fallback egress table 117: net_assert mirrors the live default route
+     (from `ip route get 1.1.1.1`) into table 117 + pref-21100 iif determ0
+     rule.  Covers netd DELETING the wlan0 table during desktop-mode
+     framework thrash (2026-07-07 failure mode).
+     VERIFIED: deleted rule 21000 by hand -> guest ping 1.1.1.1 3/3 replies
+     + DNS ok via 21100/table 117 alone; keeper re-added 21000 within 20s.
+       21000:  from all iif determ0 lookup wlan0
+       21100:  from all iif determ0 lookup 117
+       table 117: default via 192.168.0.1 dev wlan0
+  c) WiFi watchdog, DESKTOP MODE ONLY (phone-mode wlan0-down may be
+     intentional): wlan0 operstate != up for 3 consecutive 10s ticks ->
+     `timeout 15 svc wifi enable`, retry every ~9 ticks, logged to
+     log/net-keeper.log.  Keeper ticks 10s in desktop mode, 20s in phone
+     mode.  UNVERIFIED live (needs a desktop-mode session with WiFi death;
+     the real fix remains the milestone-6 Zygisk hook).
+
+Gotchas re-confirmed this session:
+  - `det shell 'a && b'` still splits at && on the device shell (su gets only
+    a).  Same for $(...) — it expands as the adb shell user BEFORE su.
+    Root multi-command = `adb shell su <<'EOF'` heredoc (det status style)
+    or a dropped script.
+  - det-hostagent consumes/deletes unknown files in run/control — don't use
+    the control dir as a scratch file-drop path.
+  - Re-running guest-start over adb hangs the client: the freshly spawned
+    keeper/hostagent hold stdout.  Use setsid like `det on` does.

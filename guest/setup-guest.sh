@@ -60,8 +60,25 @@ Name=eth0
 Address=192.168.117.2/24
 Gateway=192.168.117.1
 DNS=1.1.1.1
+DNS=8.8.8.8
 EOF
 CH "systemctl enable systemd-networkd >/dev/null 2>&1 || true"
+
+# Resolver: systemd-resolved is NOT running, so /etc/resolv.conf is a plain
+# static file (networkd's DNS= above is a no-op until resolved ever runs).
+# Two nameservers + short timeout so one dead/blocked resolver doesn't hang
+# lookups; desktop-mode netd thrash makes single-resolver stalls real.
+cat > "$G/etc/resolv.conf" <<'EOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+options timeout:2 attempts:3
+EOF
+
+# Prefer IPv4: the guest is IPv4-NAT only (link-local v6, no default v6
+# route) but resolvers happily return AAAA records — without this, every
+# dual-stack client tries unreachable IPv6 first (2026-07-11).
+grep -q '^precedence ::ffff:0:0/96 100' "$G/etc/gai.conf" 2>/dev/null ||
+    echo 'precedence ::ffff:0:0/96  100' >> "$G/etc/gai.conf"
 
 # Don't fight for ttys that don't exist / are Android's
 CH "systemctl mask getty@tty1.service console-getty.service >/dev/null 2>&1 || true"

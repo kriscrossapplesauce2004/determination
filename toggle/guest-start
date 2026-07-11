@@ -68,19 +68,55 @@ net_assert() {
     ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
         ip rule add pref 9000 to 192.168.117.0/24 lookup main
     # Only valid once the wlan0 table exists (WiFi up) — harmless to retry.
-    ip rule list | grep -q "iif determ0 lookup wlan0" ||
+    # NB `ip rule list` prints the table NUMBER (1030), not "wlan0", so match
+    # on the pref+iif instead (the old "lookup wlan0" grep never matched and
+    # we leaned on EEXIST — fine, but this also tolerates a renumbered table).
+    ip rule list | grep -q "^21000:.*iif determ0" ||
         ip rule add pref 21000 iif determ0 lookup wlan0 2>/dev/null
+
+    # Fallback egress table: during desktop-mode framework thrash netd can
+    # DELETE the wlan0 table outright (2026-07-07) — the pref-21000 rule then
+    # matches nothing and guest egress dies even though wlan0 itself is fine.
+    # Mirror the live default route into our own table 117 whenever the real
+    # path is known; rule lookups fall through empty tables, so pref 21100
+    # only carries traffic once netd's table is gone.
+    GW=$(ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* via \([0-9.]*\) dev wlan0 .*/\1/p')
+    [ -n "$GW" ] && ip route replace default via "$GW" dev wlan0 table 117 2>/dev/null
+    ip rule list | grep -q "^21100:.*iif determ0" ||
+        ip rule add pref 21100 iif determ0 lookup 117 2>/dev/null
 }
 net_assert
 
-# net-keeper: re-assert every 20s, forever (all checks are cheap no-ops
-# while the rules survive). Killed by nothing — it must outlive desktop
-# toggles; a reboot clears it with everything else.
+# net-keeper: re-assert forever (all checks are cheap no-ops while the rules
+# survive); 10s ticks in desktop mode (where netd actively fights us), 20s in
+# phone mode. Killed by nothing — it must outlive desktop toggles; a reboot
+# clears it with everything else.
+# WiFi watchdog (desktop mode ONLY — in phone mode wlan0 down may be
+# melissa's choice): system_server crash-loops on the stopped SF and its
+# restarts bounce WiFi until wlan0 stays DOWN (2026-07-07). If wlan0 sits
+# non-up for 3 consecutive ticks, poke `svc wifi enable` (idempotent, framework
+# call — timeout'd because system_server may be mid-crash), and keep retrying
+# every ~9 ticks while it stays dead. Real fix is the milestone-6 Zygisk hook.
 if ! kill -0 "$(cat "$DET/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
     (
+        fails=0
         while :; do
             net_assert 2>/dev/null
-            sleep 20
+            if [ -f "$DET/run/desktop-mode" ]; then
+                if [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" = "up" ]; then
+                    fails=0
+                else
+                    fails=$((fails+1))
+                    if [ "$fails" -eq 3 ] || [ $((fails % 9)) -eq 0 ]; then
+                        echo "wlan0 not up x$fails — svc wifi enable ($(date))" >> "$DET/log/net-keeper.log"
+                        timeout 15 svc wifi enable </dev/null >/dev/null 2>&1
+                    fi
+                fi
+                sleep 10
+            else
+                fails=0
+                sleep 20
+            fi
         done
     ) &
     echo $! > "$DET/run/net-keeper.pid"

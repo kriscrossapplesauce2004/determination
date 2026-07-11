@@ -48,6 +48,16 @@ EOF
 ln -sf /system/product "$R/product" || true
 ln -sf /system/system_ext "$R/system_ext" || true
 
+# Resolver: no systemd-resolved in the guest — static resolv.conf, two
+# nameservers + short timeouts. Prefer IPv4 in gai.conf: the guest is
+# IPv4-NAT only but gets AAAA answers (see setup-guest.sh, keep in sync).
+cat > "$R/etc/resolv.conf" <<'EOF'
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+options timeout:2 attempts:3
+EOF
+echo 'precedence ::ffff:0:0/96  100' >> "$R/etc/gai.conf"
+
 # Guest user matching the phone owner.
 chroot "$R" useradd -m -G video,input,render -s /bin/bash melissa || true
 echo 'melissa ALL=(ALL) NOPASSWD: ALL' > "$R/etc/sudoers.d/melissa"
