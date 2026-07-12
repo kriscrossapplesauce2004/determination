@@ -49,6 +49,29 @@ BL=/sys/class/backlight/backlight/brightness
 echo $! > "$DET/run/suppressor.pid"
 touch "$DET/run/desktop-mode"
 
+# 3b. system_server freezer: SIGSTOP any running system_server so its
+#     framework Watchdog can't fire. Without this, the display thread blocks
+#     60s in SurfaceControl.nativeApplyTransaction (BLAST sync to stopped SF),
+#     Watchdog kills system_server, init/zygote respawns it, ~78s crash loop
+#     — which thrashes netd and takes wlan0 down. Freezing keeps ss suspended
+#     for the entire session; desktop-off SIGKILLs it (SIGCONT would just
+#     unblock the Watchdog with accumulated block time and it'd self-kill).
+#     Tick fast (200ms) so a fresh ss is caught before it can touch netd.
+(
+    while [ -f "$DET/run/desktop-mode" ]; do
+        pid=$(pidof system_server 2>/dev/null)
+        if [ -n "$pid" ]; then
+            state=$(awk '/^State:/{print $2; exit}' /proc/$pid/status 2>/dev/null)
+            if [ "$state" != "T" ] && [ "$state" != "t" ]; then
+                kill -STOP "$pid" 2>/dev/null &&
+                    echo "ss-freezer: STOPped system_server pid=$pid state=$state $(date)"
+            fi
+        fi
+        sleep 0.2
+    done
+) &
+echo $! > "$DET/run/ss-freezer.pid"
+
 # 4. Wait for SF to actually release the composer client + GPU context.
 i=0
 while [ "$(getprop init.svc.surfaceflinger)" != "stopped" ]; do
@@ -109,22 +132,41 @@ CLOG="$DET/log/compositor.log"
     while [ -f "$DET/run/desktop-mode" ]; do
         echo "--- launch phoc (prior consecutive fast-fails: $fails) $(date)" >> "$CLOG"
         t0=$(date +%s)
+        # Root-only prep: the udev DB and seatd need root (write /run/udev,
+        # start a system unit), and melissa's XDG_RUNTIME_DIR must be created
+        # for her before phoc (which now runs UNPRIVILEGED — see below) starts.
+        # Idempotent; re-runs harmlessly each relaunch.
         "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /bin/sh -c '
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            install -d -o melissa -g melissa -m 700 /run/user/1000
+            # phoc runs as melissa now, so its config must be world-readable —
+            # it ships 0640 root:root and phoc SEGFAULTS on a failed parse.
+            chmod a+r /etc/phoc.ini 2>/dev/null || true
+            if [ -x /usr/local/sbin/det-input-udevdb ]; then
+                det-input-udevdb 2>/dev/null && systemctl start seatd 2>/dev/null
+            fi' >> "$CLOG" 2>&1
+        # Compositor runs as melissa (uid 1000), NOT root: seatd hands it the
+        # input/drm fds (socket is group video, melissa is in it) and the GPU/
+        # dri/binder nodes are world-rw or 1000-owned (recon 2026-07-12).
+        # runuser -u keeps her supplementary groups (android_input → /dev/input);
+        # HOME/USER must be set explicitly (runuser -u does not start a login
+        # shell). WLR_BACKENDS is decided here from seatd's live state since the
+        # root prep above owns the start.
+        "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/sbin/runuser -u melissa -- /bin/sh -c '
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export HOME=/home/melissa USER=melissa LOGNAME=melissa
             export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
             export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
             export EGL_PLATFORM=hwcomposer HYBRIS_EGLPLATFORM=hwcomposer ANDROID_ROOT=/system TMPDIR=/tmp
-            export XDG_RUNTIME_DIR=/run/user/0 LANG=C.UTF-8
-            WLR_BACKENDS=hwcomposer
-            if [ -x /usr/local/sbin/det-input-udevdb ]; then
-                det-input-udevdb 2>/dev/null &&
-                systemctl start seatd 2>/dev/null &&
+            export XDG_RUNTIME_DIR=/run/user/1000 LANG=C.UTF-8
+            if systemctl is-active --quiet seatd; then
                 WLR_BACKENDS=hwcomposer,libinput
+            else
+                WLR_BACKENDS=hwcomposer
             fi
             export WLR_BACKENDS LIBSEAT_BACKEND=seatd
             [ -f /usr/local/lib/det-pidfd-shim.so ] &&
                 export LD_PRELOAD=/usr/local/lib/det-pidfd-shim.so
-            mkdir -p "$XDG_RUNTIME_DIR" && chmod 700 "$XDG_RUNTIME_DIR"
             rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
             exec stdbuf -oL -eL /usr/local/bin/phoc -C /etc/phoc.ini
         ' >> "$CLOG" 2>&1
@@ -167,7 +209,7 @@ echo $! > "$DET/run/compositor.pid"
     while [ -f "$DET/run/desktop-mode" ]; do
         [ -n "$GPID" ] && [ -d "/proc/$GPID/root" ] ||
             GPID=$("$DET/lxc/bin/lxc-info" -P "$DET" -n guest -p 2>/dev/null | awk '{print $2}')
-        if [ -n "$GPID" ] && [ -S "/proc/$GPID/root/run/user/0/wayland-0" ]; then
+        if [ -n "$GPID" ] && [ -S "/proc/$GPID/root/run/user/1000/wayland-0" ]; then
             [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
             rm -f "$DET/run/evgrab.pid"
             echo "input handed to guest — evgrab released $(date)"
@@ -184,8 +226,9 @@ echo $! > "$DET/run/compositor.pid"
 # break. Falls back to a bare foot terminal if phosh isn't installed.
 (
     while [ -f "$DET/run/desktop-mode" ]; do
-        "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /bin/sh -c '
-            export XDG_RUNTIME_DIR=/run/user/0
+        "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /usr/sbin/runuser -u melissa -- /bin/sh -c '
+            export HOME=/home/melissa USER=melissa LOGNAME=melissa
+            export XDG_RUNTIME_DIR=/run/user/1000
             i=0
             until [ -S "$XDG_RUNTIME_DIR/wayland-0" ]; do
                 i=$((i+1)); [ $i -gt 100 ] && exit 9; sleep 0.2

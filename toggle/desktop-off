@@ -13,6 +13,15 @@ rm -f "$DET/run/desktop-mode"
 [ -f "$DET/run/suppressor.pid" ] && kill "$(cat "$DET/run/suppressor.pid")" 2>/dev/null
 rm -f "$DET/run/suppressor.pid"
 
+# 1b. Kill the frozen system_server so init/zygote respawns it fresh. Its
+#     display thread is still blocked in the BLAST txn to the stopped SF —
+#     SIGCONT would just make Watchdog register the accumulated block time
+#     and self-kill anyway. SIGKILL cuts straight to a clean respawn.
+[ -f "$DET/run/ss-freezer.pid" ] && kill "$(cat "$DET/run/ss-freezer.pid")" 2>/dev/null
+rm -f "$DET/run/ss-freezer.pid"
+sspid=$(pidof system_server 2>/dev/null)
+[ -n "$sspid" ] && kill -KILL "$sspid" 2>/dev/null
+
 # 2. Guest compositor must release the composer client *cleanly* — killing it
 #    mid-frame is how the HAL state machine wedges (spec risk register).
 #    Clients first (phosh session, then any bare foot), then phoc (SIGTERM:
