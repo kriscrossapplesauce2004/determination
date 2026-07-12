@@ -228,6 +228,53 @@ echo "== phoc (droidian group/102) =="
 cd "$B" && rm -rf phoc
 git clone --depth 1 -b group/102/keypad-slide-lights https://github.com/droidian/phoc.git
 cd phoc
+
+# PATCH 3 (Determination): Ctrl+Alt+F2-F12 spawns a console terminal instead
+# of the no-op wlr_session_change_vt (no real VTs — CONFIG_FRAMEBUFFER_CONSOLE
+# is off because it fights SF for the panel). VT 1 is left as-is (phosh). The
+# helper /usr/local/bin/det-console opens a fullscreen foot terminal; it can
+# also be a dispatcher for VT-specific sessions later. Works from any external
+# keyboard; evdev-level is blocked by our EVIOCGRAB, so compositor-level is the
+# only viable hook. See guest/setup-controls.sh for the det-console script.
+F=src/keyboard.c
+grep -q 'det-console' "$F" || python3 - "$F" <<'PYEOF'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+old = '''\
+  if (keysym >= XKB_KEY_XF86Switch_VT_1 && keysym <= XKB_KEY_XF86Switch_VT_12) {
+    struct wlr_session *session = phoc_server_get_session (server);
+
+    if (session) {
+      unsigned vt = keysym - XKB_KEY_XF86Switch_VT_1 + 1;
+      wlr_session_change_vt (session, vt);
+    }
+
+    return true;
+  }'''
+new = '''\
+  if (keysym >= XKB_KEY_XF86Switch_VT_1 && keysym <= XKB_KEY_XF86Switch_VT_12) {
+    unsigned vt = keysym - XKB_KEY_XF86Switch_VT_1 + 1;
+    if (vt >= 2) {
+      /* Determination: no real VTs (fbcon off); spawn a console terminal.
+       * Fork+exec so the compositor never blocks on the child. */
+      char cmd[64];
+      snprintf (cmd, sizeof(cmd), "/usr/local/bin/det-console %u", vt);
+      g_spawn_command_line_async (cmd, NULL);
+    } else {
+      struct wlr_session *session = phoc_server_get_session (server);
+      if (session)
+        wlr_session_change_vt (session, vt);
+    }
+    return true;
+  }'''
+assert old in s, 'VT switch anchor missing in keyboard.c'
+s = s.replace(old, new, 1)
+p.write_text(s)
+print('PATCH 3 (det-console VT switch): applied')
+PYEOF
+grep -q 'det-console' "$F" || { echo "FATAL: det-console VT patch failed"; exit 1; }
+
 meson setup build --prefix=/usr/local -Dbuildtype=release \
     -Dembed-wlroots=disabled -Dman=false -Dxwayland=enabled
 ninja -C build && ninja -C build install

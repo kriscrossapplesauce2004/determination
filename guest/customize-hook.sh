@@ -58,9 +58,26 @@ options timeout:2 attempts:3
 EOF
 echo 'precedence ::ffff:0:0/96  100' >> "$R/etc/gai.conf"
 
-# Guest user matching the phone owner.
-chroot "$R" useradd -m -G video,input,render -s /bin/bash melissa || true
-echo 'melissa ALL=(ALL) NOPASSWD: ALL' > "$R/etc/sudoers.d/melissa"
+# Android device-node groups (recon 2026-07-12, artifacts/node-perms-probe.txt):
+# the session runs as the unprivileged user melissa, NOT root. GPU/dri/binder/
+# ashmem are world-rw and kgsl/ion are owned by uid/gid 1000 (== melissa ==
+# Android AID_SYSTEM); the ONLY node that gates a non-root compositor is
+# /dev/input/* (0660 root:1004, AID_INPUT). Debian's input group (gid 995) does
+# not match, so make a group at Android's numeric gid. seatd's socket is group
+# video(44), which melissa already gets.
+chroot "$R" sh -c 'getent group android_input   >/dev/null || groupadd -g 1004 android_input'
+chroot "$R" sh -c 'getent group android_graphics >/dev/null || groupadd -g 1003 android_graphics'
+chroot "$R" sh -c 'getent group android_audio    >/dev/null || groupadd -g 1005 android_audio'
+
+# Guest user matching the phone owner. uid 1000 is load-bearing (owner of
+# kgsl/ion). usermod makes membership idempotent whether or not melissa exists.
+chroot "$R" sh -c 'id melissa >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash melissa'
+chroot "$R" usermod -aG video,input,render,audio,android_input,android_graphics,android_audio melissa
+
+# Password-gated sudo (proper sudo, not NOPASSWD-ALL). No password is baked into
+# the image — set one on-device with `det passwd` before sudo will work.
+echo 'melissa ALL=(ALL) ALL' > "$R/etc/sudoers.d/melissa"
+chmod 440 "$R/etc/sudoers.d/melissa"
 
 # The libhybris packages themselves install on first boot of the guest (needs
 # the device's vendor blobs visible to configure linker namespaces sanely):

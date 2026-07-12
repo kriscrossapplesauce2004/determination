@@ -315,6 +315,26 @@ if __name__ == "__main__":
 EOS
 chmod 0755 /usr/local/bin/det-session-manager
 
+echo "== det-console (Ctrl+Alt+F2 emergency terminal) =="
+# Companion to the phoc PATCH 3 (build-wlroots-phoc.sh): Ctrl+Alt+F2-F12
+# calls det-console <vt> instead of the no-op VT switch (no fbcon on this
+# device). Opens a fullscreen foot terminal. Requires an external keyboard
+# (the on-screen squeekboard can't produce Ctrl+Alt+F*).
+cat > /usr/local/bin/det-console <<'EOS'
+#!/bin/sh
+# Determination console — fullscreen terminal on Ctrl+Alt+F<n>.
+# Called by phoc's patched VT-switch handler (keyboard.c PATCH 3).
+# Inherit the Wayland env from whoever invoked phoc (desktop-on 5e). phoc runs
+# as melissa (uid 1000), so its VT-switch handler spawns us as melissa too.
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+export LANG=C.UTF-8
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+VT="${1:-2}"
+exec foot --fullscreen --title "Console VT${VT}" -- /bin/bash -l
+EOS
+chmod 0755 /usr/local/bin/det-console
+
 echo "== app-grid launchers =="
 install -d /usr/share/applications
 # NoDisplay=false so they appear in the phosh app grid. Categories=System so

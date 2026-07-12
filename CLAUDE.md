@@ -61,6 +61,26 @@ guest `/usr/lib/android/`.
 **Input:** wlroots EVIOCGRAB handoff, libinput udev properties
 (`det-input-udevdb`), quirks for touchpanel, seatd needs /dev/tty0-2.
 
+**Non-root session (2026-07-12):** the guest desktop runs as unprivileged
+`melissa` (uid 1000), NOT root. `desktop-on` does root-only prep (udev DB, seatd,
+create `/run/user/1000`, `chmod a+r /etc/phoc.ini`) then `runuser -u melissa`
+launches phoc + phosh; runtime dir is `/run/user/1000`. Device access works
+because GPU/dri/binder/ashmem are world-rw and kgsl/ion are 1000-owned (uid
+1000 == Android AID_SYSTEM); the ONE gate is `/dev/input/*` (0660 root:1004) —
+handled by group `android_input` (gid 1004, matches AID_INPUT) that melissa
+joins. seatd socket is group `video`(44). Perms recon: `artifacts/node-perms-probe.txt`.
+`/etc/phoc.ini` MUST be world-readable or phoc segfaults on parse. Sudo is
+password-gated (`melissa ALL=(ALL) ALL`) — run `det passwd` once before sudo
+works. **nosuid gotcha:** Android's /data is `nosuid,nodev`, and the container
+rootfs is a bind of a /data subtree, so the container `/` inherits nosuid and
+sudo's setuid bit is ignored ("effective uid is not 0 … nosuid"). `guest-start`
+fixes it by `mount -o remount,bind,suid,dev,exec /` inside the container
+post-start (the host-side bind-remount of `$DET/guest` does NOT reach the
+pivoted container root on 4.14). `det guest` = melissa shell; `det guest-root`
+= root escape hatch. Known
+gap: phosh runs bare (no logind), so polkit-gated actions log "No session" —
+Logout/Reboot/Poweroff are fine (det-session-manager intercepts them).
+
 **pidfd shim:** `det-pidfd-shim.so` (LD_PRELOAD) — pidfd_open→ENOSYS forces
 SIGCHLD fallback. Required because waitid(P_PIDFD) is EINVAL on 4.14.
 
@@ -75,6 +95,7 @@ Also plays gsd-power for wake: ActiveChanged(true)→AddUserActiveWatch→SetAct
 corrected capacity over `battery/capacity` in guest mount ns.
 
 **Container PTYs:** guest-start remounts devpts + symlinks /dev/ptmx (ptmxmode=000 fix).
+Same post-start block remounts `/` suid (nosuid /data would break sudo — see non-root session).
 
 **sway is dead:** incompatible with the droidian wlroots hybrid 0.17/0.18 API.
 

@@ -39,10 +39,28 @@ EOF
 ln -sf /system/product "$G/product" 2>/dev/null || true
 ln -sf /system/system_ext "$G/system_ext" 2>/dev/null || true
 
-# Guest user
-CH "id melissa >/dev/null 2>&1 || useradd -m -G video,input,render -s /bin/bash melissa"
+# Android device-node groups (recon 2026-07-12, artifacts/node-perms-probe.txt):
+# the session runs as the unprivileged user melissa, NOT root. Almost every
+# node it touches is already reachable — GPU/dri/binder/ashmem are world-rw and
+# kgsl/ion are owned by uid/gid 1000 (== melissa == Android AID_SYSTEM). The
+# ONLY gate is /dev/input/* (0660 root:1004, AID_INPUT): Debian's input group is
+# gid 995 and does NOT match, so we create a group at Android's numeric gid and
+# add melissa. seatd's socket is group video(44), which melissa already gets.
+CH "getent group android_input   >/dev/null || groupadd -g 1004 android_input"
+CH "getent group android_graphics >/dev/null || groupadd -g 1003 android_graphics"
+CH "getent group android_audio    >/dev/null || groupadd -g 1005 android_audio"
+
+# Guest user matching the phone owner. uid 1000 is load-bearing (owner of
+# kgsl/ion); keep it pinned. usermod makes group membership idempotent whether
+# or not the account already exists.
+CH "id melissa >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash melissa"
+CH "usermod -aG video,input,render,audio,android_input,android_graphics,android_audio melissa"
+
+# Password-gated sudo (proper sudo, not NOPASSWD-ALL). No password is baked into
+# the image — set one on-device with \`det passwd\` before sudo will work. Guest
+# provisioning does not need it: setup-*.sh run as root via lxc-attach, not sudo.
 mkdir -p "$G/etc/sudoers.d"
-echo 'melissa ALL=(ALL) NOPASSWD: ALL' > "$G/etc/sudoers.d/melissa"
+echo 'melissa ALL=(ALL) ALL' > "$G/etc/sudoers.d/melissa"
 chmod 440 "$G/etc/sudoers.d/melissa"
 
 # Hostname + hosts

@@ -6,7 +6,9 @@
 #   det find              discover the phone's current wireless port (mdns)
 #   det connect           discover + connect
 #   det shell [cmd...]    root shell (Magisk su) on the phone
-#   det guest [cmd...]    shell inside the LXC guest (bash -l if no cmd)
+#   det guest [cmd...]    shell inside the LXC guest AS melissa (bash -l if no cmd)
+#   det guest-root [cmd]  root shell inside the guest (admin escape hatch)
+#   det passwd            set melissa's guest password (needed before sudo works)
 #   det on | det off      enter / leave desktop mode (detached; panel changes!)
 #   det log [name] [n]    tail a /data/determination/log file (default toggle)
 #   det status            connection, root, kernel, mode, guest state
@@ -56,12 +58,43 @@ shell)
 guest)
     ensure; shift
     G=/data/determination
+    # Attach as the unprivileged guest user melissa (root shell: det guest-root).
+    # runuser -l reads /etc/group, so melissa keeps her supplementary groups
+    # (video/android_input/…) — lxc-attach --uid would drop them. Absolute path:
+    # lxc-attach hands a minimal PATH that omits /usr/sbin.
     # The whole su -c argument must be ONE quoted string (see CLAUDE.md).
+    if [ $# -gt 0 ]; then
+        adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /usr/sbin/runuser -l melissa -c \"$*\"'"
+    else
+        adb shell -t "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /usr/sbin/runuser -l melissa'"
+    fi ;;
+guest-root)
+    ensure; shift
+    G=/data/determination
+    # Root shell inside the guest — admin escape hatch (was the old `det guest`).
     if [ $# -gt 0 ]; then
         adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh -lc \"$*\"'"
     else
         adb shell -t "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /bin/bash -l'"
     fi ;;
+passwd)
+    ensure
+    G=/data/determination
+    # Set melissa's guest password. passwd(1) reads /dev/tty with echo off, and
+    # that controlling tty does NOT survive adb->su->lxc-attach (the prompt is
+    # lost and the typed password just echoes to the shell). So read it HERE,
+    # where there is a real terminal, and feed chpasswd over STDIN — never argv,
+    # so it stays out of ps. No -t: we want raw stdin piped through, not a pty.
+    printf 'New password for guest user melissa: ' >&2
+    stty -echo 2>/dev/null; read pw;  stty echo 2>/dev/null; echo >&2
+    printf 'Retype new password: '                 >&2
+    stty -echo 2>/dev/null; read pw2; stty echo 2>/dev/null; echo >&2
+    [ -n "$pw" ]     || { echo 'det: empty password refused' >&2; exit 1; }
+    [ "$pw" = "$pw2" ] || { echo 'det: passwords do not match' >&2; exit 1; }
+    if printf 'melissa:%s\n' "$pw" | \
+        adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /usr/sbin/chpasswd'"
+    then echo 'det: password set — sudo now works for melissa' >&2
+    else echo 'det: chpasswd failed' >&2; exit 1; fi ;;
 on)
     ensure
     # setsid-detach: the SF handoff must not die with this adb session.
@@ -117,5 +150,5 @@ migrate)
     adb push migrate-to-determination.sh /sdcard/Download/migrate-to-determination.sh >/dev/null
     adb shell su -c 'sh /sdcard/Download/migrate-to-determination.sh' </dev/null ;;
 *)
-    sed -n '6,18p' "$0"; exit 2 ;;
+    sed -n '6,20p' "$0"; exit 2 ;;
 esac

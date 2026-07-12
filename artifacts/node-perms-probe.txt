@@ -1,0 +1,94 @@
+===== DEVICE NODES (numeric owner:group, deref) =====
+crw-rw-rw- 1 1000 1000 503,   0 2026-07-12 13:15 /dev/kgsl-3d0
+crw-rw-rw- 1 0 0 10,  59 1970-01-15 13:04 /dev/ashmem
+crw-rw-r-- 1 1000 1000 10,  63 1970-01-15 13:04 /dev/ion
+crw-rw-rw- 1 0 0 488,   1 1970-01-15 13:04 /dev/binder
+crw-rw-rw- 1 0 0 488,   2 1970-01-15 13:04 /dev/hwbinder
+crw-rw-rw- 1 0 0 488,   3 1970-01-15 13:04 /dev/vndbinder
+--- /dev/dri ---
+total 0
+crw-rw-rw- 1 0 1003 226,   0 1970-01-15 13:04 card0
+crw-rw-rw- 1 0 1003 226, 128 1970-01-15 13:04 renderD128
+--- /dev/input (first 12) ---
+total 0
+crw-rw---- 1 0 1004 13,  64 1970-01-15 13:04 event0
+crw-rw---- 1 0 1004 13,  65 1970-01-15 13:04 event1
+crw-rw---- 1 0 1004 13,  74 1970-01-15 13:04 event10
+crw-rw---- 1 0 1004 13,  75 2026-07-12 13:09 event11
+crw-rw---- 1 0 1004 13,  76 2026-07-12 13:09 event12
+crw-rw---- 1 0 1004 13,  66 1970-01-15 13:04 event2
+crw-rw---- 1 0 1004 13,  67 1970-01-15 13:04 event3
+crw-rw---- 1 0 1004 13,  68 1970-01-15 13:04 event4
+crw-rw---- 1 0 1004 13,  69 1970-01-15 13:04 event5
+crw-rw---- 1 0 1004 13,  70 1970-01-15 13:04 event6
+crw-rw---- 1 0 1004 13,  71 1970-01-15 13:04 event7
+crw-rw---- 1 0 1004 13,  72 1970-01-15 13:04 event8
+crw-rw---- 1 0 1004 13,  73 1970-01-15 13:04 event9
+
+===== ANDROID gid name map (from bionic) =====
+graphics -> input -> gpu_service -> system -> audio -> inet -> media -> 36
+
+===== INSIDE GUEST =====
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+--- melissa ---
+NO melissa user
+--- guest sees nodes (numeric) ---
+crw-rw-rw- 1 1000 1000 503,   0 2026-07-12 13:15 /dev/kgsl-3d0
+crw-rw-rw- 1 0 0 10,  59 1970-01-15 13:04 /dev/ashmem
+crw-rw-r-- 1 1000 1000 10,  63 1970-01-15 13:04 /dev/ion
+crw-rw-rw- 1 0 0 488,   1 1970-01-15 13:04 /dev/binder
+crw-rw-rw- 1 0 0 488,   2 1970-01-15 13:04 /dev/hwbinder
+total 0
+crw-rw-rw- 1 0 1003 226,   0 1970-01-15 13:04 card0
+crw-rw-rw- 1 0 1003 226, 128 1970-01-15 13:04 renderD128
+total 0
+crw-rw---- 1 0 1004 13,  64 1970-01-15 13:04 event0
+crw-rw---- 1 0 1004 13,  65 1970-01-15 13:04 event1
+crw-rw---- 1 0 1004 13,  74 1970-01-15 13:04 event10
+crw-rw---- 1 0 1004 13,  75 2026-07-12 13:09 event11
+crw-rw---- 1 0 1004 13,  76 2026-07-12 13:09 event12
+--- seatd ---
+srwxrwx--- 1 0 44 0 2026-07-12 13:10 /run/seatd.sock
+--- existing /etc/group tail ---
+systemd-journal:x:999:
+systemd-network:x:998:
+crontab:x:997:
+messagebus:x:996:
+input:x:995:melissa
+sgx:x:994:
+clock:x:993:
+kvm:x:992:
+render:x:991:melissa
+netdev:x:101:
+melissa:x:1000:
+_ssh:x:102:
+geoclue:x:103:
+scanner:x:104:
+polkitd:x:990:
+pipewire:x:105:
+colord:x:106:
+feedbackd:x:107:
+lpadmin:x:108:
+avahi:x:109:
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+--- passwd melissa ---
+melissa:x:1000:1000::/home/melissa:/bin/bash
+--- id melissa ---
+uid=1000(melissa) gid=1000(melissa) groups=1000(melissa),44(video),995(input),991(render)
+--- video/render/input/seat gids ---
+video:x:44:melissa
+render:x:991:melissa
+input:x:995:melissa
+--- is gid 1004 taken? gid 1003? ---
+video:x:44:melissa
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+melissa now: uid=1000(melissa) gid=1000(melissa) groups=1000(melissa),44(video),995(input),991(render),1004(android_input),1003(android_graphics)
+=== open() tests AS melissa (uid 1000) ===
+  OK  read-open /dev/input/event0
+  OK  read-open /dev/dri/renderD128
+  OK  read-open /dev/dri/card0
+  OK  read-open /dev/kgsl-3d0
+  OK  read-open /dev/ion
+  OK  read-open /dev/ashmem
+  OK  read-open /dev/binder
+  OK  seatd.sock rw

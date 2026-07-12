@@ -70,6 +70,11 @@ lxc.mount.entry = /dev/dri dev/dri none rbind,create=dir,optional 0 0
 # Input — nodes are visible always; EXCLUSIVE ACCESS is arbitrated by
 # EVIOCGRAB at toggle time (spec §4), not by mount games.
 lxc.mount.entry = /dev/input dev/input none rbind,create=dir,optional 0 0
+# Audio — QCOM tinyALSA nodes (system:audio 660). Android's audioserver keeps
+# the mixer routes live so guest raw ALSA can push PCM without owning the HAL.
+# melissa is in guest group `android_audio` (gid 1005 == AID_AUDIO) — see
+# customize-hook.sh / setup-guest.sh.
+lxc.mount.entry = /dev/snd dev/snd none rbind,create=dir,optional 0 0
 
 # --- Guest -> host control channel (spec §4 convenience) ---
 # The guest cannot run root actions on the Android side (leave desktop mode,

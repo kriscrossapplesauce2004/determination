@@ -133,6 +133,14 @@ fi
 
 # Post-start in-guest fixups, ONE lxc-attach (each attach is a full
 # fork+setns round trip — three of them was pure startup latency):
+# - suid root: Android's /data is mounted nosuid,nodev, and the container
+#   rootfs is a bind of a /data subtree, so the container's own `/` inherits
+#   nosuid — sudo's setuid bit is then ignored ("effective uid is not 0 ...
+#   nosuid", found 2026-07-12). The host-side bind-remount above sets suid on
+#   $DET/guest, but that does NOT reach the container root LXC pivots into on
+#   4.14, so clear it here on `/` itself. `remount,bind` is required to change
+#   a bind mount's per-mount flags (a plain remount targets the superblock).
+#   This is what makes password-gated sudo for melissa actually elevate.
 # - ashmem: modern libcutils opens /dev/ashmem<boot_id> — a per-boot name the
 #   static lxc config can't carry. Without it composer FMQ creation fails and
 #   every hwc2 validate returns NO_RESOURCES (found 2026-07-05). Plain misc
@@ -147,7 +155,8 @@ fi
 #   VTs on this device (no fbcon), so the ioctls are harmless.
 BOOTID=$(cat /proc/sys/kernel/random/boot_id)
 lxc-attach -P "$DET" -n guest -- /bin/sh -c \
-    "[ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }; \
+    "mount -o remount,bind,suid,dev,exec / 2>/dev/null; \
+     [ -e /dev/ashmem$BOOTID ] || { mknod /dev/ashmem$BOOTID c 10 59 && chmod 666 /dev/ashmem$BOOTID; }; \
      mount -o remount,gid=5,mode=620,ptmxmode=666 devpts /dev/pts 2>/dev/null; \
      [ -e /dev/ptmx ] || ln -sf pts/ptmx /dev/ptmx; \
      for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
