@@ -92,7 +92,13 @@ Also plays gsd-power for wake: ActiveChanged(true)→AddUserActiveWatch→SetAct
 `/data/determination/run/control`. Guest writes commands via `/mnt/det-control`.
 
 **Battery:** `bms` node is accurate (not `battery`). `det-battery` bind-mounts
-corrected capacity over `battery/capacity` in guest mount ns.
+the corrected capacity over `battery/capacity`. The bind is re-asserted every
+poll pass, not once: the qpnp-smb5 charger re-enumerates its power_supply node
+on USB plug/unplug and silently drops the bind (else phosh falls back to the
+stuck raw value). The bind reaches UPower even though upowerd runs in its own
+private mount namespace, because `/sys` is a shared mount so the pid1-ns bind
+propagates in. (Separate, likely pre-existing: UPower reports `discharging`
+while charging — `ac` line_power is online=0, only `pc_port`/`usb` are online=1.)
 
 **Container PTYs:** guest-start remounts devpts + symlinks /dev/ptmx (ptmxmode=000 fix).
 Same post-start block remounts `/` suid (nosuid /data would break sudo — see non-root session).
