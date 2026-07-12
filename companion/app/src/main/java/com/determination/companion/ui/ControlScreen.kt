@@ -1,10 +1,19 @@
 package com.determination.companion.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -28,32 +37,47 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.determination.companion.BuildConfig
 import com.determination.companion.DetViewModel
+import com.determination.companion.Root
 import com.determination.companion.RootState
+import kotlinx.coroutines.delay
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ControlScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier) {
     var confirmEnter by remember { mutableStateOf(false) }
     var confirmPower by remember { mutableStateOf<String?>(null) }
+    val haptics = LocalHapticFeedback.current
 
     val s = vm.status
     val desktop = s["mode"] == "desktop"
@@ -61,56 +85,83 @@ fun ControlScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier
     val rootOk = vm.rootState == RootState.GRANTED
     val busy = vm.busy != null
 
-    Column(
-        modifier
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+    // Live status: quiet re-poll while this screen is visible.
+    LaunchedEffect(rootOk) {
+        while (rootOk) {
+            delay(5_000)
+            vm.refreshQuiet()
+        }
+    }
+
+    if (rootOk && s.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { LoadingIndicator() }
+        return
+    }
+
+    PullToRefreshBox(
+        isRefreshing = vm.busy == "status",
+        onRefresh = { vm.refresh() },
+        modifier = modifier,
     ) {
-        RootChip(vm.rootState)
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            RootChip(vm.rootState)
 
-        if (vm.rootState == RootState.DENIED) {
-            GlassCard {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Root required", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "This app drives Determination through Magisk su. Open Magisk → " +
-                            "Superuser and grant Determination (screen must be unlocked), then retry.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    FilledTonalButton(onClick = { vm.refresh() }) { Text("Retry") }
+            if (vm.rootState == RootState.DENIED) {
+                GlassCard {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Root required", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "This app drives Determination through Magisk su. Open Magisk → " +
+                                "Superuser and grant Determination (screen must be unlocked), then retry.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        FilledTonalButton(onClick = { vm.refresh() }) { Text("Retry") }
+                    }
                 }
+                return@Column
             }
-            return@Column
-        }
 
-        if (wide) {
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(Modifier.weight(1f)) { StatusCard(vm, desktop) }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Actions(vm, desktop, installed, rootOk, busy,
-                        onEnter = { confirmEnter = true }, onPower = { confirmPower = it })
+            if (wide) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(Modifier.weight(1f)) { StatusCard(vm, desktop) }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        Actions(vm, desktop, installed, rootOk, busy,
+                            onEnter = { confirmEnter = true }, onPower = { confirmPower = it })
+                    }
                 }
+            } else {
+                StatusCard(vm, desktop)
+                Actions(vm, desktop, installed, rootOk, busy,
+                    onEnter = { confirmEnter = true }, onPower = { confirmPower = it })
             }
-        } else {
-            StatusCard(vm, desktop)
-            Actions(vm, desktop, installed, rootOk, busy,
-                onEnter = { confirmEnter = true }, onPower = { confirmPower = it })
-        }
 
-        SectionLabel("Diagnostics")
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            vm.logs.take(if (wide) 4 else 2).forEach { LogChip(it, vm) }
-        }
-        if (!wide) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            vm.logs.drop(2).forEach { LogChip(it, vm) }
+            SectionLabel("Diagnostics")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                vm.logs.take(if (wide) 4 else 2).forEach { LogChip(it, vm) }
+            }
+            if (!wide) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                vm.logs.drop(2).forEach { LogChip(it, vm) }
+            }
+
+            Text(
+                "Determination v${BuildConfig.VERSION_NAME} · stay determined ❤",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp),
+            )
         }
     }
 
     if (confirmEnter) {
         AlertDialog(
             onDismissRequest = { confirmEnter = false },
+            icon = { Icon(Icons.Rounded.DesktopWindows, null) },
             title = { Text("Enter desktop mode?") },
             text = {
                 Text(
@@ -121,7 +172,8 @@ fun ControlScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier
             confirmButton = {
                 Button(onClick = {
                     confirmEnter = false
-                    vm.act("enter", refreshAfter = false) { com.determination.companion.Root.enterDesktop() }
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    vm.act("enter", refreshAfter = false) { Root.enterDesktop() }
                 }) { Text("Enter") }
             },
             dismissButton = { TextButton(onClick = { confirmEnter = false }) { Text("Cancel") } },
@@ -142,9 +194,9 @@ fun ControlScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier
                     ),
                     onClick = {
                         confirmPower = null
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         vm.act("power", refreshAfter = false) {
-                            if (which == "reboot") com.determination.companion.Root.rebootPhone()
-                            else com.determination.companion.Root.powerOff()
+                            if (which == "reboot") Root.rebootPhone() else Root.powerOff()
                         }
                     },
                 ) { Text(if (which == "reboot") "Reboot" else "Power off") }
@@ -165,6 +217,36 @@ private fun RootChip(state: RootState) {
         leadingIcon = { Icon(icon, null, Modifier.size(18.dp)) })
 }
 
+/** Slowly spinning expressive shape badge behind the mode icon. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ModeBadge(desktop: Boolean) {
+    val spin by rememberInfiniteTransition(label = "badge")
+        .animateFloat(
+            0f, 360f,
+            infiniteRepeatable(tween(40_000, easing = LinearEasing)),
+            label = "spin",
+        )
+    val container by animateColorAsState(
+        MaterialTheme.colorScheme.primaryContainer, label = "badgeColor",
+    )
+    Box(contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(64.dp)
+                .rotate(spin)
+                .clip(MaterialShapes.Cookie9Sided.toShape())
+                .background(container),
+        )
+        Icon(
+            if (desktop) Icons.Rounded.DesktopWindows else Icons.Rounded.Smartphone,
+            null,
+            Modifier.size(30.dp),
+            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
@@ -172,13 +254,8 @@ private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
     GlassCard {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (desktop) Icons.Rounded.DesktopWindows else Icons.Rounded.Smartphone,
-                    null,
-                    Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Spacer(Modifier.width(12.dp))
+                ModeBadge(desktop)
+                Spacer(Modifier.width(16.dp))
                 Column {
                     Text(
                         if (desktop) "Desktop mode" else "Phone mode",
@@ -194,24 +271,52 @@ private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
                 }
             }
 
-            StatusRow("Guest", (s["guest"] ?: "?") +
-                (s["ip"]?.takeIf { it.isNotBlank() }?.let { "  ·  $it" } ?: ""))
-            StatusRow("SurfaceFlinger", s["sf"] ?: "?")
-            StatusRow("Host agent", s["agent"] ?: "?")
-            StatusRow("Kernel", s["kernel"] ?: "?")
+            Spacer(Modifier.height(2.dp))
+            StatusRow(
+                "Guest",
+                (s["guest"] ?: "?") + (s["ip"]?.takeIf { it.isNotBlank() }?.let { "  ·  $it" } ?: ""),
+                good = s["guest"] == "running",
+            )
+            StatusRow(
+                "SurfaceFlinger", s["sf"] ?: "?",
+                // In desktop mode a STOPPED SF is the healthy state.
+                good = if (desktop) s["sf"] == "stopped" else s["sf"] == "running",
+            )
+            StatusRow("Host agent", s["agent"] ?: "?", good = s["agent"] == "up")
+            StatusRow("Kernel", s["kernel"] ?: "?", good = null)
+            StatusRow(
+                "Uptime",
+                listOfNotNull(
+                    s["uptime"]?.takeIf { it.isNotBlank() },
+                    s["datafree"]?.takeIf { it.isNotBlank() }?.let { "$it free" },
+                ).joinToString("  ·  ").ifBlank { "?" },
+                good = null,
+            )
 
             val batt = s["batt"]?.toIntOrNull()
             if (batt != null) {
+                val charging = s["battstat"]?.contains("harging") == true
+                val low = batt <= 15 && !charging
                 Spacer(Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (charging) {
+                        Icon(
+                            Icons.Rounded.Bolt, "charging",
+                            Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                     Text(
                         "Battery  $batt%  ·  ${s["battmv"] ?: "?"} mV  ·  ${s["battstat"] ?: ""}",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = if (low) MaterialTheme.colorScheme.error
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 LinearWavyProgressIndicator(
                     progress = { batt / 100f },
+                    color = if (low) MaterialTheme.colorScheme.error
+                    else MaterialTheme.colorScheme.primary,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -220,14 +325,26 @@ private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
 }
 
 @Composable
-private fun StatusRow(label: String, value: String) {
-    Row {
+private fun StatusRow(label: String, value: String, good: Boolean?) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             label,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(130.dp),
+            modifier = Modifier.width(118.dp),
         )
+        if (good != null) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(MaterialTheme.shapes.small)
+                    .background(
+                        if (good) Color(0xFF54B87B)
+                        else MaterialTheme.colorScheme.error,
+                    ),
+            )
+            Spacer(Modifier.width(8.dp))
+        }
         Text(
             value,
             style = MaterialTheme.typography.bodyMedium,
@@ -260,7 +377,7 @@ private fun Actions(
             }
         } else {
             Button(
-                onClick = { vm.act("exit") { com.determination.companion.Root.exitDesktop() } },
+                onClick = { vm.act("exit") { Root.exitDesktop() } },
                 enabled = rootOk && !busy,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
             ) {
@@ -269,7 +386,7 @@ private fun Actions(
                 Text("Exit Desktop Mode", style = MaterialTheme.typography.titleMedium)
             }
             FilledTonalButton(
-                onClick = { vm.act("recover") { com.determination.companion.Root.recoverDesktop() } },
+                onClick = { vm.act("recover") { Root.recoverDesktop() } },
                 enabled = rootOk && !busy,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -281,7 +398,7 @@ private fun Actions(
 
         SectionLabel("Guest & power")
         FilledTonalButton(
-            onClick = { vm.act("guest") { com.determination.companion.Root.restartGuest() } },
+            onClick = { vm.act("guest") { Root.restartGuest() } },
             enabled = rootOk && installed && !desktop && !busy,
             modifier = Modifier.fillMaxWidth(),
         ) {
@@ -337,7 +454,10 @@ fun GlassCard(content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = glassColor()),
+        colors = CardDefaults.cardColors(
+            containerColor = glassColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) { content() }

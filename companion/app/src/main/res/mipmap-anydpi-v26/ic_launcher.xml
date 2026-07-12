@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Adaptive launcher icon: soul on the battle-box, plus a monochrome layer so
+     Material You themed icons (Android 13+) tint it with the wallpaper color. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/det_ink" />
+    <foreground android:drawable="@drawable/ic_soul_fg" />
+    <monochrome android:drawable="@drawable/ic_soul_mono" />
+</adaptive-icon>

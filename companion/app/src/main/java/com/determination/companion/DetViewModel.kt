@@ -81,6 +81,7 @@ class DetViewModel : ViewModel() {
     var status by mutableStateOf<Map<String, String>>(emptyMap()); private set
     var busy by mutableStateOf<String?>(null); private set
     var message by mutableStateOf<String?>(null)  // one-shot snackbar text
+    var rebootPrompt by mutableStateOf<String?>(null)  // "why" text → offer reboot
     var logText by mutableStateOf<String?>(null)
     var logName by mutableStateOf<String?>(null)
 
@@ -104,6 +105,12 @@ class DetViewModel : ViewModel() {
             status = if (hasRoot) Root.status() else emptyMap()
             busy = null
         }
+    }
+
+    /** Background poll: refresh status without the busy spinner (no UI flicker). */
+    fun refreshQuiet() {
+        if (rootState != RootState.GRANTED || busy != null) return
+        viewModelScope.launch(Dispatchers.IO) { status = Root.status() }
     }
 
     fun refreshInstaller() {
@@ -144,8 +151,8 @@ class DetViewModel : ViewModel() {
         busy = "module"
         viewModelScope.launch(Dispatchers.IO) {
             val r = Root.installModuleZip(path)
-            message = if (r.ok) "Module installed — reboot to apply"
-            else "Install failed: ${r.err.ifBlank { r.out }}"
+            if (r.ok) rebootPrompt = "Module installed. It takes effect on the next boot."
+            else message = "Install failed: ${r.err.ifBlank { r.out }}"
             inventory = Root.inventory()
             busy = null
         }
@@ -155,8 +162,8 @@ class DetViewModel : ViewModel() {
         busy = "flash"
         viewModelScope.launch(Dispatchers.IO) {
             val r = Root.flashBootImage(path)
-            message = if (r.ok) "Boot image flashed — reboot to apply"
-            else "Flash failed: ${r.err.ifBlank { r.out }}"
+            if (r.ok) rebootPrompt = "Boot image flashed to the active slot."
+            else message = "Flash failed: ${r.err.ifBlank { r.out }}"
             busy = null
         }
     }

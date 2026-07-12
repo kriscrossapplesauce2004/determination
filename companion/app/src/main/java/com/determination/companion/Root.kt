@@ -53,6 +53,9 @@ object Root {
             echo "batt=${'$'}(cat /sys/class/power_supply/bms/capacity 2>/dev/null)"
             echo "battmv=${'$'}(( ${'$'}(cat /sys/class/power_supply/bms/voltage_now 2>/dev/null || echo 0) / 1000 ))"
             echo "battstat=${'$'}(cat /sys/class/power_supply/battery/status 2>/dev/null)"
+            up=${'$'}(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
+            echo "uptime=${'$'}((up / 3600))h ${'$'}(( (up % 3600) / 60 ))m"
+            echo "datafree=${'$'}(df -h /data 2>/dev/null | awk 'NR==2{print ${'$'}4}')"
         """.trimIndent()
         val r = run(script, 12)
         return parseKv(r.out)

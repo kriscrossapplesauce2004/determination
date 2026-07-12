@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,9 +23,13 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Smartphone
 import androidx.compose.material.icons.rounded.SystemUpdateAlt
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
@@ -40,8 +46,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
@@ -56,9 +66,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.determination.companion.DetViewModel
+import com.determination.companion.R
+import com.determination.companion.Root
 import com.determination.companion.RootState
 
 enum class Dest(
@@ -89,6 +104,9 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
     val snackbar = remember { SnackbarHostState() }
     val compact = windowSize.widthSizeClass == WindowWidthSizeClass.Compact
     val expanded = windowSize.widthSizeClass == WindowWidthSizeClass.Expanded
+    // Landscape phone: barely any height — swap the large collapsing bar for a
+    // pinned small one so content gets the room.
+    val shortScreen = windowSize.heightSizeClass == WindowHeightSizeClass.Compact
 
     LaunchedEffect(vm.message) {
         vm.message?.let { snackbar.showSnackbar(it); vm.message = null }
@@ -117,42 +135,59 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     }
                 }
             }
-            val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            val scroll =
+                if (shortScreen) TopAppBarDefaults.pinnedScrollBehavior()
+                else TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+            val barTitle: @Composable () -> Unit = {
+                Column {
+                    Text(dest.headline)
+                    if (!shortScreen) Text(
+                        dest.tagline,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            val barNav: @Composable () -> Unit = {
+                Image(
+                    painterResource(R.drawable.ic_soul),
+                    contentDescription = null,
+                    modifier = Modifier.padding(horizontal = 12.dp).size(28.dp),
+                )
+            }
+            val barActions: @Composable RowScope.() -> Unit = {
+                if (vm.busy != null) {
+                    LoadingIndicator(Modifier.size(40.dp))
+                } else {
+                    IconButton(onClick = {
+                        when (dest) {
+                            Dest.Control -> vm.refresh()
+                            Dest.Install -> vm.refreshInstaller()
+                            Dest.Software -> vm.refreshSoftware()
+                        }
+                    }) { Icon(Icons.Rounded.Refresh, "Refresh") }
+                }
+            }
+            val barColors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color.Transparent,
+                scrolledContainerColor =
+                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+            )
             Scaffold(
                 modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
                 containerColor = Color.Transparent,
                 topBar = {
-                    LargeTopAppBar(
-                        title = {
-                            Column {
-                                Text(dest.headline)
-                                Text(
-                                    dest.tagline,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        },
-                        actions = {
-                            if (vm.busy != null) {
-                                LoadingIndicator(Modifier.size(40.dp))
-                            } else {
-                                IconButton(onClick = {
-                                    when (dest) {
-                                        Dest.Control -> vm.refresh()
-                                        Dest.Install -> vm.refreshInstaller()
-                                        Dest.Software -> vm.refreshSoftware()
-                                    }
-                                }) { Icon(Icons.Rounded.Refresh, "Refresh") }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            scrolledContainerColor =
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
-                        ),
-                        scrollBehavior = scroll,
-                    )
+                    if (shortScreen) {
+                        TopAppBar(
+                            title = barTitle, navigationIcon = barNav, actions = barActions,
+                            colors = barColors, scrollBehavior = scroll,
+                        )
+                    } else {
+                        LargeTopAppBar(
+                            title = barTitle, navigationIcon = barNav, actions = barActions,
+                            colors = barColors, scrollBehavior = scroll,
+                        )
+                    }
                 },
                 bottomBar = {
                     if (compact) {
@@ -187,7 +222,13 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                             .padding(pad),
                         contentAlignment = Alignment.TopCenter,
                     ) {
-                        val content = Modifier.widthIn(max = if (expanded) 1040.dp else 640.dp)
+                        val content = Modifier.widthIn(
+                            max = when {
+                                expanded -> 1080.dp
+                                !compact -> 760.dp
+                                else -> 640.dp
+                            },
+                        )
                         when (d) {
                             Dest.Control -> ControlScreen(vm, expanded, content)
                             Dest.Install -> InstallScreen(vm, expanded, content)
@@ -201,12 +242,25 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
 
     // Log viewer sheet (shared by every screen).
     if (vm.logName != null) {
+        val clipboard = LocalClipboardManager.current
         ModalBottomSheet(
             onDismissRequest = { vm.closeLog() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 24.dp)) {
-                Text(vm.logName ?: "", style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        vm.logName ?: "",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = {
+                        vm.logText?.let { clipboard.setText(AnnotatedString(it)) }
+                    }) { Icon(Icons.Rounded.ContentCopy, "Copy") }
+                    IconButton(onClick = { vm.openLog(vm.logName ?: return@IconButton) }) {
+                        Icon(Icons.Rounded.Refresh, "Reload")
+                    }
+                }
                 Box(Modifier.size(8.dp))
                 val text = vm.logText
                 if (text == null) {
@@ -218,12 +272,33 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                         text,
                         fontFamily = FontFamily.Monospace,
                         style = MaterialTheme.typography.bodySmall,
+                        softWrap = false,
                         modifier = Modifier
                             .verticalScroll(rememberScrollState())
+                            .horizontalScroll(rememberScrollState())
                             .fillMaxWidth(),
                     )
                 }
             }
         }
+    }
+
+    // "Reboot to apply" prompt after a successful module install / boot flash.
+    vm.rebootPrompt?.let { why ->
+        AlertDialog(
+            onDismissRequest = { vm.rebootPrompt = null },
+            icon = { Icon(Icons.Rounded.RestartAlt, null) },
+            title = { Text("Reboot to apply?") },
+            text = { Text(why) },
+            confirmButton = {
+                Button(onClick = {
+                    vm.rebootPrompt = null
+                    vm.act("power", refreshAfter = false) { Root.rebootPhone() }
+                }) { Text("Reboot now") }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.rebootPrompt = null }) { Text("Later") }
+            },
+        )
     }
 }

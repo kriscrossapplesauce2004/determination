@@ -13,8 +13,10 @@ import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.expressiveLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -68,6 +70,11 @@ fun DetTheme(content: @Composable () -> Unit) {
  * "Aurora glass" backdrop: three big soft radial blobs in the theme's accent
  * colors under every screen. Translucent surfaces above it read as frosted
  * glass without needing (unavailable) backdrop blur.
+ *
+ * Also anchors LocalContentColor to onSurface: the translucent surfaces used
+ * everywhere are alpha-modified colors that contentColorFor() can't match, so
+ * without this the default content color falls through to black — invisible
+ * text on the dark theme.
  */
 @Composable
 fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
@@ -99,7 +106,9 @@ fun AuroraBackground(modifier: Modifier = Modifier, content: @Composable () -> U
                 center = Offset(w * 0.3f, h * 0.95f), radius = w,
             )
         }
-        content()
+        CompositionLocalProvider(LocalContentColor provides cs.onSurface) {
+            content()
+        }
     }
 }
 
