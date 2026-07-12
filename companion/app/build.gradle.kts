@@ -12,8 +12,8 @@ android {
         applicationId = "com.determination.companion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.5.1"
+        versionCode = 7
+        versionName = "0.5.2"
     }
 
     buildTypes {
@@ -53,4 +53,10 @@ dependencies {
     implementation("androidx.compose.material3:material3:1.4.0-alpha18")
     implementation("androidx.compose.material3:material3-window-size-class:1.4.0-alpha18")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
+
+    // Real backdrop blur (RenderEffect on 12+, scrim fallback below).
+    // 1.6.x is the last line on Compose 1.8/compileSdk 35 — 1.7+ pulls
+    // androidx deps that demand SDK 36 / AGP 8.9.
+    implementation("dev.chrisbanes.haze:haze:1.6.10")
+    implementation("dev.chrisbanes.haze:haze-materials:1.6.10")
 }

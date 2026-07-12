@@ -42,8 +42,6 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -53,7 +51,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -75,10 +72,17 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.clip
 import com.determination.companion.DetViewModel
 import com.determination.companion.R
 import com.determination.companion.Root
 import com.determination.companion.RootState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
+import dev.chrisbanes.haze.materials.HazeMaterials
 
 enum class Dest(
     val label: String,
@@ -101,7 +105,11 @@ enum class Dest(
     ),
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalHazeMaterialsApi::class,
+)
 @Composable
 fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
     var dest by rememberSaveable { mutableStateOf(Dest.Control) }
@@ -124,21 +132,10 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
         }
     }
 
+    val hazeState = rememberHazeState()
+
     AuroraBackground {
         Row(Modifier.fillMaxSize()) {
-            if (!compact) {
-                NavigationRail(containerColor = Color.Transparent) {
-                    Box(Modifier.size(8.dp))
-                    Dest.entries.forEach { d ->
-                        NavigationRailItem(
-                            selected = dest == d,
-                            onClick = { dest = d },
-                            icon = { Icon(if (dest == d) d.activeIcon else d.icon, d.label) },
-                            label = { Text(d.label) },
-                        )
-                    }
-                }
-            }
             val scroll =
                 if (shortScreen) TopAppBarDefaults.pinnedScrollBehavior()
                 else TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -166,43 +163,33 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     Dest.Software -> vm.refreshSoftware()
                 }
             }
-            // On compact the refresh affordance lives in the floating bubble
-            // next to the nav pill; elsewhere it stays in the top bar.
-            val barActions: @Composable RowScope.() -> Unit = {
-                if (!compact) {
-                    if (vm.busy != null) {
-                        LoadingIndicator(Modifier.size(40.dp))
-                    } else {
-                        IconButton(onClick = refreshCurrent) { Icon(Icons.Rounded.Refresh, "Refresh") }
-                    }
-                }
-            }
+            // Refresh lives in the floating bubble on every size class; the
+            // top bar stays clean and frosts (haze) over passing content.
             val barColors = TopAppBarDefaults.topAppBarColors(
                 containerColor = Color.Transparent,
-                scrolledContainerColor =
-                    MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
+                scrolledContainerColor = Color.Transparent,
             )
+            val barModifier = Modifier.hazeEffect(hazeState, HazeMaterials.ultraThin())
             Scaffold(
                 modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
                 containerColor = Color.Transparent,
                 topBar = {
                     if (shortScreen) {
                         TopAppBar(
-                            title = barTitle, navigationIcon = barNav, actions = barActions,
+                            title = barTitle, navigationIcon = barNav,
                             colors = barColors, scrollBehavior = scroll,
+                            modifier = barModifier,
                         )
                     } else {
                         LargeTopAppBar(
-                            title = barTitle, navigationIcon = barNav, actions = barActions,
+                            title = barTitle, navigationIcon = barNav,
                             colors = barColors, scrollBehavior = scroll,
+                            modifier = barModifier,
                         )
                     }
                 },
                 snackbarHost = {
-                    SnackbarHost(
-                        snackbar,
-                        Modifier.padding(bottom = if (compact) 84.dp else 0.dp),
-                    )
+                    SnackbarHost(snackbar, Modifier.padding(bottom = 84.dp))
                 },
             ) { pad ->
                 Box(Modifier.fillMaxSize().padding(pad)) {
@@ -213,6 +200,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                                 .togetherWith(fadeOut() + slideOutVertically { -it / 16 })
                         },
                         label = "screen",
+                        modifier = Modifier.fillMaxSize().hazeSource(hazeState),
                     ) { d ->
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                             val content = Modifier.widthIn(
@@ -224,7 +212,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                             )
                             // Content scrolls UNDER the floating pill; screens
                             // add this much extra end-of-scroll padding.
-                            val bottomPad = if (compact) 84.dp else 0.dp
+                            val bottomPad = 84.dp
                             when (d) {
                                 Dest.Control -> ControlScreen(vm, expanded, content, bottomPad)
                                 Dest.Install -> InstallScreen(vm, expanded, content, bottomPad)
@@ -232,17 +220,17 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                             }
                         }
                     }
-                    if (compact) {
-                        FloatingNav(
-                            dest = dest,
-                            onSelect = { dest = it },
-                            busy = vm.busy != null,
-                            onRefresh = refreshCurrent,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 14.dp),
-                        )
-                    }
+                    FloatingNav(
+                        dest = dest,
+                        onSelect = { dest = it },
+                        busy = vm.busy != null,
+                        onRefresh = refreshCurrent,
+                        wide = !compact,
+                        hazeState = hazeState,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 14.dp),
+                    )
                 }
             }
         }
@@ -253,22 +241,26 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
 }
 
 /**
- * Floating pill navigation (the Google-Photos look): a translucent glass pill
- * hovering over the content with the selected destination highlighted as a
- * chip, plus a round refresh bubble beside it that doubles as the busy
- * indicator on compact screens.
+ * Floating pill navigation (the Google-Photos look) on every size class: a
+ * frosted-glass pill hovering over the content — real backdrop blur via haze —
+ * with the selected destination highlighted as a chip, plus a round refresh
+ * bubble beside it that doubles as the busy indicator. On wide screens the
+ * pill expands: every destination shows its icon and items breathe more.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalHazeMaterialsApi::class)
 @Composable
 private fun FloatingNav(
     dest: Dest,
     onSelect: (Dest) -> Unit,
     busy: Boolean,
     onRefresh: () -> Unit,
+    wide: Boolean,
+    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
-    val glass = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.82f)
     val stroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+    val frost = HazeMaterials.thin(MaterialTheme.colorScheme.surfaceContainerHigh)
+    val itemPadH = if (wide) 20.dp else 16.dp
     Row(
         modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -276,13 +268,16 @@ private fun FloatingNav(
     ) {
         Surface(
             shape = CircleShape,
-            color = glass,
+            color = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
             border = stroke,
             shadowElevation = 6.dp,
         ) {
             Row(
-                Modifier.padding(6.dp),
+                Modifier
+                    .clip(CircleShape)
+                    .hazeEffect(hazeState, frost)
+                    .padding(6.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -299,11 +294,17 @@ private fun FloatingNav(
                         Row(
                             Modifier
                                 .animateContentSize()
-                                .padding(horizontal = 16.dp, vertical = 11.dp),
+                                .padding(horizontal = itemPadH, vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            if (selected) Icon(d.activeIcon, null, Modifier.size(18.dp))
+                            if (selected || wide) {
+                                Icon(
+                                    if (selected) d.activeIcon else d.icon,
+                                    null,
+                                    Modifier.size(18.dp),
+                                )
+                            }
                             Text(
                                 d.label,
                                 style = MaterialTheme.typography.labelLarge,
@@ -317,12 +318,18 @@ private fun FloatingNav(
         Surface(
             onClick = onRefresh,
             shape = CircleShape,
-            color = glass,
+            color = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
             border = stroke,
             shadowElevation = 6.dp,
         ) {
-            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier
+                    .clip(CircleShape)
+                    .hazeEffect(hazeState, frost)
+                    .size(52.dp),
+                contentAlignment = Alignment.Center,
+            ) {
                 if (busy) LoadingIndicator(Modifier.size(28.dp))
                 else Icon(Icons.Rounded.Refresh, "Refresh", Modifier.size(22.dp))
             }
