@@ -35,13 +35,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.determination.companion.BuildConfig
 import com.determination.companion.DetViewModel
 import com.determination.companion.RootState
 
 @Composable
-fun InstallScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier) {
+fun InstallScreen(
+    vm: DetViewModel,
+    wide: Boolean,
+    modifier: Modifier = Modifier,
+    bottomPad: Dp = 0.dp,
+) {
     var confirmFlash by remember { mutableStateOf<String?>(null) }
     var confirmFlashArmed by remember { mutableStateOf(false) }
     val inv = vm.inventory
@@ -52,7 +58,7 @@ fun InstallScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier
         modifier
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
+            .padding(bottom = 24.dp + bottomPad),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         SectionLabel("This device")

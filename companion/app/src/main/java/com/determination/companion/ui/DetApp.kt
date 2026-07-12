@@ -1,6 +1,7 @@
 package com.determination.companion.ui
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -16,7 +17,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
@@ -38,13 +42,12 @@ import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -70,6 +73,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.determination.companion.DetViewModel
 import com.determination.companion.R
@@ -155,17 +159,22 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     modifier = Modifier.padding(horizontal = 12.dp).size(28.dp),
                 )
             }
+            val refreshCurrent = {
+                when (dest) {
+                    Dest.Control -> vm.refresh()
+                    Dest.Install -> vm.refreshInstaller()
+                    Dest.Software -> vm.refreshSoftware()
+                }
+            }
+            // On compact the refresh affordance lives in the floating bubble
+            // next to the nav pill; elsewhere it stays in the top bar.
             val barActions: @Composable RowScope.() -> Unit = {
-                if (vm.busy != null) {
-                    LoadingIndicator(Modifier.size(40.dp))
-                } else {
-                    IconButton(onClick = {
-                        when (dest) {
-                            Dest.Control -> vm.refresh()
-                            Dest.Install -> vm.refreshInstaller()
-                            Dest.Software -> vm.refreshSoftware()
-                        }
-                    }) { Icon(Icons.Rounded.Refresh, "Refresh") }
+                if (!compact) {
+                    if (vm.busy != null) {
+                        LoadingIndicator(Modifier.size(40.dp))
+                    } else {
+                        IconButton(onClick = refreshCurrent) { Icon(Icons.Rounded.Refresh, "Refresh") }
+                    }
                 }
             }
             val barColors = TopAppBarDefaults.topAppBarColors(
@@ -189,51 +198,50 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                         )
                     }
                 },
-                bottomBar = {
-                    if (compact) {
-                        NavigationBar(
-                            containerColor =
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.88f),
-                        ) {
-                            Dest.entries.forEach { d ->
-                                NavigationBarItem(
-                                    selected = dest == d,
-                                    onClick = { dest = d },
-                                    icon = { Icon(if (dest == d) d.activeIcon else d.icon, d.label) },
-                                    label = { Text(d.label) },
-                                )
+                snackbarHost = {
+                    SnackbarHost(
+                        snackbar,
+                        Modifier.padding(bottom = if (compact) 84.dp else 0.dp),
+                    )
+                },
+            ) { pad ->
+                Box(Modifier.fillMaxSize().padding(pad)) {
+                    AnimatedContent(
+                        targetState = dest,
+                        transitionSpec = {
+                            (fadeIn() + slideInVertically { it / 12 })
+                                .togetherWith(fadeOut() + slideOutVertically { -it / 16 })
+                        },
+                        label = "screen",
+                    ) { d ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                            val content = Modifier.widthIn(
+                                max = when {
+                                    expanded -> 1080.dp
+                                    !compact -> 760.dp
+                                    else -> 640.dp
+                                },
+                            )
+                            // Content scrolls UNDER the floating pill; screens
+                            // add this much extra end-of-scroll padding.
+                            val bottomPad = if (compact) 84.dp else 0.dp
+                            when (d) {
+                                Dest.Control -> ControlScreen(vm, expanded, content, bottomPad)
+                                Dest.Install -> InstallScreen(vm, expanded, content, bottomPad)
+                                Dest.Software -> SoftwareScreen(vm, expanded, content, bottomPad)
                             }
                         }
                     }
-                },
-                snackbarHost = { SnackbarHost(snackbar) },
-            ) { pad ->
-                AnimatedContent(
-                    targetState = dest,
-                    transitionSpec = {
-                        (fadeIn() + slideInVertically { it / 12 })
-                            .togetherWith(fadeOut() + slideOutVertically { -it / 16 })
-                    },
-                    label = "screen",
-                ) { d ->
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(pad),
-                        contentAlignment = Alignment.TopCenter,
-                    ) {
-                        val content = Modifier.widthIn(
-                            max = when {
-                                expanded -> 1080.dp
-                                !compact -> 760.dp
-                                else -> 640.dp
-                            },
+                    if (compact) {
+                        FloatingNav(
+                            dest = dest,
+                            onSelect = { dest = it },
+                            busy = vm.busy != null,
+                            onRefresh = refreshCurrent,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 14.dp),
                         )
-                        when (d) {
-                            Dest.Control -> ControlScreen(vm, expanded, content)
-                            Dest.Install -> InstallScreen(vm, expanded, content)
-                            Dest.Software -> SoftwareScreen(vm, expanded, content)
-                        }
                     }
                 }
             }
@@ -241,6 +249,90 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
     }
 
     // Log viewer sheet (shared by every screen).
+    LogSheetAndDialogs(vm)
+}
+
+/**
+ * Floating pill navigation (the Google-Photos look): a translucent glass pill
+ * hovering over the content with the selected destination highlighted as a
+ * chip, plus a round refresh bubble beside it that doubles as the busy
+ * indicator on compact screens.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun FloatingNav(
+    dest: Dest,
+    onSelect: (Dest) -> Unit,
+    busy: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val glass = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.82f)
+    val stroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
+    Row(
+        modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = glass,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = stroke,
+            shadowElevation = 6.dp,
+        ) {
+            Row(
+                Modifier.padding(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Dest.entries.forEach { d ->
+                    val selected = d == dest
+                    Surface(
+                        onClick = { onSelect(d) },
+                        shape = CircleShape,
+                        color = if (selected) MaterialTheme.colorScheme.secondaryContainer
+                        else Color.Transparent,
+                        contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    ) {
+                        Row(
+                            Modifier
+                                .animateContentSize()
+                                .padding(horizontal = 16.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            if (selected) Icon(d.activeIcon, null, Modifier.size(18.dp))
+                            Text(
+                                d.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Surface(
+            onClick = onRefresh,
+            shape = CircleShape,
+            color = glass,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            border = stroke,
+            shadowElevation = 6.dp,
+        ) {
+            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+                if (busy) LoadingIndicator(Modifier.size(28.dp))
+                else Icon(Icons.Rounded.Refresh, "Refresh", Modifier.size(22.dp))
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun LogSheetAndDialogs(vm: DetViewModel) {
     if (vm.logName != null) {
         val clipboard = LocalClipboardManager.current
         ModalBottomSheet(

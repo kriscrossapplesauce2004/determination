@@ -65,6 +65,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.determination.companion.BuildConfig
 import com.determination.companion.DetViewModel
@@ -74,7 +75,12 @@ import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ControlScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier) {
+fun ControlScreen(
+    vm: DetViewModel,
+    wide: Boolean,
+    modifier: Modifier = Modifier,
+    bottomPad: Dp = 0.dp,
+) {
     var confirmEnter by remember { mutableStateOf(false) }
     var confirmPower by remember { mutableStateOf<String?>(null) }
     val haptics = LocalHapticFeedback.current
@@ -107,7 +113,7 @@ fun ControlScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier
             Modifier
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
-                .padding(bottom = 24.dp),
+                .padding(bottom = 24.dp + bottomPad),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             RootChip(vm.rootState)

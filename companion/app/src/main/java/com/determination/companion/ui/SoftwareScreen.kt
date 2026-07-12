@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.determination.companion.CATALOG
 import com.determination.companion.COMPOSITORS
@@ -34,12 +35,17 @@ import com.determination.companion.DetViewModel
 import com.determination.companion.RootState
 
 @Composable
-fun SoftwareScreen(vm: DetViewModel, wide: Boolean, modifier: Modifier = Modifier) {
+fun SoftwareScreen(
+    vm: DetViewModel,
+    wide: Boolean,
+    modifier: Modifier = Modifier,
+    bottomPad: Dp = 0.dp,
+) {
     Column(
         modifier
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp)
-            .padding(bottom = 24.dp),
+            .padding(bottom = 24.dp + bottomPad),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (!vm.guestUp) {
