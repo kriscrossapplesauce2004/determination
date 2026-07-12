@@ -169,7 +169,10 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                 containerColor = Color.Transparent,
                 scrolledContainerColor = Color.Transparent,
             )
-            val barModifier = Modifier.hazeEffect(hazeState, HazeMaterials.ultraThin())
+            // Slightly gentler frost than the material default (24dp).
+            val barModifier = Modifier.hazeEffect(hazeState, HazeMaterials.ultraThin()) {
+                blurRadius = 14.dp
+            }
             Scaffold(
                 modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
                 containerColor = Color.Transparent,
@@ -276,7 +279,7 @@ private fun FloatingNav(
             Row(
                 Modifier
                     .clip(CircleShape)
-                    .hazeEffect(hazeState, frost)
+                    .hazeEffect(hazeState, frost) { blurRadius = 14.dp }
                     .padding(6.dp),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -326,7 +329,7 @@ private fun FloatingNav(
             Box(
                 Modifier
                     .clip(CircleShape)
-                    .hazeEffect(hazeState, frost)
+                    .hazeEffect(hazeState, frost) { blurRadius = 14.dp }
                     .size(52.dp),
                 contentAlignment = Alignment.Center,
             ) {
