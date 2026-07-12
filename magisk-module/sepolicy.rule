@@ -20,3 +20,11 @@ allow magisk graphics_device chr_file { open read write ioctl map }
 allow magisk gpu_device chr_file { open read write ioctl map }
 allow magisk ion_device chr_file { open read write ioctl }
 allow magisk dmabuf_system_heap_device chr_file { open read ioctl }
+
+# Guest audio: on Android 16 the classic AudioFlinger/AAudio/AudioPolicy
+# services are no longer published to servicemanager — they now live behind
+# system_server's AIDL `audio` service, unreachable from the magisk sepolicy
+# domain. The bridge therefore runs inside companion.apk (untrusted_app
+# context) and uses AudioTrack, which is why there is NO sepolicy rule here
+# for audio — nothing in this file's domain can help. See
+# companion/AudioBridgeService.kt.

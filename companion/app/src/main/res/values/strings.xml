@@ -44,4 +44,6 @@
 
     <string name="tile_label">Desktop Mode</string>
     <string name="tile_active">Desktop: ON</string>
+
+    <string name="audio_bridge_notif">Determination guest audio</string>
 </resources>

@@ -1,6 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- AudioBridgeService: raw PCM from the guest over 192.168.117.1:4713 to
+         AudioTrack. FGS mediaPlayback is required on Android 14+ for a
+         long-lived audio session; POST_NOTIFICATIONS lets the FGS banner show
+         on 13+ without a user prompt (channel is IMPORTANCE_MIN so it's a
+         status-line dot only). RECEIVE_BOOT_COMPLETED starts the service on
+         boot so guest audio works without a per-boot tap. INTERNET is for
+         the loopback-only ServerSocket. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
@@ -30,6 +43,23 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+
+        <!-- Guest audio bridge: keeps a ServerSocket on 192.168.117.1:4713
+             and pipes incoming PCM to AudioTrack (runs in this app's SELinux
+             context, which is what the framework audio service accepts). -->
+        <service
+            android:name=".AudioBridgeService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
