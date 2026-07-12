@@ -1,18 +1,19 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
     namespace = "com.determination.companion"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.determination.companion"
         minSdk = 26
-        targetSdk = 34
-        versionCode = 2
-        versionName = "0.2.0"
+        targetSdk = 35
+        versionCode = 4
+        versionName = "0.4.0"
     }
 
     buildTypes {
@@ -28,10 +29,26 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
-    implementation("androidx.appcompat:appcompat:1.7.0")
+    // XML theme parent (Theme.Material3.*) for the pre-Compose window + QS tile.
     implementation("com.google.android.material:material:1.12.0")
+
+    // Compose / Material 3 Expressive. Pinned to 1.4.0-alpha18: the Expressive
+    // APIs (MaterialExpressiveTheme, LoadingIndicator, wavy indicators…) are
+    // public only in the alpha channel — 1.4.0 stable made them internal, and
+    // the 1.5.0 alphas need compileSdk 37 / AGP 9.1 (beyond Gradle 8.7).
+    implementation("androidx.activity:activity-compose:1.9.3")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    // window-size-class must match: the androidx atomic-group constraint would
+    // otherwise force the whole material3 group back to the stable version.
+    implementation("androidx.compose.material3:material3:1.4.0-alpha18")
+    implementation("androidx.compose.material3:material3-window-size-class:1.4.0-alpha18")
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
 }

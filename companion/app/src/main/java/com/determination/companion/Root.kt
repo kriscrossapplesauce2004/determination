@@ -12,6 +12,7 @@ object Root {
     const val DET = "/data/determination"
     private const val BIN = "$DET/bin"
     private const val LXC = "$DET/lxc/bin"
+    private const val MODDIR = "/data/adb/modules/determination"
 
     data class Result(val ok: Boolean, val out: String, val err: String)
 
@@ -54,8 +55,12 @@ object Root {
             echo "battstat=${'$'}(cat /sys/class/power_supply/battery/status 2>/dev/null)"
         """.trimIndent()
         val r = run(script, 12)
+        return parseKv(r.out)
+    }
+
+    private fun parseKv(text: String): Map<String, String> {
         val m = HashMap<String, String>()
-        r.out.lineSequence().forEach { line ->
+        text.lineSequence().forEach { line ->
             val i = line.indexOf('=')
             if (i > 0) m[line.substring(0, i)] = line.substring(i + 1).trim()
         }
@@ -97,9 +102,127 @@ object Root {
         run("$BIN/desktop-off 2>/dev/null; svc power shutdown || reboot -p", 20)
 
     /** Tail one of the on-device logs for the in-app viewer. */
-    fun tailLog(name: String, lines: Int = 60): String {
+    fun tailLog(name: String, lines: Int = 120): String {
         val safe = name.filter { it.isLetterOrDigit() || it == '.' || it == '-' || it == '_' }
         val r = run("tail -n $lines $DET/log/$safe 2>/dev/null", 10)
         return if (r.out.isBlank()) "(empty or not found: $safe)" else r.out
+    }
+
+    // ── Installer / updater ────────────────────────────────────────────────
+
+    /**
+     * Installed-component inventory in one su round-trip. Keys:
+     * kernel, det_kernel (yes/no — binderfs marker), module_ver, module_code,
+     * guest (debian version or empty), slot, boot_part.
+     */
+    fun inventory(): Map<String, String> {
+        val script = """
+            echo "kernel=${'$'}(uname -r)"
+            zcat /proc/config.gz 2>/dev/null | grep -q ANDROID_BINDERFS=y && echo "det_kernel=yes" || echo "det_kernel=no"
+            echo "module_ver=${'$'}(grep '^version=' $MODDIR/module.prop 2>/dev/null | cut -d= -f2)"
+            echo "module_code=${'$'}(grep '^versionCode=' $MODDIR/module.prop 2>/dev/null | cut -d= -f2)"
+            [ -f $MODDIR/disable ] && echo "module_state=disabled" || echo "module_state=enabled"
+            echo "guest=${'$'}(cat $DET/guest/etc/debian_version 2>/dev/null)"
+            echo "slot=${'$'}(getprop ro.boot.slot_suffix)"
+            echo "boot_part=${'$'}(ls -l /dev/block/bootdevice/by-name/boot${'$'}(getprop ro.boot.slot_suffix) 2>/dev/null | awk '{print ${'$'}NF}')"
+            echo "toolkit=${'$'}([ -x $BIN/desktop-on ] && echo yes || echo no)"
+        """.trimIndent()
+        return parseKv(run(script, 12).out)
+    }
+
+    /** Candidate artifacts for the updater, newest first: zips, boot images, APKs. */
+    fun findArtifacts(): List<String> {
+        val r = run(
+            "ls -1t /sdcard/Download/determination-magisk-*.zip " +
+                "/sdcard/Download/decemberos-magisk-*.zip " +
+                "/sdcard/Download/boot*.img /sdcard/Download/determination*.img " +
+                "/sdcard/Download/*companion*.apk /sdcard/Download/app-*.apk " +
+                "/data/local/tmp/determination-magisk-*.zip /data/local/tmp/boot*.img " +
+                "/data/local/tmp/*companion*.apk /data/local/tmp/app-*.apk 2>/dev/null",
+            10
+        )
+        return r.out.lineSequence().map { it.trim() }.filter { it.startsWith("/") }.toList()
+    }
+
+    /** Install/upgrade the Magisk module from a zip. Takes effect on reboot. */
+    fun installModuleZip(path: String): Result =
+        run("magisk --install-module '${sanitizePath(path)}'", 120)
+
+    /**
+     * Flash a boot image to the CURRENT slot. Refuses anything that doesn't
+     * carry the ANDROID! magic. The UI double-confirms before calling this.
+     */
+    fun flashBootImage(path: String): Result {
+        val p = sanitizePath(path)
+        val script = """
+            set -e
+            [ "${'$'}(dd if='$p' bs=8 count=1 2>/dev/null)" = "ANDROID!" ] || { echo "not a boot image (no ANDROID! magic)"; exit 1; }
+            slot=${'$'}(getprop ro.boot.slot_suffix)
+            part=/dev/block/bootdevice/by-name/boot${'$'}slot
+            [ -e "${'$'}part" ] || { echo "boot partition not found: ${'$'}part"; exit 1; }
+            dd if='$p' of="${'$'}part" bs=1048576
+            sync
+            echo "flashed to boot${'$'}slot"
+        """.trimIndent()
+        return run(script, 60)
+    }
+
+    /** Sideload an APK update of this app (root pm install; survives self-update). */
+    fun installApk(path: String): Result {
+        val p = sanitizePath(path)
+        return run("cp '$p' /data/local/tmp/det-companion-update.apk && pm install -r /data/local/tmp/det-companion-update.apk", 60)
+    }
+
+    private fun sanitizePath(path: String): String =
+        path.filter { it.isLetterOrDigit() || it in "/._-" }
+
+    // ── Guest software catalog ─────────────────────────────────────────────
+
+    fun guestRunning(): Boolean =
+        run("$LXC/lxc-info -P $DET -n guest 2>/dev/null | grep -q RUNNING && echo yes", 8)
+            .out.contains("yes")
+
+    /** dpkg status for many packages in one round-trip: pkg=installed|absent */
+    fun dpkgStatus(pkgs: List<String>): Map<String, String> {
+        if (pkgs.isEmpty()) return emptyMap()
+        val names = pkgs.joinToString(" ") { it.filter { c -> c.isLetterOrDigit() || c in ".+-" } }
+        val script = "for p in $names; do " +
+            "$LXC/lxc-attach -P $DET -n guest -- dpkg-query -W -f '\${db:Status-Status}' \"\$p\" 2>/dev/null | grep -q installed " +
+            "&& echo \"\$p=installed\" || echo \"\$p=absent\"; done"
+        return parseKv(run(script, 30).out)
+    }
+
+    /** apt-get install inside the guest. Long timeout — packages can be big. */
+    fun aptInstall(pkg: String): Result {
+        val p = pkg.filter { it.isLetterOrDigit() || it in ".+-" }
+        return run(
+            "$LXC/lxc-attach -P $DET -n guest -- /bin/sh -c " +
+                "'export DEBIAN_FRONTEND=noninteractive PATH=/usr/sbin:/usr/bin:/sbin:/bin; " +
+                "apt-get update -qq 2>/dev/null; apt-get install -y $p' 2>&1 | tail -5",
+            600
+        )
+    }
+
+    fun aptRemove(pkg: String): Result {
+        val p = pkg.filter { it.isLetterOrDigit() || it in ".+-" }
+        return run(
+            "$LXC/lxc-attach -P $DET -n guest -- /bin/sh -c " +
+                "'export DEBIAN_FRONTEND=noninteractive PATH=/usr/sbin:/usr/bin:/sbin:/bin; " +
+                "apt-get remove -y $p' 2>&1 | tail -5",
+            300
+        )
+    }
+
+    /**
+     * Session/compositor preference. Only phoc/phosh is wired into desktop-on
+     * today; the choice is persisted at $DET/etc/compositor for the session
+     * launcher to honor as alternatives land.
+     */
+    fun getCompositor(): String =
+        run("cat $DET/etc/compositor 2>/dev/null", 8).out.trim().ifBlank { "phosh" }
+
+    fun setCompositor(id: String): Result {
+        val safe = id.filter { it.isLetterOrDigit() || it == '-' }
+        return run("mkdir -p $DET/etc && echo '$safe' > $DET/etc/compositor", 8)
     }
 }

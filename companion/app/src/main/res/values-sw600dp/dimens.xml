@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!-- Adaptive: wider side margins on tablets / unfolded / landscape. -->
-    <dimen name="screen_pad">80dp</dimen>
-</resources>
