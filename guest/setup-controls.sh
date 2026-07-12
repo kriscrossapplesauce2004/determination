@@ -441,24 +441,30 @@ echo "== battery translator (det-battery) =="
 cat > /usr/local/sbin/det-battery <<'EOS'
 #!/bin/sh
 set -u
-BATT=$(readlink -f /sys/class/power_supply/battery 2>/dev/null)
 BMS=/sys/class/power_supply/bms/capacity
 CAP=/run/det-battery-capacity
-[ -n "$BATT" ] && [ -e "$BATT/capacity" ] && [ -r "$BMS" ] || {
-    echo "det-battery: battery/bms nodes not present — nothing to do"; exit 0; }
+[ -r "$BMS" ] || { echo "det-battery: bms node not present — nothing to do"; exit 0; }
 
 seed=$(cat "$BMS" 2>/dev/null)
-case "$seed" in ''|*[!0-9]*) seed=$(cat "$BATT/capacity" 2>/dev/null) ;; esac
-echo "${seed:-50}" > "$CAP"
-# Shadow the broken node's capacity with our file (idempotent across restarts).
-if ! mountpoint -q "$BATT/capacity"; then
-    mount --bind "$CAP" "$BATT/capacity" || { echo "det-battery: bind failed"; exit 1; }
-fi
-echo "det-battery: shadowing $BATT/capacity <- bms (seed ${seed})"
+case "$seed" in ''|*[!0-9]*) seed=50 ;; esac
+echo "$seed" > "$CAP"
+echo "det-battery: shadowing battery/capacity <- bms (seed ${seed})"
+
+# Poll the real gauge and KEEP the shadow bind alive. The bind must be
+# re-asserted every pass, not just once: the qpnp-smb5 charger re-enumerates
+# its power_supply node on USB plug/unplug, which silently drops the bind and
+# drops UPower/phosh back to the stuck raw capacity (found 2026-07-12, the
+# "battery shat itself" report). Re-resolve BATT each pass too — the sysfs
+# symlink is recreated by the re-enumeration. The bind propagates into
+# UPower's private mount namespace because /sys is a shared mount.
 while :; do
     c=$(cat "$BMS" 2>/dev/null)
     case "$c" in ''|*[!0-9]*) ;; *) echo "$c" > "$CAP" ;; esac
-    sleep 30
+    BATT=$(readlink -f /sys/class/power_supply/battery 2>/dev/null)
+    if [ -n "$BATT" ] && [ -e "$BATT/capacity" ]; then
+        mountpoint -q "$BATT/capacity" || mount --bind "$CAP" "$BATT/capacity" 2>/dev/null
+    fi
+    sleep 15
 done
 EOS
 chmod 0755 /usr/local/sbin/det-battery
