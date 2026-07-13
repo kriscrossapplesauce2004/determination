@@ -1,12 +1,16 @@
 package com.determination.companion
 
 import java.io.BufferedReader
+import java.io.BufferedWriter
+import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /**
- * Thin wrapper around Magisk `su`. The app never holds root itself — it shells
- * out to `su -c` for each action, exactly like `det shell` does over adb.
- * Determination's on-device tree lives at [DET]; see toggle/ for the scripts.
+ * Thin wrapper around Magisk `su`. Commands run through ONE persistent root
+ * shell (a single su grant per app session) instead of a fresh `su -c` per
+ * call — spawning su every 5s poll made Magisk toast "granted superuser
+ * rights" endlessly. Determination's on-device tree lives at [DET].
  */
 object Root {
     const val DET = "/data/determination"
@@ -16,21 +20,73 @@ object Root {
 
     data class Result(val ok: Boolean, val out: String, val err: String)
 
-    /** Run a command string through `su -c`, capturing output. Blocking. */
-    fun run(cmd: String, timeoutSec: Long = 15): Result {
+    private const val MARK = "__DET_DONE__"
+    private var shell: Process? = null
+    private var stdin: BufferedWriter? = null
+    private var stdout: BufferedReader? = null
+    private var stderr: BufferedReader? = null
+    private val reader = Executors.newCachedThreadPool()
+
+    @Synchronized
+    private fun ensureShell(): Boolean {
+        shell?.let { if (it.isAlive) return true }
         return try {
-            val p = ProcessBuilder("su", "-c", cmd).redirectErrorStream(false).start()
-            val out = p.inputStream.bufferedReader().use(BufferedReader::readText)
-            val err = p.errorStream.bufferedReader().use(BufferedReader::readText)
-            val finished = p.waitFor(timeoutSec, TimeUnit.SECONDS)
-            if (!finished) {
-                p.destroyForcibly()
-                Result(false, out, "timed out after ${timeoutSec}s")
-            } else {
-                Result(p.exitValue() == 0, out.trim(), err.trim())
-            }
+            val p = ProcessBuilder("su").redirectErrorStream(false).start()
+            shell = p
+            stdin = p.outputStream.bufferedWriter()
+            stdout = p.inputStream.bufferedReader()
+            stderr = p.errorStream.bufferedReader()
+            true
         } catch (e: Exception) {
+            shell = null
+            false
+        }
+    }
+
+    @Synchronized
+    private fun killShell() {
+        shell?.destroyForcibly()
+        shell = null
+    }
+
+    /** Run a command string in the persistent root shell. Blocking. */
+    @Synchronized
+    fun run(cmd: String, timeoutSec: Long = 15): Result {
+        if (!ensureShell()) return Result(false, "", "su failed (no root?)")
+        return try {
+            stdin!!.apply {
+                // Subshell so `exit`/`set -e` in cmd can't kill our shell.
+                write("($cmd)\n")
+                write("echo $MARK$?; echo $MARK >&2\n")
+                flush()
+            }
+            val outF = reader.submit<String> { readUntilMark(stdout!!) }
+            val errF = reader.submit<String> { readUntilMark(stderr!!) }
+            val outRaw = outF.get(timeoutSec, TimeUnit.SECONDS)
+            val err = errF.get(2, TimeUnit.SECONDS)
+            val nl = outRaw.lastIndexOf('\n')
+            val rcLine = outRaw.substring(nl + 1)
+            val out = if (nl >= 0) outRaw.substring(0, nl) else ""
+            Result(rcLine == "0", out.trim(), err.trim())
+        } catch (e: TimeoutException) {
+            killShell()
+            Result(false, "", "timed out after ${timeoutSec}s")
+        } catch (e: Exception) {
+            killShell()
             Result(false, "", e.message ?: "su failed (no root?)")
+        }
+    }
+
+    /** Read lines until the marker; return text before it (marker line carries rc on stdout). */
+    private fun readUntilMark(r: BufferedReader): String {
+        val sb = StringBuilder()
+        while (true) {
+            val line = r.readLine() ?: throw RuntimeException("root shell died")
+            if (line.startsWith(MARK)) {
+                sb.append(line.removePrefix(MARK))
+                return sb.toString()
+            }
+            sb.append(line).append('\n')
         }
     }
 

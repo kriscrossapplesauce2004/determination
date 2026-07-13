@@ -40,6 +40,7 @@ import kotlin.concurrent.thread
 class AudioBridgeService : Service() {
 
     companion object {
+        const val EXTRA_FROM_BOOT = "from-boot"
         private const val TAG = "DetAudioBridge"
         private const val NOTIF_CHAN = "det-audio-bridge"
         private const val NOTIF_ID = 0x0DE7
@@ -65,7 +66,14 @@ class AudioBridgeService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIF_ID, buildNotification(), foregroundType())
+        val fromBoot = intent?.getBooleanExtra(EXTRA_FROM_BOOT, false) == true
+        try {
+            startForeground(NOTIF_ID, buildNotification(), foregroundType(fromBoot))
+        } catch (e: Exception) {
+            // Never crashloop over FGS-type policy (Android 15+ restricts what
+            // can start from BOOT_COMPLETED); run demoted-to-background instead.
+            Log.w(TAG, "startForeground denied, running in background: ${e.message}")
+        }
         if (running.compareAndSet(false, true)) {
             acceptor = thread(name = "det-audio-acceptor", isDaemon = true) { acceptLoop() }
         }
@@ -178,7 +186,11 @@ class AudioBridgeService : Service() {
             .setOngoing(true)
             .build()
 
-    // Android 14+ requires a service-type when starting a mediaPlayback FGS.
-    private fun foregroundType(): Int =
-        if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+    // Android 14+ requires a service-type. mediaPlayback is banned when the
+    // start comes from BOOT_COMPLETED (15+), so boot uses connectedDevice.
+    private fun foregroundType(fromBoot: Boolean): Int = when {
+        Build.VERSION.SDK_INT < 34 -> 0
+        fromBoot -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+    }
 }

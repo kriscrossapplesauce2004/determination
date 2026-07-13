@@ -15,6 +15,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED) return
         val svc = Intent(context, AudioBridgeService::class.java)
+            .putExtra(AudioBridgeService.EXTRA_FROM_BOOT, true)
         context.startForegroundService(svc)
     }
 }
