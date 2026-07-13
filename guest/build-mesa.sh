@@ -44,8 +44,37 @@ rm -rf "$B/mesa"
 git clone --depth 1 -b "$MESA_REF" \
     https://gitlab.freedesktop.org/mesa/mesa.git "$B/mesa"
 
-echo "== configure =="
+echo "== patch: zink device selection on kgsl (phase 0.4) =="
+# Turnip-KGSL exposes no VK_EXT_physical_device_drm identity, so zink's
+# display-device matching can never succeed ("ZINK: failed to choose pdev")
+# and GL-on-zink is dead for EGL/GBM/surfaceless. Env-gated fallback to the
+# first enumerated device — single-GPU phone, so device 0 is always right.
+# Activated by ZINK_MATCH_ANY_DEVICE=1 in /opt/mesa/env.sh below.
 cd "$B/mesa"
+patch -p1 <<'EOF'
+diff --git a/src/gallium/drivers/zink/zink_screen.c b/src/gallium/drivers/zink/zink_screen.c
+--- a/src/gallium/drivers/zink/zink_screen.c
++++ b/src/gallium/drivers/zink/zink_screen.c
+@@ -1654,6 +1654,16 @@ choose_pdev(struct zink_screen *screen, int64_t dev_major, int64_t dev_minor, ui
+          idx = zink_get_display_device(screen, pdev_count, pdevs, dev_major,
+                                        dev_minor);
+
++      /* Determination/kgsl: a KGSL-backed turnip device exposes no
++       * VK_EXT_physical_device_drm identity, so display-device matching can
++       * never succeed even though the driver works. On single-GPU systems,
++       * allow falling back to the first enumerated device. */
++      if (idx == -1 && !adapter_luid && !cpu &&
++          debug_get_bool_option("ZINK_MATCH_ANY_DEVICE", false)) {
++         mesa_logw("ZINK: no drm-matched device; ZINK_MATCH_ANY_DEVICE using device 0");
++         idx = 0;
++      }
++
+       if (idx != -1)
+          /* valid cpu device */
+          screen->pdev = pdevs[idx];
+EOF
+
+echo "== configure =="
 meson setup build --prefix="$PREFIX" --buildtype=release \
     -Dplatforms=wayland \
     -Dgallium-drivers=zink \
@@ -72,6 +101,9 @@ export LD_LIBRARY_PATH=$LIBDIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}
 export VK_DRIVER_FILES=$ICD
 export LIBGL_DRIVERS_PATH=$LIBDIR/dri
 export MESA_LOADER_DRIVER_OVERRIDE=zink
+# kgsl turnip has no VK_EXT_physical_device_drm — see the zink patch in
+# build-mesa.sh; without this GL-on-zink cannot find the GPU.
+export ZINK_MATCH_ANY_DEVICE=1
 EOF
 chmod 644 "$PREFIX/env.sh"
 
