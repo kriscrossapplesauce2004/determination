@@ -57,10 +57,30 @@ means, roughly:
 
 ## Milestone 5: external convergence (the last milestone)
 
-9. Guest compositor on a DP-alt external display *concurrently* with
-   SurfaceFlinger on the panel; then KWin; then the summon UX. Hardware
-   path already proven (Android's own desktop mode runs over DP-alt), so
-   this is integration work, not risk.
+9. Architecture pinned 2026-07-13 (plan + tasks #1–#4; no nested-under-phoc
+   — melissa's call). Two chained phases on the **minigbm/native-DRM track**:
+
+   **Exclusive first:** downstream SDE is a real atomic KMS driver
+   (`msm_drm` on card0 — 5 CRTCs, 16 planes, dumb buffers, PRIME, DSI + DP
+   + writeback connectors; `artifacts/kms-probe-20260713.txt`). Stack: Mesa
+   Turnip-KGSL + zink (`guest/build-mesa.sh`, `/opt/mesa`) + minigbm msm
+   backend as libgbm (`guest/build-minigbm.sh`, `/opt/minigbm`) + the
+   compositor's native DRM backend. The vendor composer HAL is just another
+   DRM client — stop it (plus SF) and the guest owns KMS. Gates:
+   `guest/native-smoke.sh` (no display risk), then a `modetest -s`
+   dumb-buffer commit on DSI (the go/no-go). Payoff: vendor GL exits the
+   guest (Adreno varying hack, android_wlegl all retire) and unmodified
+   desktops return — phoc native, then **KWin** (NoopSession first, elogind
+   if needed). GNOME/Mutter deferred (logind-hard; phosh IS GNOME).
+   phosh-on-monitor already works today via the hwc backend, plug-and-play —
+   the gap this fixes is a desktop-grade DE, not the hardware path.
+
+   **Then concurrent (the headline):** SF alive on the panel; guest renders
+   headless on the same Mesa stack; minigbm dmabuf ⇄ AHardwareBuffer bridge
+   (same UBWC layouts as gralloc — that's the whole trick) into an Android
+   presenter on the DP display; input back via uinput; summon UX = the
+   presenter's show/hide. True concurrency is ONLY reachable this way on
+   4.14: one DRM master per card, no DRM leases, single composer client.
 
 ## Standing discipline
 
