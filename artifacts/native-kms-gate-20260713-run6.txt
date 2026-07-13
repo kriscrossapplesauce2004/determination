@@ -1,0 +1,46 @@
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+--- native-kms-gate Mon Jul 13 22:49:55 BST 2026
+== 1. input grab ==
+evgrab: grabbed /dev/input/event12 (sm8150-tavil-snd-card Button Jack)
+evgrab: grabbed /dev/input/event11 (sm8150-tavil-snd-card Headset Jack)
+evgrab: grabbed /dev/input/event3 (touchpanel_ps)
+evgrab: grabbed /dev/input/event4 (elliptic_ultrasound_proximity)
+evgrab: grabbed /dev/input/event1 (touchpanel)
+evgrab: grabbed /dev/input/event2 (touchpanel_kpd)
+evgrab: grabbed /dev/input/event5 (qti-haptics)
+evgrab: grabbed /dev/input/event0 (qpnp_pon)
+evgrab: grabbed /dev/input/event10 (qwerty)
+evgrab: grabbed /dev/input/event6 (hall_m1120_up)
+evgrab: grabbed /dev/input/event9 (gpio-keys)
+evgrab: grabbed /dev/input/event7 (hall_m1120_down)
+evgrab: grabbed /dev/input/event8 (oplus,hall_tri_state_key)
+== 2. stop SF + suppressor + ss-freezer ==
+== 3. stop the composer HAL (releases DRM master) ==
+pre-seeded panel0-backlight=500
+== 4. modetest: legacy setcrtc, HOLD 30s (no -v — flip events hang; this is the LOOK AT THE PANEL test) ==
+-- mid-hold: live brightness bump 500 -> 700 --
+panel0 actual=0
+[14521.742653] msm-dsi-display:[dsi_display_set_backlight] backlight level changed 0 -> 500
+rc=0
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+opened device `MSM Snapdragon DRM` on driver `msm_drm` (version 1.2.0 at 20130625)
+setting mode 1080x2340x60x179431-62.25Hz on connectors 28, crtc 136
+== 5. modetest: atomic commit, strace'd (run 2 was silent) ==
+rc=0
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+opened device `MSM Snapdragon DRM` on driver `msm_drm` (version 1.2.0 at 20130625)
+== 6. kernel log during test (full ring to native-gate.dmesg; SDE summary here) ==
+[14521.611072] [drm:_sde_crtc_blend_setup_mixer:2214] do not config dimlayer at the fps switch
+[14521.658881] msm-dsi-panel:[dsi_panel_power_on:660] enable poc gpio
+[14521.709368] msm-dsi-display:[dsi_display_set_backlight] [dsi_display_set_backlight]Setting seed mode for OP7 models: mode = 0
+[14521.742653] msm-dsi-display:[dsi_display_set_backlight] backlight level changed 0 -> 500
+[14521.742657] msm-dsi-panel:[dsi_panel_update_backlight:1038] dsi_panel_update_backlight:decoupling for SOFEF03F & op7 models
+[14529.597079] msm-dsi-panel:[dsi_panel_update_backlight:1038] dsi_panel_update_backlight:decoupling for SOFEF03F & op7 models
+[14551.606399] msm-dsi-display:[dsi_display_set_backlight] backlight level changed 700 -> 0
+[14551.606432] msm-dsi-panel:[dsi_panel_update_backlight:1038] dsi_panel_update_backlight:decoupling for SOFEF03F & op7 models
+== VERDICT ==
+LEGACY: mode-set accepted (visual confirmation decides)
+ATOMIC: FAIL
+NATIVE-KMS-GATE: COMMIT ACCEPTED — did the panel show SMPTE bars?
+== restore ==
+phone mode restored (sf=running hwc=running)

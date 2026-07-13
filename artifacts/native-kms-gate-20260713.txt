@@ -1,0 +1,34 @@
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+--- native-kms-gate Mon Jul 13 18:29:57 BST 2026
+== 1. input grab ==
+evgrab: grabbed /dev/input/event12 (sm8150-tavil-snd-card Button Jack)
+evgrab: grabbed /dev/input/event11 (sm8150-tavil-snd-card Headset Jack)
+evgrab: grabbed /dev/input/event1 (touchpanel)
+evgrab: grabbed /dev/input/event2 (touchpanel_kpd)
+evgrab: grabbed /dev/input/event5 (qti-haptics)
+evgrab: grabbed /dev/input/event0 (qpnp_pon)
+evgrab: grabbed /dev/input/event3 (touchpanel_ps)
+evgrab: grabbed /dev/input/event4 (elliptic_ultrasound_proximity)
+evgrab: grabbed /dev/input/event7 (hall_m1120_down)
+evgrab: grabbed /dev/input/event8 (oplus,hall_tri_state_key)
+evgrab: grabbed /dev/input/event10 (qwerty)
+evgrab: grabbed /dev/input/event6 (hall_m1120_up)
+evgrab: grabbed /dev/input/event9 (gpio-keys)
+== 2. stop SF + suppressor + ss-freezer ==
+== 3. stop the composer HAL (releases DRM master) ==
+== 4. modetest: legacy setcrtc + 10s vsync flips ==
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+failed to find mode "1080x2340" for connector 28
+failed to create dumb buffer: Invalid argument
+failed to create dumb buffer: Invalid argument
+opened device `MSM Snapdragon DRM` on driver `msm_drm` (version 1.2.0 at 20130625)
+rc_legacy=0 (124 = ran full 12s = GOOD)
+== 5. modetest: atomic commit + 10s vsync flips ==
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+opened device `MSM Snapdragon DRM` on driver `msm_drm` (version 1.2.0 at 20130625)
+rc_atomic=0 (124 = ran full 12s = GOOD)
+== 6. kernel log during test (SDE complaints live here) ==
+== VERDICT ==
+NATIVE-KMS-GATE: COMMIT PATH ALIVE (check the panel showed SMPTE bars!)
+== restore ==
+phone mode restored (sf=running hwc=running)

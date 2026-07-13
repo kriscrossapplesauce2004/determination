@@ -1,0 +1,96 @@
+[14521.594519] type=1400 audit(1783979397.934:2669): avc:  denied  { ioctl } for  comm="lxc-attach" path="socket:[1470346]" dev="sockfs" ino=1470346 ioctlcmd=0x542a scontext=u:r:magisk:s0 tcontext=u:r:adbd:s0 tclass=unix_stream_socket permissive=1
+[14521.594656] logd: HexToBytes: Invalid characters: ", s
+[14521.594795] type=1400 audit(1783979397.934:2670): avc:  denied  { ioctl } for  comm="lxc-attach" path="/data/local/tmp/mt-legacy.out" dev="dm-36" ino=6324419 ioctlcmd=0x542a scontext=u:r:magisk:s0 tcontext=u:object_r:shell_data_file:s0 tclass=file permissive=1
+[14521.594894] logd: HexToBytes: Invalid size: 31
+[14521.611072] [drm:_sde_crtc_blend_setup_mixer:2214] do not config dimlayer at the fps switch
+[14521.658881] msm-dsi-panel:[dsi_panel_power_on:660] enable poc gpio
+[14521.709368] msm-dsi-display:[dsi_display_set_backlight] [dsi_display_set_backlight]Setting seed mode for OP7 models: mode = 0
+[14521.742653] msm-dsi-display:[dsi_display_set_backlight] backlight level changed 0 -> 500
+[14521.742657] msm-dsi-panel:[dsi_panel_update_backlight:1038] dsi_panel_update_backlight:decoupling for SOFEF03F & op7 models
+[14526.905754] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=385,shell_temp=0,chging_temp=385
+[14526.908554] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14526.908576] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14526.908590] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -131 0 0]
+[14526.908601] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14526.967600] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4262 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 430 ], GAUGE[ 385 / 3860 / 3860 / -131 / 383755 / 47 / 47 / 8 / 1245 / 2698 / 3114 / 8611 / 1277 / 1245 / 2820 / 2698 / 46 / 6560 / 496 / 1277 / 390 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14526.967608] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14526.967613] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14529.597079] msm-dsi-panel:[dsi_panel_update_backlight:1038] dsi_panel_update_backlight:decoupling for SOFEF03F & op7 models
+[14531.771497] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=385,shell_temp=0,chging_temp=385
+[14531.774021] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14531.774033] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14531.774040] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -136 0 0]
+[14531.774046] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14531.819632] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4265 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 435 ], GAUGE[ 385 / 3858 / 3858 / -136 / 385055 / 47 / 47 / 8 / 1245 / 2698 / 3114 / 8611 / 1277 / 1245 / 2820 / 2698 / 46 / 6560 / 496 / 1277 / 390 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14531.819647] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14531.819651] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14531.916593] healthd: battery l=47 v=3858 t=38.5 h=2 st=2 c=-136 fc=3577000 cc=1 chg=u
+[14536.890060] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=384,shell_temp=0,chging_temp=384
+[14536.892785] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14536.892796] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14536.892800] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -113 0 0]
+[14536.892805] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14536.940900] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4248 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 440 ], GAUGE[ 384 / 3858 / 3858 / -113 / 386350 / 47 / 47 / 8 / 1245 / 2698 / 3114 / 8611 / 1277 / 1245 / 2820 / 2698 / 46 / 6560 / 496 / 1277 / 390 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14536.940911] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14536.940915] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14542.011212] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=384,shell_temp=0,chging_temp=384
+[14542.015287] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14542.015316] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14542.015333] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -120 0 0]
+[14542.015348] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14542.054630] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4259 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 446 ], GAUGE[ 384 / 3857 / 3857 / -120 / 385055 / 47 / 47 / 8 / 1245 / 2698 / 3114 / 8611 / 1277 / 1245 / 2820 / 2698 / 46 / 6560 / 496 / 1277 / 390 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14542.054641] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14542.054645] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14545.058565] healthd: battery l=47 v=3857 t=38.3 h=2 st=2 c=-145 fc=3577000 cc=1 chg=u
+[14547.897415] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=383,shell_temp=0,chging_temp=383
+[14547.900207] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14547.900223] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14547.900230] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -60 0 0]
+[14547.900237] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14547.939257] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4180 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 451 ], GAUGE[ 383 / 3850 / 3850 / -60 / 433390 / 47 / 47 / 8 / 1245 / 2698 / 3114 / 8611 / 1277 / 1245 / 2820 / 2698 / 46 / 6560 / 496 / 1277 / 390 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14547.939265] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14547.939268] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14551.606399] msm-dsi-display:[dsi_display_set_backlight] backlight level changed 700 -> 0
+[14551.606432] msm-dsi-panel:[dsi_panel_update_backlight:1038] dsi_panel_update_backlight:decoupling for SOFEF03F & op7 models
+[14551.610831] <sensor_feedback>sensor_fb_notifier: sensor_fb_notifier suspend 
+[14551.610838] [TP]touchpanel: fb_notifier_callback: event = 2, blank = 1
+[14551.610868] <sensor_feedback>oplus_subsystem_sleeptime : ADSP:0x385
+[14551.610870] <sensor_feedback>oplus_subsystem_sleeptime found: ADSP:0x385
+[14551.610881] <sensor_feedback>oplus_subsystem_sleeptime : CDSP:0x2c5
+[14551.610883] <sensor_feedback>oplus_subsystem_sleeptime found: CDSP:0x2c5
+[14551.610892] <sensor_feedback>oplus_subsystem_sleeptime : SLPI:0x3a098
+[14551.610894] <sensor_feedback>oplus_subsystem_sleeptime found: SLPI:0x3a098
+[14551.771479] [TP]touchpanel: fb_notifier_callback: event = 1, blank = 1
+[14551.771497] [TP]touchpanel: tp_suspend: start.
+[14551.771507] [TP]touchpanel: tp_suspend ts->spuri_fp_touch.fp_trigger =0  ts->i2c_ready =1  ts->spuri_fp_touch.lcd_resume_ok=0 
+[14551.771516] [TP]touchpanel: tp_suspend: do not suspend twice.
+[14551.771523] [TP]touchpanel: tp_suspend: end.
+[14551.855392] type=1400 audit(1783979428.198:2671): avc:  denied  { ioctl } for  comm="lxc-attach" path="socket:[1470346]" dev="sockfs" ino=1470346 ioctlcmd=0x542a scontext=u:r:magisk:s0 tcontext=u:r:adbd:s0 tclass=unix_stream_socket permissive=1
+[14551.855613] logd: HexToBytes: Invalid characters: ", s
+[14551.855674] type=1400 audit(1783979428.198:2672): avc:  denied  { ioctl } for  comm="lxc-attach" path="/data/local/tmp/mt-atomic.out" dev="dm-36" ino=6324420 ioctlcmd=0x542a scontext=u:r:magisk:s0 tcontext=u:object_r:shell_data_file:s0 tclass=file permissive=1
+[14551.855742] logd: HexToBytes: Invalid size: 31
+[14553.017810] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=382,shell_temp=0,chging_temp=382
+[14553.020654] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14553.020680] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14553.020693] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -188 0 0]
+[14553.020704] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14553.045561] [OPLUS_CHG][oplus_chg_set_input_current_limit] led_on = 0, 		current_limit = 500, 		led_temp_status = 2
+[14553.061083] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4259 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 457 ], GAUGE[ 382 / 3863 / 3863 / -188 / 383755 / 47 / 47 / 8 / 1246 / 2698 / 3114 / 8606 / 1278 / 1246 / 2820 / 2698 / 46 / 6560 / 496 / 1278 / 389 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14553.061094] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14553.061099] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14558.905288] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=381,shell_temp=0,chging_temp=381
+[14558.908120] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14558.908144] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14558.908157] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -220 0 0]
+[14558.908168] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14558.953140] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4268 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 462 ], GAUGE[ 381 / 3871 / 3871 / -220 / 383430 / 47 / 47 / 8 / 1246 / 2698 / 3114 / 8606 / 1278 / 1246 / 2820 / 2698 / 46 / 6560 / 496 / 1278 / 389 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14558.953152] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1
+[14558.953157] [OPLUS_CHG][oplus_chg_print_log]ffc_exit_chg_break:0
+[14563.462051] healthd: battery l=47 v=3871 t=38.1 h=2 st=2 c=-224 fc=3577000 cc=1 chg=u
+[14563.769830] [OPLUS_CHG][oplus_chg_match_temp_for_chging]batt_temp=381,shell_temp=0,chging_temp=381
+[14563.772693] [oplus_chg_get_battery_data] will call oplus_gauge_protect_check
+[14563.772718] [OPLUS_CHG][oplus_vooc_print_log]VOOC[ 1 / 0 / 0 / 0 / 0 / 0]
+[14563.772731] [OPLUS_CHG][oplus_check_afi_update_condition] fastchg status[0 0 0 0 0] charger info[1 4 -280 0 0]
+[14563.772741] [OPLUS_CHG][oplus_check_afi_update_condition] true 3: ormal charger or others unkown
+[14563.819646] [OPLUS_CHG][oplus_chg_print_log] CHGR[ 1 / 4 / 4182 / 1 / 0 ], BAT[ 1 / 0 / 1 / 0 / 1 / 467 ], GAUGE[ 381 / 3881 / 3881 / -280 / 435335 / 47 / 47 / 8 / 1246 / 2698 / 3114 / 8606 / 1278 / 1246 / 2820 / 2698 / 46 / 6560 / 496 / 1278 / 389 / 1153 /], STATUS[ 0x0 / 0 / 0 / 0 / 0 / 0x0 ], OTHER[ 0 / 1 / 0 / 0 / 0/ 0 ]
+[14563.819654] [OPLUS_CHG][oplus_chg_print_log]FFC: fastchg_to_ffc:0,fastchg_ffc_status:0,ffc_temp_status:1

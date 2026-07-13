@@ -1,0 +1,179 @@
+#!/system/bin/sh
+# M5 native-DRM track, Phase 1.1 — THE go/no-go gate: can a non-HWC client
+# (guest modetest) take DRM master on the downstream SDE and scan out a dumb
+# buffer on the DSI panel? Run as root, PHONE MODE, device-visible: the panel
+# shows SMPTE bars for ~25s, then Android comes back by itself.
+#
+# GATE PASSED 2026-07-13 run 6: SMPTE bars visible 30s at pre-seeded
+# brightness, live brightness update mid-hold worked, clean restore.
+# (artifacts/native-kms-gate-20260713-run6.txt)
+#
+# Borrow-from-desktop-on notes:
+#   - SF stop + suppressor + ss-freezer + backlight keeper are the proven
+#     desktop-on mechanisms (steps 2/3/3b/4b there), reused verbatim in
+#     miniature. NOTE: under raw KMS the roles INVERT vs hwc sessions —
+#     panel0-backlight (sde_connector bl device, 0-1023) is the real OLED
+#     brightness lever; backlight/ accepts writes but does nothing here.
+#   - NEW vs desktop-on: the vendor composer service itself
+#     (vendor.hwcomposer-2-4) is stopped too — it holds DRM master on card0
+#     (recon holders.txt); the guest can't become master while it lives.
+#   - Restore is trap-guarded: any exit path restarts composer + SF.
+# Capture:
+#   adb shell "su -c 'sh /data/local/tmp/native-kms-gate'" then pull
+#   /data/local/tmp/native-kms-gate.out -> artifacts/.
+set -u
+DET=/data/determination
+LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
+GATE="$DET/run/native-gate"
+BL=/sys/class/backlight/backlight/brightness
+BL_LEVEL=1400
+CONNECTOR=28          # DSI-1 (kms-probe 2026-07-13)
+MODE="#0"        # mode BY INDEX: downstream SDE mode NAME is 1080x2340x60x179431 (res x refresh x clock)
+
+[ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active — run desktop-off first"; exit 1; }
+$LXC /bin/true 2>/dev/null || { echo "FATAL: guest not running"; exit 1; }
+$LXC /usr/bin/test -x /usr/bin/modetest || { echo "FATAL: modetest missing in guest (kms-probe.sh prep)"; exit 1; }
+
+restored=0
+restore() {
+    [ "$restored" = 1 ] && return
+    restored=1
+    echo "== restore =="
+    rm -f "$GATE"
+    start vendor.hwcomposer-2-4
+    # Give the HAL a beat to register with hwservicemanager before SF binds.
+    sleep 2
+    # Fresh system_server (SIGCONT would just let Watchdog count the
+    # accumulated block time and self-kill — same logic as desktop-off 1b).
+    sspid=$(pidof system_server 2>/dev/null)
+    [ -n "$sspid" ] && kill -KILL "$sspid" 2>/dev/null
+    start surfaceflinger
+    i=0
+    until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
+        i=$((i+1)); [ $i -gt 20 ] && { echo "WARN: SF slow to return"; break; }
+        sleep 0.5
+    done
+    # Boot-animation-forever fix, verbatim from desktop-off 3b.
+    if [ "$(getprop sys.boot_completed)" = "1" ]; then
+        i=0
+        while [ $i -lt 20 ]; do
+            [ "$(getprop init.svc.bootanim)" = "running" ] && break
+            i=$((i+1)); sleep 0.5
+        done
+        if [ "$(getprop init.svc.bootanim)" = "running" ]; then
+            setprop service.bootanim.exit 1
+            setprop service.bootanim.progress 1
+            i=0
+            while [ "$(getprop init.svc.bootanim)" = "running" ] && [ $i -lt 10 ]; do
+                i=$((i+1)); sleep 0.5
+            done
+            [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim
+        fi
+    fi
+    [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
+    rm -f "$DET/run/evgrab.pid"
+    echo "phone mode restored (sf=$(getprop init.svc.surfaceflinger) hwc=$(getprop init.svc.vendor.hwcomposer-2-4))"
+}
+trap restore EXIT INT TERM
+
+echo "--- native-kms-gate $(date)"
+echo "== 1. input grab =="
+"$DET/bin/evgrab" -a -p "$DET/run/evgrab.pid" || { echo "FATAL: evgrab failed"; exit 1; }
+
+echo "== 2. stop SF + suppressor + ss-freezer =="
+stop bootanim
+stop surfaceflinger
+touch "$GATE"
+(
+    while [ -f "$GATE" ]; do
+        [ "$(getprop init.svc.surfaceflinger)" = "running" ] && stop surfaceflinger
+        echo "$BL_LEVEL" > "$BL" 2>/dev/null
+        sleep 1
+    done
+) &
+(
+    while [ -f "$GATE" ]; do
+        pid=$(pidof system_server 2>/dev/null)
+        if [ -n "$pid" ]; then
+            state=$(awk '/^State:/{print $2; exit}' /proc/$pid/status 2>/dev/null)
+            [ "$state" != "T" ] && [ "$state" != "t" ] && kill -STOP "$pid" 2>/dev/null
+        fi
+        sleep 0.2
+    done
+) &
+i=0
+while [ "$(getprop init.svc.surfaceflinger)" != "stopped" ]; do
+    i=$((i+1)); [ $i -gt 20 ] && { echo "FATAL: SF did not stop"; exit 1; }
+    sleep 0.5
+done
+sleep 1
+
+echo "== 3. stop the composer HAL (releases DRM master) =="
+stop vendor.hwcomposer-2-4
+i=0
+while [ "$(getprop init.svc.vendor.hwcomposer-2-4)" != "stopped" ]; do
+    i=$((i+1)); [ $i -gt 10 ] && { echo "FATAL: composer did not stop"; exit 1; }
+    sleep 0.5
+done
+sleep 1
+echo "$BL_LEVEL" > "$BL" 2>/dev/null
+dmesg -c > /dev/null 2>&1   # clear ring so the capture below is test-only
+
+# §3 trap, raw-KMS edition — solved by READING THE SOURCE (sde_connector.c):
+# sde_backlight_device_update_status() silently CACHES brightness writes
+# while c_conn->allow_bl_update is false (true only between bridge_enable
+# and bridge_disable, i.e. while a commit has lit the display). At
+# sde_connector_helper_bridge_enable() the driver applies whatever
+# props.brightness holds at first-frame time — and Android leaves it at 0
+# when SF stops (runs 2-4: "backlight level changed 1023 -> 0"). So:
+# PRE-SEED panel0-backlight (the sde_connector bl device, 0-1023) BEFORE
+# the modeset; bridge_enable then applies our level instead of 0.
+echo 500 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
+echo "pre-seeded panel0-backlight=$(cat /sys/class/backlight/panel0-backlight/brightness 2>/dev/null)"
+
+echo "== 4. modetest: legacy setcrtc, HOLD 30s (no -v — flip events hang; this is the LOOK AT THE PANEL test) =="
+# Mid-hold check: with allow_bl_update true (display lit by our commit), a
+# live brightness write should now go straight through — proves runtime
+# control, not just the pre-seed.
+(
+    sleep 8
+    echo "-- mid-hold: live brightness bump 500 -> 700 --"
+    echo 700 > /sys/class/backlight/panel0-backlight/brightness 2>&1
+    sleep 1
+    echo "panel0 actual=$(cat /sys/class/backlight/panel0-backlight/actual_brightness 2>&1)"
+    dmesg | grep -i "backlight level changed" | tail -4
+) &
+timeout 35 $LXC /bin/sh -c "export PATH=/usr/sbin:/usr/bin:/sbin:/bin; sleep 30 | modetest -M msm_drm -s $CONNECTOR:\"$MODE\"@XR24" > /data/local/tmp/mt-legacy.out 2>&1
+echo "rc=$?"
+cat /data/local/tmp/mt-legacy.out
+
+echo "== 5. modetest: atomic commit, strace'd (run 2 was silent) =="
+timeout 20 $LXC /bin/sh -c "export PATH=/usr/sbin:/usr/bin:/sbin:/bin; T=\"\"; command -v strace >/dev/null && T=\"strace -f -e trace=ioctl -o /tmp/mt-atomic.strace\"; sleep 12 | \$T modetest -M msm_drm -a -s $CONNECTOR:\"$MODE\"@XR24" > /data/local/tmp/mt-atomic.out 2>&1
+echo "rc=$?"
+cat /data/local/tmp/mt-atomic.out
+$LXC /bin/sh -c "grep -E 'MODE_ATOMIC|MODE_CREATE_DUMB|ADDFB' /tmp/mt-atomic.strace | tail -15" 2>/dev/null
+
+
+echo "== 6. kernel log during test (full ring to native-gate.dmesg; SDE summary here) =="
+dmesg > /data/local/tmp/native-gate.dmesg 2>&1
+chmod 644 /data/local/tmp/native-gate.dmesg 2>/dev/null
+dmesg | grep -iE "sde|drm|msm|dsi|backlight|error|fail" | tail -50
+
+echo "== VERDICT =="
+# Honest pass: the mode-set line printed and nothing failed. The REAL verdict
+# is a human seeing SMPTE bars during the 30s hold — exit codes proved
+# unreliable (run 1 "passed" rc=0 while failing to even find the mode).
+verdict() {  # $1 = label, $2 = file
+    if grep -q "setting mode" "$2" && ! grep -qi "failed" "$2"; then
+        echo "$1: mode-set accepted (visual confirmation decides)"; return 0
+    else
+        echo "$1: FAIL"; return 1
+    fi
+}
+pass=0
+verdict "LEGACY" /data/local/tmp/mt-legacy.out && pass=1
+verdict "ATOMIC" /data/local/tmp/mt-atomic.out && pass=1
+[ "$pass" = 1 ] && echo "NATIVE-KMS-GATE: COMMIT ACCEPTED — did the panel show SMPTE bars?" \
+                || echo "NATIVE-KMS-GATE: FAIL (no scanout on either path)"
+restore
+exit 0
