@@ -53,22 +53,24 @@ restore() {
         i=$((i+1)); [ $i -gt 20 ] && { echo "WARN: SF slow to return"; break; }
         sleep 0.5
     done
-    # Boot-animation-forever fix, verbatim from desktop-off 3b.
+    # Boot-animation-forever fix. The desktop-off 3b dance alone RACES here
+    # (looped twice on 2026-07-13): bootanim can start after the wait window,
+    # and SF resets service.bootanim.exit=0 when it launches it. Run the
+    # dance once, then leave a 60s keeper behind that re-asserts the exit
+    # signal (and hard-stops as a last resort) if the animation reappears.
     if [ "$(getprop sys.boot_completed)" = "1" ]; then
-        i=0
-        while [ $i -lt 20 ]; do
-            [ "$(getprop init.svc.bootanim)" = "running" ] && break
-            i=$((i+1)); sleep 0.5
-        done
-        if [ "$(getprop init.svc.bootanim)" = "running" ]; then
-            setprop service.bootanim.exit 1
-            setprop service.bootanim.progress 1
-            i=0
-            while [ "$(getprop init.svc.bootanim)" = "running" ] && [ $i -lt 10 ]; do
-                i=$((i+1)); sleep 0.5
+        (
+            end=$(( $(date +%s) + 60 ))
+            while [ "$(date +%s)" -lt "$end" ]; do
+                if [ "$(getprop init.svc.bootanim)" = "running" ]; then
+                    setprop service.bootanim.exit 1
+                    setprop service.bootanim.progress 1
+                    sleep 3
+                    [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim
+                fi
+                sleep 1
             done
-            [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim
-        fi
+        ) &
     fi
     [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
     rm -f "$DET/run/evgrab.pid"
