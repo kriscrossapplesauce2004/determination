@@ -1,0 +1,26 @@
+lxc-attach: guest: confile.c: set_config_unsupported_key: 153 Invalid argument - Unsupported config key "lxc.seccomp"
+== 1. Turnip on kgsl ==
+	deviceName         = Turnip Adreno (TM) 640
+	driverID           = DRIVER_ID_MESA_TURNIP
+	driverName         = turnip Mesa driver
+TURNIP: OK
+== 2. minigbm probe ==
+/dev/dri/renderD128: backend=msm_drm
+/dev/dri/renderD128: bo stride=1024 modifier=0x0
+/dev/dri/renderD128: map/write OK (map stride=1024)
+/dev/dri/renderD128: dmabuf export OK (fd=4)
+/dev/dri/card0: backend=msm_drm
+/dev/dri/card0: bo stride=1024 modifier=0x0
+/dev/dri/card0: map/write OK (map stride=1024)
+/dev/dri/card0: dmabuf export OK (fd=4)
+GBM-PROBE: ALL PASS
+MINIGBM: OK
+== 3. minigbm dmabuf -> Turnip import ==
+gbm: backend=msm_drm dmabuf fd=4 size=262144 stride=1024
+vk: device=Turnip Adreno (TM) 640
+vk: dmabuf memoryTypeBits=0x7
+VK-IMPORT: PASS (bound 262144-byte minigbm dmabuf as VkBuffer on Turnip Adreno (TM) 640)
+== 4. zink GL identity (informational) ==
+SKIP: eglinfo not installed (apt install mesa-utils-bin)
+== VERDICT ==
+NATIVE-SMOKE: ALL PASS
