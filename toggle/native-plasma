@@ -1,0 +1,181 @@
+#!/system/bin/sh
+# M5 native-DRM track: KWin/Plasma-Mobile smoke on raw KMS with real GPU
+# (zink/Turnip). Run as root, PHONE MODE, device-visible. Reuses the proven
+# native-kms-gate prep/restore (SF + composer stop, ss-freezer, backlight
+# pre-seed, trap-guarded restore, bootanim keeper).
+#
+# Stages (pick with $1, default "kwin"):
+#   kwin    — kwin_wayland + a terminal, ~2 min hold. The atomic-commit and
+#             GL-under-KWin probe. KWin 6 is atomic-only, which modetest
+#             never proved — THIS is the real test.
+#   plasma  — full Plasma Mobile shell (plasmashell mobile lookandfeel)
+#             inside kwin, ~3 min hold.
+# Ends by itself; desktop-off-style restore. Logs: /data/local/tmp/
+# native-plasma.out + kwin log at guest /tmp/kwin.log (pulled by caller).
+set -u
+DET=/data/determination
+LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
+GATE="$DET/run/native-gate"
+BL=/sys/class/backlight/backlight/brightness
+BL_LEVEL=1400
+STAGE="${1:-kwin}"
+case "$STAGE" in
+    kwin) HOLD=120;;
+    plasma) HOLD=180;;
+    *) echo "usage: native-plasma [kwin|plasma]"; exit 1;;
+esac
+
+[ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active — run desktop-off first"; exit 1; }
+$LXC /bin/true 2>/dev/null || { echo "FATAL: guest not running"; exit 1; }
+$LXC /usr/bin/test -x /usr/bin/kwin_wayland || { echo "FATAL: kwin_wayland missing (plasma install still running?)"; exit 1; }
+
+restored=0
+restore() {
+    [ "$restored" = 1 ] && return
+    restored=1
+    echo "== restore =="
+    rm -f "$GATE"
+    # Clean guest session teardown first (mirror desktop-off step 2: clients,
+    # then compositor; kwin must release DRM master before the vendor HAL
+    # rebinds).
+    $LXC /bin/sh -c 'pkill -TERM plasmashell; pkill -TERM foot; sleep 1; pkill -TERM kwin_wayland; true' 2>/dev/null
+    i=0
+    while pgrep -f kwin_wayland >/dev/null 2>&1; do
+        i=$((i+1)); [ $i -gt 30 ] && { echo "WARN: kwin still alive after 3s — SIGKILL"; pkill -KILL -f kwin_wayland; break; }
+        sleep 0.1
+    done
+    sleep 0.5
+    start vendor.hwcomposer-2-4
+    sleep 2
+    sspid=$(pidof system_server 2>/dev/null)
+    [ -n "$sspid" ] && kill -KILL "$sspid" 2>/dev/null
+    start surfaceflinger
+    i=0
+    until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
+        i=$((i+1)); [ $i -gt 20 ] && { echo "WARN: SF slow to return"; break; }
+        sleep 0.5
+    done
+    # bootanim keeper (60s): the one-shot exit dance races (2026-07-13 x2).
+    if [ "$(getprop sys.boot_completed)" = "1" ]; then
+        (
+            end=$(( $(date +%s) + 60 ))
+            while [ "$(date +%s)" -lt "$end" ]; do
+                if [ "$(getprop init.svc.bootanim)" = "running" ]; then
+                    setprop service.bootanim.exit 1
+                    setprop service.bootanim.progress 1
+                    sleep 3
+                    [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim
+                fi
+                sleep 1
+            done
+        ) &
+    fi
+    [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
+    rm -f "$DET/run/evgrab.pid"
+    echo "phone mode restored (sf=$(getprop init.svc.surfaceflinger) hwc=$(getprop init.svc.vendor.hwcomposer-2-4))"
+}
+trap restore EXIT INT TERM
+
+echo "--- native-plasma stage=$STAGE $(date)"
+echo "== 1. input grab =="
+"$DET/bin/evgrab" -a -p "$DET/run/evgrab.pid" || { echo "FATAL: evgrab failed"; exit 1; }
+
+echo "== 2. stop SF + suppressor + ss-freezer =="
+stop bootanim
+stop surfaceflinger
+touch "$GATE"
+(
+    while [ -f "$GATE" ]; do
+        [ "$(getprop init.svc.surfaceflinger)" = "running" ] && stop surfaceflinger
+        echo "$BL_LEVEL" > "$BL" 2>/dev/null
+        sleep 1
+    done
+) &
+(
+    while [ -f "$GATE" ]; do
+        pid=$(pidof system_server 2>/dev/null)
+        if [ -n "$pid" ]; then
+            state=$(awk '/^State:/{print $2; exit}' /proc/$pid/status 2>/dev/null)
+            [ "$state" != "T" ] && [ "$state" != "t" ] && kill -STOP "$pid" 2>/dev/null
+        fi
+        sleep 0.2
+    done
+) &
+i=0
+while [ "$(getprop init.svc.surfaceflinger)" != "stopped" ]; do
+    i=$((i+1)); [ $i -gt 20 ] && { echo "FATAL: SF did not stop"; exit 1; }
+    sleep 0.5
+done
+sleep 1
+
+echo "== 3. stop composer HAL + pre-seed brightness =="
+stop vendor.hwcomposer-2-4
+i=0
+while [ "$(getprop init.svc.vendor.hwcomposer-2-4)" != "stopped" ]; do
+    i=$((i+1)); [ $i -gt 10 ] && { echo "FATAL: composer did not stop"; exit 1; }
+    sleep 0.5
+done
+sleep 1
+# sde_connector applies props.brightness at first-frame (allow_bl_update):
+# seed BEFORE kwin's first commit. 0-1023 scale.
+echo 500 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
+dmesg -c > /dev/null 2>&1
+
+echo "== 4. guest prep (udev db for libinput) =="
+$LXC /bin/sh -c '
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    [ -x /usr/local/sbin/det-input-udevdb ] && det-input-udevdb 2>/dev/null
+    install -d -m 700 /run/user/0
+    true'
+
+echo "== 5. launch kwin ($STAGE) =="
+# Root session, NoopSession (no logind): kwin opens /dev/dri + /dev/input
+# directly. Mesa env = /opt/mesa (zink/Turnip GL 4.6) — NEVER /usr/local
+# (hybris) here. KWin 6 DRM backend is atomic-only: this doubles as the
+# atomic probe modetest couldn't deliver.
+$LXC /bin/sh -c '
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    export HOME=/root USER=root LOGNAME=root
+    export XDG_RUNTIME_DIR=/run/user/0 LANG=C.UTF-8 TMPDIR=/tmp
+    . /opt/mesa/env.sh
+    export WLR_NO_HARDWARE_CURSORS=1
+    export QT_QPA_PLATFORM=wayland
+    export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
+    rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
+    STAGE='"$STAGE"'
+    if [ "$STAGE" = plasma ]; then
+        export QT_QUICK_CONTROLS_MOBILE=1 PLASMA_PLATFORM=phone:handset
+        CLIENT="plasmashell"
+    else
+        CLIENT="foot"
+    fi
+    nohup dbus-run-session -- kwin_wayland --no-lockscreen --inputmethod "" \
+        --exit-with-session "$CLIENT" > /tmp/kwin.log 2>&1 &
+    echo "kwin launched (pid $!)"
+' 2>&1
+
+# Input handoff: once kwin binds its wayland socket, release evgrab so kwin
+# (which opened the nodes at startup) starts receiving events.
+GPID=$("$DET/lxc/bin/lxc-info" -P "$DET" -n guest -p 2>/dev/null | awk '{print $2}')
+i=0
+while [ $i -lt 100 ]; do
+    [ -n "$GPID" ] && [ -S "/proc/$GPID/root/run/user/0/wayland-0" ] && break
+    i=$((i+1)); sleep 0.3
+done
+if [ -S "/proc/$GPID/root/run/user/0/wayland-0" ]; then
+    echo "kwin socket up after ~$((i*3/10))s — releasing input grab"
+    [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
+    rm -f "$DET/run/evgrab.pid"
+else
+    echo "WARN: kwin socket never appeared — check /tmp/kwin.log (holding anyway for log capture)"
+fi
+
+echo "== 6. holding ${HOLD}s — LOOK AT (and touch) THE PANEL =="
+sleep "$HOLD"
+
+echo "== 7. kwin log tail =="
+$LXC /bin/sh -c 'tail -60 /tmp/kwin.log' 2>/dev/null
+echo "== 8. kernel log summary =="
+dmesg | grep -iE "sde|drm error|dsi|backlight level|fail" | tail -20
+restore
+exit 0
