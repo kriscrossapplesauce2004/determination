@@ -67,8 +67,10 @@ means, roughly:
    backend as libgbm (`guest/build-minigbm.sh`, `/opt/minigbm`) + the
    compositor's native DRM backend. The vendor composer HAL is just another
    DRM client — stop it (plus SF) and the guest owns KMS. Gates:
-   `guest/native-smoke.sh` (no display risk), then a `modetest -s`
-   dumb-buffer commit on DSI (the go/no-go). Payoff: vendor GL exits the
+   `guest/native-smoke.sh` (no display risk — **PASSED 2026-07-13**), then a
+   `modetest -s` dumb-buffer commit on DSI (the go/no-go —
+   **PASSED 2026-07-13**, `toggle/native-kms-gate`, bars on panel with
+   brightness control; atomic + flip-event delivery still to verify). Payoff: vendor GL exits the
    guest (Adreno varying hack, android_wlegl all retire) and unmodified
    desktops return — phoc native, then **KWin** (NoopSession first, elogind
    if needed). GNOME/Mutter deferred (logind-hard; phosh IS GNOME).
