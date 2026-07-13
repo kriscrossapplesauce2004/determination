@@ -22,10 +22,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Smartphone
 import androidx.compose.material.icons.outlined.SystemUpdateAlt
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Refresh
@@ -103,7 +109,21 @@ enum class Dest(
         "Software", Icons.Outlined.Apps, Icons.Rounded.Apps,
         "Software", "Compositors & guest apps",
     ),
+    Settings(
+        "Settings", Icons.Outlined.Settings, Icons.Rounded.Settings,
+        "Settings", "Battery & behavior",
+    ),
 }
+
+// Long-press the refresh bubble. Nobody long-presses a refresh button.
+private val EGG_QUOTES = listOf(
+    "* (You feel your sins crawling on your back.)",
+    "* [[Hyperlink blocked.]]",
+    "* You're going to have a good time.",
+    "* (The refresh bubble refuses to elaborate.)",
+    "* THE POWER OF FLUFFY BOYS SHINES WITHIN YOU.",
+    "* (It's a phone. It fills you with determination.)",
+)
 
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -129,6 +149,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
             Dest.Control -> vm.refresh()
             Dest.Install -> vm.refreshInstaller()
             Dest.Software -> vm.refreshSoftware()
+            Dest.Settings -> vm.refresh()
         }
     }
 
@@ -149,11 +170,28 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     )
                 }
             }
+            // (7 quick taps on the soul — the number of human souls.)
+            var soulTaps by remember { mutableStateOf(0) }
+            var soulLast by remember { mutableStateOf(0L) }
             val barNav: @Composable () -> Unit = {
                 Image(
                     painterResource(R.drawable.ic_soul),
                     contentDescription = null,
-                    modifier = Modifier.padding(horizontal = 12.dp).size(28.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp)
+                        .size(28.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            val now = System.currentTimeMillis()
+                            soulTaps = if (now - soulLast < 1500) soulTaps + 1 else 1
+                            soulLast = now
+                            if (soulTaps >= 7) {
+                                soulTaps = 0
+                                vm.message = "* Despite everything, it's still you."
+                            }
+                        },
                 )
             }
             val refreshCurrent = {
@@ -161,6 +199,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     Dest.Control -> vm.refresh()
                     Dest.Install -> vm.refreshInstaller()
                     Dest.Software -> vm.refreshSoftware()
+                    Dest.Settings -> vm.refresh()
                 }
             }
             // Refresh lives in the floating bubble on every size class; the
@@ -220,6 +259,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                                 Dest.Control -> ControlScreen(vm, expanded, content, bottomPad)
                                 Dest.Install -> InstallScreen(vm, expanded, content, bottomPad)
                                 Dest.Software -> SoftwareScreen(vm, expanded, content, bottomPad)
+                                Dest.Settings -> SettingsScreen(vm, content, bottomPad)
                             }
                         }
                     }
@@ -228,6 +268,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                         onSelect = { dest = it },
                         busy = vm.busy != null,
                         onRefresh = refreshCurrent,
+                        onRefreshLongPress = { vm.message = EGG_QUOTES.random() },
                         wide = !compact,
                         hazeState = hazeState,
                         modifier = Modifier
@@ -250,13 +291,18 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
  * bubble beside it that doubles as the busy indicator. On wide screens the
  * pill expands: every destination shows its icon and items breathe more.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalHazeMaterialsApi::class)
+@OptIn(
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalHazeMaterialsApi::class,
+    ExperimentalFoundationApi::class,
+)
 @Composable
 private fun FloatingNav(
     dest: Dest,
     onSelect: (Dest) -> Unit,
     busy: Boolean,
     onRefresh: () -> Unit,
+    onRefreshLongPress: () -> Unit,
     wide: Boolean,
     hazeState: HazeState,
     modifier: Modifier = Modifier,
@@ -319,7 +365,6 @@ private fun FloatingNav(
             }
         }
         Surface(
-            onClick = onRefresh,
             shape = CircleShape,
             color = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.onSurface,
@@ -330,6 +375,7 @@ private fun FloatingNav(
                 Modifier
                     .clip(CircleShape)
                     .hazeEffect(hazeState, frost) { blurRadius = 14.dp }
+                    .combinedClickable(onClick = onRefresh, onLongClick = onRefreshLongPress)
                     .size(52.dp),
                 contentAlignment = Alignment.Center,
             ) {

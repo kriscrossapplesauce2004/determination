@@ -91,3 +91,11 @@ fi
 [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
 rm -f "$DET/run/evgrab.pid"
 echo "phone mode restored"
+
+# 5. Battery saver (companion app setting): with the flag set, an idle guest
+#    doesn't linger in phone mode — stop it. desktop-on's guest-start brings
+#    it back on the next entry.
+if [ -f "$DET/etc/stop-guest-on-exit" ]; then
+    echo "stop-guest-on-exit set — stopping guest"
+    "$DET/lxc/bin/lxc-stop" -P "$DET" -n guest -t 10 2>/dev/null
+fi

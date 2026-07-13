@@ -91,10 +91,12 @@ fun ControlScreen(
     val rootOk = vm.rootState == RootState.GRANTED
     val busy = vm.busy != null
 
-    // Live status: quiet re-poll while this screen is visible.
-    LaunchedEffect(rootOk) {
-        while (rootOk) {
-            delay(5_000)
+    // Live status: quiet re-poll while this screen is visible. Period comes
+    // from Settings (0 = manual only) — each poll is a root round-trip.
+    val pollSec = vm.pollSeconds
+    LaunchedEffect(rootOk, pollSec) {
+        while (rootOk && pollSec > 0) {
+            delay(pollSec * 1000L)
             vm.refreshQuiet()
         }
     }
@@ -313,7 +315,9 @@ private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
                         )
                     }
                     Text(
-                        "Battery  $batt%  ·  ${s["battmv"] ?: "?"} mV  ·  ${s["battstat"] ?: ""}",
+                        // (only ever visible at exactly 1% — you cannot give up just yet)
+                        if (batt == 1 && !charging) "* But it refused.  ·  1%"
+                        else "Battery  $batt%  ·  ${s["battmv"] ?: "?"} mV  ·  ${s["battstat"] ?: ""}",
                         style = MaterialTheme.typography.labelMedium,
                         color = if (low) MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant,

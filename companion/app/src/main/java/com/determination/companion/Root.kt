@@ -148,6 +148,17 @@ object Root {
     fun recoverDesktop(): Result =
         run("$LXC/lxc-attach -P $DET -n guest -- /usr/bin/pkill -TERM phoc", 15)
 
+    /** Stop the guest container (battery saver — it idles at ~0 but holds RAM + wakeups). */
+    fun stopGuest(): Result = run("$LXC/lxc-stop -P $DET -n guest -t 10", 30)
+
+    /**
+     * Persist the "stop guest when leaving desktop mode" flag where desktop-off
+     * reads it, so exits triggered from inside the desktop honor it too.
+     */
+    fun setStopGuestOnExitFlag(on: Boolean): Result =
+        if (on) run("mkdir -p $DET/etc && touch $DET/etc/stop-guest-on-exit", 8)
+        else run("rm -f $DET/etc/stop-guest-on-exit", 8)
+
     /** Stop + cold-start the guest container (guest-start is idempotent). */
     fun restartGuest(): Result = run(
         "$LXC/lxc-stop -P $DET -n guest -t 10 2>/dev/null; $BIN/guest-start", 40

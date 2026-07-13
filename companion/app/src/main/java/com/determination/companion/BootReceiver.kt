@@ -14,6 +14,8 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED) return
+        Prefs.init(context)
+        if (!Prefs.audioBridgeAtBoot) return
         val svc = Intent(context, AudioBridgeService::class.java)
             .putExtra(AudioBridgeService.EXTRA_FROM_BOOT, true)
         context.startForegroundService(svc)
