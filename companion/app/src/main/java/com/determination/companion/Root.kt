@@ -99,6 +99,7 @@ object Root {
     /** One su round-trip that returns parseable key=value status lines. */
     fun status(): Map<String, String> {
         val script = """
+            echo "uid=${'$'}(id -u)"
             echo "kernel=${'$'}(uname -r)"
             echo "sf=${'$'}(getprop init.svc.surfaceflinger)"
             [ -f $DET/run/desktop-mode ] && echo "mode=desktop" || echo "mode=phone"
@@ -252,14 +253,27 @@ object Root {
         run("$LXC/lxc-info -P $DET -n guest 2>/dev/null | grep -q RUNNING && echo yes", 8)
             .out.contains("yes")
 
-    /** dpkg status for many packages in one round-trip: pkg=installed|absent */
+    /** Compositor pref + guest state in one su round-trip (Software tab load). */
+    fun sessionInfo(): Map<String, String> = parseKv(
+        run(
+            "echo \"compositor=${'$'}(cat $DET/etc/compositor 2>/dev/null)\"; " +
+                "$LXC/lxc-info -P $DET -n guest 2>/dev/null | grep -q RUNNING " +
+                "&& echo guestup=yes || echo guestup=no",
+            10
+        ).out
+    )
+
+    /** dpkg status for many packages: ONE lxc-attach for the whole list. */
     fun dpkgStatus(pkgs: List<String>): Map<String, String> {
         if (pkgs.isEmpty()) return emptyMap()
-        val names = pkgs.joinToString(" ") { it.filter { c -> c.isLetterOrDigit() || c in ".+-" } }
-        val script = "for p in $names; do " +
-            "$LXC/lxc-attach -P $DET -n guest -- dpkg-query -W -f '\${db:Status-Status}' \"\$p\" 2>/dev/null | grep -q installed " +
-            "&& echo \"\$p=installed\" || echo \"\$p=absent\"; done"
-        return parseKv(run(script, 30).out)
+        val safe = pkgs.map { it.filter { c -> c.isLetterOrDigit() || c in ".+-" } }
+        val r = run(
+            "$LXC/lxc-attach -P $DET -n guest -- dpkg-query -W " +
+                "-f '\${Package}=\${db:Status-Status}\\n' ${safe.joinToString(" ")} 2>/dev/null",
+            30
+        )
+        val states = parseKv(r.out)
+        return safe.associateWith { if (states[it] == "installed") "installed" else "absent" }
     }
 
     /** apt-get install inside the guest. Long timeout — packages can be big. */

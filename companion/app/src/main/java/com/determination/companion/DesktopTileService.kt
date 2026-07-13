@@ -22,8 +22,10 @@ class DesktopTileService : TileService() {
 
     private fun refreshTile() {
         io.execute {
-            val hasRoot = Root.hasRoot()
-            val mode = if (hasRoot) Root.status()["mode"] ?: "?" else "?"
+            // One su round-trip: status carries uid, which is the root check.
+            val s = Root.status()
+            val hasRoot = s["uid"] == "0"
+            val mode = if (hasRoot) s["mode"] ?: "?" else "?"
             val t = qsTile ?: return@execute
             when {
                 !hasRoot -> {
@@ -47,9 +49,9 @@ class DesktopTileService : TileService() {
     override fun onClick() {
         super.onClick()
         io.execute {
-            if (!Root.hasRoot()) return@execute
-            val mode = Root.status()["mode"]
-            if (mode == "desktop") Root.exitDesktop() else Root.enterDesktop()
+            val s = Root.status()
+            if (s["uid"] != "0") return@execute
+            if (s["mode"] == "desktop") Root.exitDesktop() else Root.enterDesktop()
             refreshTile()
         }
     }

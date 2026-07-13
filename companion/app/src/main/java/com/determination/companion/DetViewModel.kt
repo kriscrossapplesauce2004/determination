@@ -132,9 +132,11 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
     fun refresh() {
         busy = "status"
         viewModelScope.launch(Dispatchers.IO) {
-            val hasRoot = Root.hasRoot()
-            rootState = if (hasRoot) RootState.GRANTED else RootState.DENIED
-            status = if (hasRoot) Root.status() else emptyMap()
+            // One su round-trip: the status script reports uid, which doubles
+            // as the root check (previously a separate `id -u` trip).
+            val s = Root.status()
+            rootState = if (s["uid"] == "0") RootState.GRANTED else RootState.DENIED
+            status = if (rootState == RootState.GRANTED) s else emptyMap()
             busy = null
         }
     }
@@ -159,8 +161,9 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
         if (rootState != RootState.GRANTED) return
         busy = "software"
         viewModelScope.launch(Dispatchers.IO) {
-            compositor = Root.getCompositor()
-            guestUp = Root.guestRunning()
+            val info = Root.sessionInfo()
+            compositor = (info["compositor"] ?: "").ifBlank { "phosh" }
+            guestUp = info["guestup"] == "yes"
             pkgStatus =
                 if (guestUp) Root.dpkgStatus(CATALOG.map { it.pkg } + COMPOSITORS.mapNotNull { it.aptPkg })
                 else emptyMap()

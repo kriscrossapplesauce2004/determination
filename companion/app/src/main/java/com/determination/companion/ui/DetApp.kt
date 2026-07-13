@@ -4,8 +4,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.horizontalScroll
@@ -71,7 +71,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -238,8 +240,11 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     AnimatedContent(
                         targetState = dest,
                         transitionSpec = {
-                            (fadeIn() + slideInVertically { it / 12 })
-                                .togetherWith(fadeOut() + slideOutVertically { -it / 16 })
+                            // Slide toward the tab you moved to — the screen
+                            // follows the pill direction instead of dropping in.
+                            val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                            (fadeIn() + slideInHorizontally { dir * it / 14 })
+                                .togetherWith(fadeOut() + slideOutHorizontally { -dir * it / 18 })
                         },
                         label = "screen",
                         modifier = Modifier.fillMaxSize().hazeSource(hazeState),
@@ -309,7 +314,9 @@ private fun FloatingNav(
 ) {
     val stroke = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f))
     val frost = HazeMaterials.thin(MaterialTheme.colorScheme.surfaceContainerHigh)
-    val itemPadH = if (wide) 20.dp else 16.dp
+    val haptics = LocalHapticFeedback.current
+    // Compact fits four destinations because unselected items are icon-only.
+    val itemPadH = if (wide) 20.dp else 14.dp
     Row(
         modifier,
         verticalAlignment = Alignment.CenterVertically,
@@ -333,7 +340,10 @@ private fun FloatingNav(
                 Dest.entries.forEach { d ->
                     val selected = d == dest
                     Surface(
-                        onClick = { onSelect(d) },
+                        onClick = {
+                            if (!selected) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+                            onSelect(d)
+                        },
                         shape = CircleShape,
                         color = if (selected) MaterialTheme.colorScheme.secondaryContainer
                         else Color.Transparent,
@@ -347,14 +357,12 @@ private fun FloatingNav(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            if (selected || wide) {
-                                Icon(
-                                    if (selected) d.activeIcon else d.icon,
-                                    null,
-                                    Modifier.size(18.dp),
-                                )
-                            }
-                            Text(
+                            Icon(
+                                if (selected) d.activeIcon else d.icon,
+                                contentDescription = d.label,
+                                modifier = Modifier.size(if (selected || wide) 18.dp else 20.dp),
+                            )
+                            if (selected || wide) Text(
                                 d.label,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
