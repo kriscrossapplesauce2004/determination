@@ -15,6 +15,10 @@ export XDG_CONFIG_DIRS="$HOME/.config/plasma-mobile:/etc/xdg:${XDG_CONFIG_DIRS:-
 
 QT_QPA_PLATFORM=offscreen plasma-mobile-envmanager --apply-settings || true
 
+# Rebuild the KService cache or the homescreen/app drawer shows no apps —
+# nothing else in this minimal session (no full startplasma) ever builds it.
+kbuildsycoca6 >/var/log/kbuildsycoca.log 2>&1 || true
+
 # kactivitymanagerd first (dbus activation raced and crashed it last run);
 # the mobile corona wants it.
 /usr/lib/aarch64-linux-gnu/libexec/kactivitymanagerd >/var/log/kactivitymanagerd.log 2>&1 &
