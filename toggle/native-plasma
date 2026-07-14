@@ -24,6 +24,9 @@ case "$STAGE" in
     plasma) HOLD=180;;
     *) echo "usage: native-plasma [kwin|plasma]"; exit 1;;
 esac
+# DET_HOLD env overrides the hold (e.g. 86400 for a persistent session;
+# end it early with: sh native-restore).
+HOLD="${DET_HOLD:-$HOLD}"
 
 [ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active — run desktop-off first"; exit 1; }
 $LXC /bin/true 2>/dev/null || { echo "FATAL: guest not running"; exit 1; }
