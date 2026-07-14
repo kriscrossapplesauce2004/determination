@@ -21,5 +21,7 @@ if [ "$CLIENT" = "plasmashell" ]; then
 fi
 
 rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
+# /var/log, NOT /tmp: the container rebooted post-teardown once (2026-07-14)
+# and tmpfs ate the evidence.
 exec dbus-run-session -- kwin_wayland --no-lockscreen \
-    --exit-with-session "$CLIENT" > /tmp/kwin.log 2>&1
+    --exit-with-session "$CLIENT" > /var/log/kwin.log 2>&1

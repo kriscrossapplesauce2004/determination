@@ -31,8 +31,10 @@ if [ "$(getprop init.svc.surfaceflinger)" != "running" ]; then
     done
 fi
 # bootanim keeper (60s): the one-shot exit dance races (2026-07-13 x2).
+# setsid-detached or it dies with the adb session and the loop returns
+# (2026-07-14: bootanim loop-of-doom after a normal restore, keeper HUP'd).
 if [ "$(getprop sys.boot_completed)" = "1" ]; then
-    (
+    setsid sh -c '
         end=$(( $(date +%s) + 60 ))
         while [ "$(date +%s)" -lt "$end" ]; do
             if [ "$(getprop init.svc.bootanim)" = "running" ]; then
@@ -43,7 +45,7 @@ if [ "$(getprop sys.boot_completed)" = "1" ]; then
             fi
             sleep 1
         done
-    ) &
+    ' </dev/null >/dev/null 2>&1 &
 fi
 [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
 rm -f "$DET/run/evgrab.pid"

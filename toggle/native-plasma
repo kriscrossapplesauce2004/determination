@@ -11,7 +11,7 @@
 #   plasma  — full Plasma Mobile shell (plasmashell mobile lookandfeel)
 #             inside kwin, ~3 min hold.
 # Ends by itself; desktop-off-style restore. Logs: /data/local/tmp/
-# native-plasma.out + kwin log at guest /tmp/kwin.log (pulled by caller).
+# native-plasma.out + kwin log at guest /var/log/kwin.log (pulled by caller).
 set -u
 DET=/data/determination
 LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
@@ -138,14 +138,14 @@ if [ -S "/proc/$GPID/root/run/user/0/wayland-0" ]; then
     [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
     rm -f "$DET/run/evgrab.pid"
 else
-    echo "WARN: kwin socket never appeared — check /tmp/kwin.log (holding anyway for log capture)"
+    echo "WARN: kwin socket never appeared — check /var/log/kwin.log (holding anyway for log capture)"
 fi
 
 echo "== 6. holding ${HOLD}s — LOOK AT (and touch) THE PANEL =="
 sleep "$HOLD"
 
 echo "== 7. kwin log tail =="
-$LXC /bin/sh -c 'tail -60 /tmp/kwin.log' 2>/dev/null
+$LXC /bin/sh -c 'tail -60 /var/log/kwin.log' 2>/dev/null
 echo "== 8. kernel log summary =="
 dmesg | grep -iE "sde|drm error|dsi|backlight level|fail" | tail -20
 restore
