@@ -32,7 +32,18 @@ rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
 # /var/log, NOT /tmp: the container rebooted post-teardown once (2026-07-14)
 # and tmpfs ate the evidence. Bus address exported for mid-run busctl
 # diagnostics (native-plasma step 6a).
-exec dbus-run-session -- /bin/sh -c '
-    echo "$DBUS_SESSION_BUS_ADDRESS" > /run/det-plasma-bus
-    exec kwin_wayland --no-lockscreen --exit-with-session "$1"
-' _ "$CLIENT" > /var/log/kwin.log 2>&1
+# plasma stage: client passed positionally (NOT --exit-with-session) so a
+# plasmashell crash — e.g. the Qt 6.8 wp_fractional_scale/get_tearing_control
+# protocol error (2026-07-14, opening Settings) — doesn't take the whole
+# session down; plasmashell auto-respawns. foot keeps exit-with-session.
+if [ "$CLIENT" = /usr/local/bin/det-plasma-client ]; then
+    exec dbus-run-session -- /bin/sh -c '
+        echo "$DBUS_SESSION_BUS_ADDRESS" > /run/det-plasma-bus
+        exec kwin_wayland --no-lockscreen "$1"
+    ' _ "$CLIENT" > /var/log/kwin.log 2>&1
+else
+    exec dbus-run-session -- /bin/sh -c '
+        echo "$DBUS_SESSION_BUS_ADDRESS" > /run/det-plasma-bus
+        exec kwin_wayland --no-lockscreen --exit-with-session "$1"
+    ' _ "$CLIENT" > /var/log/kwin.log 2>&1
+fi

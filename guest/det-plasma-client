@@ -20,4 +20,6 @@ QT_QPA_PLATFORM=offscreen plasma-mobile-envmanager --apply-settings || true
 /usr/lib/aarch64-linux-gnu/libexec/kactivitymanagerd >/var/log/kactivitymanagerd.log 2>&1 &
 sleep 2
 
-exec plasmashell --no-respawn
+# no --no-respawn: plasmashell self-restarts after crashes (Qt 6.8
+# fractional-scale protocol error kills it when opening Settings).
+exec plasmashell
