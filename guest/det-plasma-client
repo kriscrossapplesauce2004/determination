@@ -1,0 +1,23 @@
+#!/bin/sh
+# Determination: Plasma Mobile shell client, launched inside our kwin session
+# (det-plasma-session). Mirrors /usr/bin/startplasmamobile's env WITHOUT
+# startplasma-wayland (which would spawn its own kwin_wayland_wrapper) —
+# missing PLASMA_DEFAULT_SHELL was the 'starting invalid corona
+# "org.kde.plasma.desktop"' instant crash (2026-07-14).
+export QT_QPA_PLATFORMTHEME=KDE
+export QT_QUICK_CONTROLS_STYLE=org.kde.breeze
+export QT_ENABLE_GLYPH_CACHE_WORKAROUND=1
+export QT_QUICK_CONTROLS_MOBILE=true
+export PLASMA_INTEGRATION_USE_PORTAL=1
+export PLASMA_PLATFORM=phone:handset
+export PLASMA_DEFAULT_SHELL=org.kde.plasma.mobileshell
+export XDG_CONFIG_DIRS="$HOME/.config/plasma-mobile:/etc/xdg:${XDG_CONFIG_DIRS:-/etc/xdg}"
+
+QT_QPA_PLATFORM=offscreen plasma-mobile-envmanager --apply-settings || true
+
+# kactivitymanagerd first (dbus activation raced and crashed it last run);
+# the mobile corona wants it.
+/usr/lib/aarch64-linux-gnu/libexec/kactivitymanagerd >/var/log/kactivitymanagerd.log 2>&1 &
+sleep 2
+
+exec plasmashell --no-respawn

@@ -92,6 +92,10 @@ sleep 1
 # sde_connector applies props.brightness at first-frame (allow_bl_update):
 # seed BEFORE kwin's first commit. 0-1023 scale.
 echo 500 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
+# The SDE writeback connector reports Connected with 34 modes; kwin treats
+# it as a real second output and (suspected) maps the touchscreen to it.
+# Force it off for the session; native-restore sets it back to detect.
+echo off > /sys/class/drm/card0-Virtual-1/status 2>/dev/null
 dmesg -c > /dev/null 2>&1
 
 echo "== 4. guest prep (udev db, logind) =="
@@ -141,8 +145,34 @@ else
     echo "WARN: kwin socket never appeared — check /var/log/kwin.log (holding anyway for log capture)"
 fi
 
+# TOUCH FIX (2026-07-14): stopping SF suspends the oplus touchpanel into
+# gesture mode (taps logged as "detect single tap gesture", no input events).
+# The msm_atomic notifier calls are compiled OUT on oplus kernels
+# (#ifndef OPLUS_BUG_STABILITY) so kwin's raw-KMS unblank never resumes it.
+# oplus_display_private_api.c exposes a manual trigger: writing 1 fires
+# MSM_DRM_EVENT_BLANK/UNBLANK → tp_resume. Fire after kwin's first commit.
+sleep 3
+echo 1 > /sys/kernel/oplus_display/notify_panel_blank 2>/dev/null
+echo "touchpanel resume notifier fired"
+
 echo "== 6. holding ${HOLD}s — LOOK AT (and touch) THE PANEL =="
-sleep "$HOLD"
+sleep 15
+echo "== 6a. input diagnostics (touch dead across runs 1-6) =="
+$LXC /bin/sh -c '
+    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    KPID=$(pgrep -o kwin_wayland); echo "kwin pid: $KPID"
+    echo "-- input fds held by kwin:"
+    ls -l /proc/$KPID/fd 2>/dev/null | grep -oE "/dev/input/event[0-9]+" | sort | uniq -c
+    echo "-- logind session state files:"
+    grep -H -E "^(ACTIVE|STATE|VTNR|SEAT|TTY)" /run/systemd/sessions/* 2>/dev/null
+    echo "-- active VT: $(cat /sys/class/tty/tty0/active 2>/dev/null)"
+    echo "-- kwin event1 (touchpanel) InputDevice properties:"
+    BUS=$(cat /run/det-plasma-bus 2>/dev/null)
+    [ -n "$BUS" ] && busctl --address="$BUS" call org.kde.KWin \
+        /org/kde/KWin/InputDevice/event1 org.freedesktop.DBus.Properties \
+        GetAll s org.kde.KWin.InputDevice 2>&1 | tr "}" "\n" | grep -iE "enabled|output|touch|name" | head
+    true' 2>&1
+sleep $((HOLD-15))
 
 echo "== 7. kwin log tail =="
 $LXC /bin/sh -c 'tail -60 /var/log/kwin.log' 2>/dev/null

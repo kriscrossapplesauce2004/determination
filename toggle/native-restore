@@ -11,12 +11,23 @@ GATE="$DET/run/native-gate"
 
 echo "== native-restore $(date) =="
 rm -f "$GATE"
+echo detect > /sys/class/drm/card0-Virtual-1/status 2>/dev/null
 $LXC /bin/sh -c 'export PATH=/usr/sbin:/usr/bin:/sbin:/bin; systemctl stop det-plasma 2>/dev/null; pkill -TERM plasmashell; pkill -TERM foot; sleep 1; pkill -TERM kwin_wayland; sleep 1; pkill -KILL -f kwin_wayland; true' 2>/dev/null
 sleep 0.5
 if [ "$(getprop init.svc.vendor.hwcomposer-2-4)" != "running" ]; then
     start vendor.hwcomposer-2-4
     sleep 2
 fi
+# Raw-KMS sessions wedge the color/livedisplay HALs (HwBinder SIGSEGV);
+# every system_server respawn then dies in LiveDisplayService.onBootPhase
+# (getHueRange throws) = the bootanim loop of doom (2026-07-14 x2).
+# Bounce them BEFORE ss comes up so they re-init on the fresh composer.
+stop vendor.livedisplay-hal
+stop display-color-hal-1-0
+sleep 1
+start display-color-hal-1-0
+sleep 1
+start vendor.livedisplay-hal
 if [ "$(getprop init.svc.surfaceflinger)" != "running" ]; then
     sspid=$(pidof system_server 2>/dev/null)
     if [ -n "$sspid" ]; then

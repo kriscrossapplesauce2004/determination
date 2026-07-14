@@ -13,15 +13,26 @@ install -d -m 700 "$XDG_RUNTIME_DIR"
 
 . /opt/mesa/env.sh
 export QT_QPA_PLATFORM=wayland XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
+# Diagnostics (2026-07-14 run 1 failed GL init + touch with no evidence):
+# mesa EGL reasons + KWin's GL-backend and libinput device-add logging.
+export EGL_LOG_LEVEL=debug
+export QT_LOGGING_RULES="kwin_*.debug=true"
+# Desktop-GL context created but checkSupported failed silently (run 2);
+# force a GLES context — zink's GLES 3.2 passes all of KWin's checks.
+export KWIN_COMPOSE=O2ES
 
 [ -f /run/det-plasma.env ] && . /run/det-plasma.env
 CLIENT="${DET_PLASMA_CLIENT:-foot}"
-if [ "$CLIENT" = "plasmashell" ]; then
-    export QT_QUICK_CONTROLS_MOBILE=1 PLASMA_PLATFORM=phone:handset
-fi
+# Plasma Mobile needs the full startplasmamobile env (PLASMA_DEFAULT_SHELL
+# etc.) — det-plasma-client wraps that; plain plasmashell insta-crashes with
+# an invalid desktop corona.
+[ "$CLIENT" = "plasmashell" ] && CLIENT=/usr/local/bin/det-plasma-client
 
 rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
 # /var/log, NOT /tmp: the container rebooted post-teardown once (2026-07-14)
-# and tmpfs ate the evidence.
-exec dbus-run-session -- kwin_wayland --no-lockscreen \
-    --exit-with-session "$CLIENT" > /var/log/kwin.log 2>&1
+# and tmpfs ate the evidence. Bus address exported for mid-run busctl
+# diagnostics (native-plasma step 6a).
+exec dbus-run-session -- /bin/sh -c '
+    echo "$DBUS_SESSION_BUS_ADDRESS" > /run/det-plasma-bus
+    exec kwin_wayland --no-lockscreen --exit-with-session "$1"
+' _ "$CLIENT" > /var/log/kwin.log 2>&1
