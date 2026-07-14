@@ -12,6 +12,10 @@ export PLASMA_INTEGRATION_USE_PORTAL=1
 export PLASMA_PLATFORM=phone:handset
 export PLASMA_DEFAULT_SHELL=org.kde.plasma.mobileshell
 export XDG_CONFIG_DIRS="$HOME/.config/plasma-mobile:/etc/xdg:${XDG_CONFIG_DIRS:-/etc/xdg}"
+# Debian ships /etc/xdg/menus/plasma-applications.menu — without the prefix
+# kbuildsycoca6 looks for plain applications.menu, finds nothing, and the
+# app drawer stays EMPTY (2026-07-14).
+export XDG_MENU_PREFIX=plasma-
 
 QT_QPA_PLATFORM=offscreen plasma-mobile-envmanager --apply-settings || true
 
