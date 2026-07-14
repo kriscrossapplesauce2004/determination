@@ -58,13 +58,24 @@ cat > /usr/local/sbin/det-input-udevdb <<'EOF'
 # condition-blocked in this container: /sys is read-only). /run is tmpfs —
 # desktop-on re-runs this before each phoc launch. Only devices input_id
 # actually classifies get an entry; the rest stay invisible to libinput.
+#
+# 2026-07-14 (KWin/logind): logind TakeDevice needs (a) the eventN char entry
+# to exist so sd_device sees it initialized ("I:" line), and (b) the PARENT
+# inputN device (db id "+input:inputN") to carry current udev tag "seat"
+# ("Q:seat"), or session_device_verify → manager_process_seat_device skips it
+# and TakeDevice returns ENODEV. Verified against systemd v257 source.
 set -e
 mkdir -p /run/udev/data
 for ev in /sys/class/input/event*; do
     [ -e "$ev" ] || continue
     props=$(udevadm test-builtin input_id "$ev" 2>/dev/null | grep '^ID_' || true)
     [ -n "$props" ] || continue
-    printf '%s\n' "$props" | sed 's/^/E:/' > "/run/udev/data/c$(cat "$ev/dev")"
+    { printf 'I:1\n'; printf '%s\n' "$props" | sed 's/^/E:/'; } \
+        > "/run/udev/data/c$(cat "$ev/dev")"
+    parent=$(basename "$(readlink -f "$ev/device")")
+    case "$parent" in input*)
+        printf 'I:1\nG:seat\nQ:seat\n' > "/run/udev/data/+input:$parent"
+    esac
 done
 EOF
 chmod 755 /usr/local/sbin/det-input-udevdb

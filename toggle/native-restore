@@ -1,0 +1,50 @@
+#!/system/bin/sh
+# M5 native track: standalone phone-mode restore. Idempotent — safe to run
+# any time the panel is stuck after a native-kms/native-plasma run (works
+# even if the run was interrupted mid-flight and its trap never fired).
+# Sequence proven 2026-07-13: gate flag off (kills suppressor/freezer loops)
+# → guest compositor teardown → composer HAL → SIGKILL frozen ss (NEVER
+# SIGCONT) → SF → bootanim keeper (one-shot exit dance races) → evgrab off.
+DET=/data/determination
+LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
+GATE="$DET/run/native-gate"
+
+echo "== native-restore $(date) =="
+rm -f "$GATE"
+$LXC /bin/sh -c 'export PATH=/usr/sbin:/usr/bin:/sbin:/bin; systemctl stop det-plasma 2>/dev/null; pkill -TERM plasmashell; pkill -TERM foot; sleep 1; pkill -TERM kwin_wayland; sleep 1; pkill -KILL -f kwin_wayland; true' 2>/dev/null
+sleep 0.5
+if [ "$(getprop init.svc.vendor.hwcomposer-2-4)" != "running" ]; then
+    start vendor.hwcomposer-2-4
+    sleep 2
+fi
+if [ "$(getprop init.svc.surfaceflinger)" != "running" ]; then
+    sspid=$(pidof system_server 2>/dev/null)
+    if [ -n "$sspid" ]; then
+        state=$(awk '/^State:/{print $2; exit}' /proc/$sspid/status 2>/dev/null)
+        [ "$state" = "T" ] || [ "$state" = "t" ] && kill -KILL "$sspid" 2>/dev/null
+    fi
+    start surfaceflinger
+    i=0
+    until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
+        i=$((i+1)); [ $i -gt 20 ] && { echo "WARN: SF slow to return"; break; }
+        sleep 0.5
+    done
+fi
+# bootanim keeper (60s): the one-shot exit dance races (2026-07-13 x2).
+if [ "$(getprop sys.boot_completed)" = "1" ]; then
+    (
+        end=$(( $(date +%s) + 60 ))
+        while [ "$(date +%s)" -lt "$end" ]; do
+            if [ "$(getprop init.svc.bootanim)" = "running" ]; then
+                setprop service.bootanim.exit 1
+                setprop service.bootanim.progress 1
+                sleep 3
+                [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim
+            fi
+            sleep 1
+        done
+    ) &
+fi
+[ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
+rm -f "$DET/run/evgrab.pid"
+echo "phone mode restored (sf=$(getprop init.svc.surfaceflinger) hwc=$(getprop init.svc.vendor.hwcomposer-2-4))"

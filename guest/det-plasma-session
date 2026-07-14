@@ -1,0 +1,25 @@
+#!/bin/sh
+# Determination: launched by det-plasma.service inside a PAM/logind session.
+# Mesa env = /opt/mesa (zink/Turnip GL) — never /usr/local (hybris world).
+# Stage selection via /run/det-plasma.env (written by toggle/native-plasma):
+#   DET_PLASMA_CLIENT=foot         kwin smoke (default)
+#   DET_PLASMA_CLIENT=plasmashell  full Plasma Mobile shell
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/root USER=root LOGNAME=root
+export LANG=C.UTF-8 TMPDIR=/tmp
+# pam_systemd sets XDG_RUNTIME_DIR; belt-and-braces for manual runs.
+[ -n "${XDG_RUNTIME_DIR:-}" ] || export XDG_RUNTIME_DIR=/run/user/0
+install -d -m 700 "$XDG_RUNTIME_DIR"
+
+. /opt/mesa/env.sh
+export QT_QPA_PLATFORM=wayland XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
+
+[ -f /run/det-plasma.env ] && . /run/det-plasma.env
+CLIENT="${DET_PLASMA_CLIENT:-foot}"
+if [ "$CLIENT" = "plasmashell" ]; then
+    export QT_QUICK_CONTROLS_MOBILE=1 PLASMA_PLATFORM=phone:handset
+fi
+
+rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
+exec dbus-run-session -- kwin_wayland --no-lockscreen \
+    --exit-with-session "$CLIENT" > /tmp/kwin.log 2>&1

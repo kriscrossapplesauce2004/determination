@@ -34,47 +34,20 @@ restore() {
     [ "$restored" = 1 ] && return
     restored=1
     echo "== restore =="
-    rm -f "$GATE"
-    # Clean guest session teardown first (mirror desktop-off step 2: clients,
-    # then compositor; kwin must release DRM master before the vendor HAL
-    # rebinds).
-    $LXC /bin/sh -c 'pkill -TERM plasmashell; pkill -TERM foot; sleep 1; pkill -TERM kwin_wayland; true' 2>/dev/null
-    i=0
-    while pgrep -f kwin_wayland >/dev/null 2>&1; do
-        i=$((i+1)); [ $i -gt 30 ] && { echo "WARN: kwin still alive after 3s — SIGKILL"; pkill -KILL -f kwin_wayland; break; }
-        sleep 0.1
-    done
-    sleep 0.5
-    start vendor.hwcomposer-2-4
-    sleep 2
-    sspid=$(pidof system_server 2>/dev/null)
-    [ -n "$sspid" ] && kill -KILL "$sspid" 2>/dev/null
-    start surfaceflinger
-    i=0
-    until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
-        i=$((i+1)); [ $i -gt 20 ] && { echo "WARN: SF slow to return"; break; }
-        sleep 0.5
-    done
-    # bootanim keeper (60s): the one-shot exit dance races (2026-07-13 x2).
-    if [ "$(getprop sys.boot_completed)" = "1" ]; then
-        (
-            end=$(( $(date +%s) + 60 ))
-            while [ "$(date +%s)" -lt "$end" ]; do
-                if [ "$(getprop init.svc.bootanim)" = "running" ]; then
-                    setprop service.bootanim.exit 1
-                    setprop service.bootanim.progress 1
-                    sleep 3
-                    [ "$(getprop init.svc.bootanim)" = "running" ] && stop bootanim
-                fi
-                sleep 1
-            done
-        ) &
-    fi
-    [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
-    rm -f "$DET/run/evgrab.pid"
-    echo "phone mode restored (sf=$(getprop init.svc.surfaceflinger) hwc=$(getprop init.svc.vendor.hwcomposer-2-4))"
+    sh "$DET/bin/native-restore"
 }
 trap restore EXIT INT TERM
+
+# Orphan watchdog: if THIS script dies without its trap (SIGKILL, adb drop,
+# tool-call rejection mid-flight — happened 2026-07-13, panel stayed dark),
+# the detached watcher runs native-restore. Normal exit removes $GATE first,
+# so the watchdog no-ops.
+(
+    setsid sh -c "
+        while kill -0 $$ 2>/dev/null; do sleep 1; done
+        [ -f '$GATE' ] && sh '$DET/bin/native-restore' >> /data/local/tmp/native-restore-watchdog.log 2>&1
+    " </dev/null >/dev/null 2>&1 &
+) &
 
 echo "--- native-plasma stage=$STAGE $(date)"
 echo "== 1. input grab =="
@@ -121,38 +94,36 @@ sleep 1
 echo 500 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
 dmesg -c > /dev/null 2>&1
 
-echo "== 4. guest prep (udev db for libinput) =="
+echo "== 4. guest prep (udev db, logind) =="
+# logind TakeDevice returns ENODEV for any device without a udev DB entry
+# (no udevd in the container). det-input-udevdb fakes the input nodes;
+# fake the DRM card the same way (seat0 + master-of-seat tags) or KWin's
+# "Failed to open /dev/dri/card0 (No such device)" comes back (2026-07-14).
 $LXC /bin/sh -c '
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     [ -x /usr/local/sbin/det-input-udevdb ] && det-input-udevdb 2>/dev/null
-    install -d -m 700 /run/user/0
+    mkdir -p /run/udev/data
+    for c in /sys/class/drm/card[0-9]; do
+        [ -e "$c/dev" ] || continue
+        printf "E:ID_SEAT=seat0\nG:seat\nG:master-of-seat\nQ:seat\nQ:master-of-seat\nI:1\n" \
+            > "/run/udev/data/c$(cat "$c/dev")"
+    done
+    systemctl start systemd-logind
     true'
 
-echo "== 5. launch kwin ($STAGE) =="
-# Root session, NoopSession (no logind): kwin opens /dev/dri + /dev/input
-# directly. Mesa env = /opt/mesa (zink/Turnip GL 4.6) — NEVER /usr/local
-# (hybris) here. KWin 6 DRM backend is atomic-only: this doubles as the
-# atomic probe modetest couldn't deliver.
-$LXC /bin/sh -c '
-    export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    export HOME=/root USER=root LOGNAME=root
-    export XDG_RUNTIME_DIR=/run/user/0 LANG=C.UTF-8 TMPDIR=/tmp
-    . /opt/mesa/env.sh
-    export WLR_NO_HARDWARE_CURSORS=1
-    export QT_QPA_PLATFORM=wayland
-    export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
-    rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
-    STAGE='"$STAGE"'
-    if [ "$STAGE" = plasma ]; then
-        export QT_QUICK_CONTROLS_MOBILE=1 PLASMA_PLATFORM=phone:handset
-        CLIENT="plasmashell"
-    else
-        CLIENT="foot"
-    fi
-    nohup dbus-run-session -- kwin_wayland --no-lockscreen --inputmethod "" \
-        --exit-with-session "$CLIENT" > /tmp/kwin.log 2>&1 &
-    echo "kwin launched (pid $!)"
-' 2>&1
+echo "== 5. launch kwin ($STAGE) via det-plasma.service =="
+# KWin 6 refuses to open devices outside a logind session (NoopSession::
+# openRestricted is `return -1` — even root). det-plasma.service uses
+# PAMName=login + TTYPath so pam_systemd registers a real logind session
+# (greetd-style). Session script: guest /usr/local/bin/det-plasma-session
+# (mesa /opt/mesa env). KWin 6 DRM backend is atomic-only: this doubles as
+# the atomic probe modetest couldn't deliver.
+if [ "$STAGE" = plasma ]; then
+    $LXC /bin/sh -c 'echo DET_PLASMA_CLIENT=plasmashell > /run/det-plasma.env'
+else
+    $LXC /bin/sh -c 'echo DET_PLASMA_CLIENT=foot > /run/det-plasma.env'
+fi
+$LXC /bin/sh -c 'export PATH=/usr/sbin:/usr/bin:/sbin:/bin; systemctl daemon-reload; systemctl restart det-plasma; sleep 2; systemctl is-active det-plasma; loginctl list-sessions --no-legend 2>/dev/null' 2>&1
 
 # Input handoff: once kwin binds its wayland socket, release evgrab so kwin
 # (which opened the nodes at startup) starts receiving events.
