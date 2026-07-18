@@ -59,10 +59,11 @@ det connect                # discover + connect over wireless adb
   Run this and a full round-trip regression at the end of every session.
 - **Wedged/blanked session:** `pkill phoc` in the guest — the desktop-on
   supervisor relaunches everything (input grabs included) in ~10s.
-- **Guest networking is only reliable in PHONE mode.** In desktop mode
-  `system_server` crash-loops and thrashes netd/WiFi (the Milestone-6 Zygisk
-  hook is the real fix). Do network-heavy guest work in phone mode; see
-  `[[det-guest]]` for the debugging playbook.
+- **Guest networking is verified in desktop mode.** `desktop-on` freezes
+  `system_server`, preventing its blocked display thread from reaching the
+  Watchdog crash loop that formerly thrashed netd/WiFi. `desktop-off` kills
+  the frozen process so init/zygote can spawn a clean replacement; do not
+  substitute `SIGCONT`.
 
 Probe/script outputs go to `artifacts/` with descriptive names (standing
 request — `[[save-script-outputs-to-artifacts]]`).

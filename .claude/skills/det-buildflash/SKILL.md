@@ -62,10 +62,10 @@ An OTA can switch the active slot, replace the Determination kernel with stock,
 **new** running config (a fresh `artifacts/kernel-config-full-<rom>.txt`), then
 reflash + reinstall the module.
 
-## Kernel #4 TODO
+## Kernel #4
 
-Add `CONFIG_PSTORE` + `PSTORE_RAM`/`RAMOOPS` to `determination.config` — panic
-text is currently lost (no pstore), so a real panic can't be read back. Until
-then, tap `dmesg -w` to a host file during risky/network-heavy guest work.
+`CONFIG_PSTORE` + `PSTORE_RAM`/`RAMOOPS` are enabled and running. After a panic,
+collect the ramoops records before another boot overwrites useful evidence.
+Live `dmesg -w` capture is still worthwhile during risky display/kernel work.
 
 Reach the device via `[[det-phone]]`; guest graphics debugging is `[[det-guest]]`.

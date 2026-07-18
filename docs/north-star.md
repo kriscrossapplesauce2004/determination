@@ -33,31 +33,28 @@ means, roughly:
 
 ## Bugs / hardening (near-term)
 
-1. **Power-button wake path** — phoc's hwcomposer output re-enable never
-   fires after a blank; button is quirked inert and idle-blank forced to 0.
-   The one thing that still makes a session fragile for a human. Fix next.
-2. **Pstore in kernel #4** — CONFIG_PSTORE + PSTORE_RAM/RAMOOPS so the next
-   panic leaves evidence. Small config change, rebuild, reflash.
-3. **Guest DNS flakiness** — re-test first: likely a symptom of the netd
-   flushing that the milestone-6 Zygisk hook just eliminated.
-4. **Rebuild lxc/bin** (`guest/build-lxc.sh`) to drop the baked-in
+Completed since this list was written: power-button wake is verified, kernel 4
+has pstore/ramoops, and freezing `system_server` removed the netd/WiFi
+thrash that caused guest-network instability in desktop mode.
+
+1. **Rebuild lxc/bin** (`guest/build-lxc.sh`) to drop the baked-in
    `/data/decemberos` runtime path; then remove the compat symlink from
    guest-start.
-5. **QS tile tap-test** — registration/binding already confirmed; one tap
+2. **QS tile tap-test** — registration/binding already confirmed; one tap
    whenever convenient closes it.
-6. **Desktop-mode soak test** — milestone 6 removed the framework thrash
+3. **Desktop-mode soak test** — milestone 6 removed the framework thrash
    that correlated with the 07-06 reboots/panic; a long session on wall
    power would confirm the stability story cheaply.
 
 ## Features
 
-7. **Audio (pipewire) in the guest** — gives volume keys meaning; the
+4. **Audio (pipewire) in the guest** — gives volume keys meaning; the
    prerequisite for calls-less phone basics.
-8. **Phosh polish** — feedbackd (haptics), backgrounds, session niceties.
+5. **Phosh polish** — feedbackd (haptics), backgrounds, session niceties.
 
 ## Milestone 5: external convergence (the last milestone)
 
-9. Architecture pinned 2026-07-13 (plan + tasks #1–#4; no nested-under-phoc
+6. Architecture pinned 2026-07-13 (plan + tasks #1–#4; no nested-under-phoc
    — melissa's call). Two chained phases on the **minigbm/native-DRM track**:
 
    **Exclusive first:** downstream SDE is a real atomic KMS driver
@@ -72,8 +69,9 @@ means, roughly:
    **PASSED 2026-07-13**, `toggle/native-kms-gate`, bars on panel with
    brightness control; atomic + flip-event delivery still to verify). Payoff: vendor GL exits the
    guest (Adreno varying hack, android_wlegl all retire) and unmodified
-   desktops return — phoc native, then **KWin** (NoopSession first, elogind
-   if needed). GNOME/Mutter deferred (logind-hard; phosh IS GNOME).
+   desktops return — **Plasma Mobile under KWin is now verified on-panel with
+   zink/Turnip GPU compositing and touch (2026-07-14)**. GNOME/Mutter remains
+   deferred (logind-hard; phosh IS GNOME).
    phosh-on-monitor already works today via the hwc backend, plug-and-play —
    the gap this fixes is a desktop-grade DE, not the hardware path.
 

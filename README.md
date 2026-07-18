@@ -75,4 +75,8 @@ Full rationale, topology decision, and risk register: see
 - [x] Milestone 6: Zygisk hook on system_server's SF-death handling —
       verified on device 2026-07-11: system_server stable, WiFi stays up,
       guest networking alive throughout desktop mode
-- [ ] Milestone 5: external convergence (DP-alt, KWin, summon UX)
+- [x] Milestone 5 phase 1: native graphics/KMS path proven (2026-07-13/14) —
+      Turnip on KGSL, minigbm allocation, dmabuf→Vulkan import, raw DSI KMS
+      scanout, and Plasma Mobile under KWin with GPU compositing + touch
+- [ ] Milestone 5 phase 2: concurrent external convergence — Android/SF keeps
+      the panel while a guest-rendered dmabuf is presented on DP-alt

@@ -110,7 +110,7 @@ Same post-start block remounts `/` suid (nosuid /data would break sudo — see n
 **ReZygisk:** native Zygisk MUST stay disabled (`zygisk=0`) or ReZygisk skips
 module loading. Both ABI .so files required (arm64-v8a + armeabi-v7a).
 
-## Current state (2026-07-12)
+## Current state (2026-07-14)
 
 **Kernel #4 running** (`4.14.357-perf-g96adfa8256dc #2`, distro clang 22).
 pstore/ramoops enabled. Module v0.4.1 (versionCode=8). Guest RUNNING.
@@ -118,6 +118,11 @@ pstore/ramoops enabled. Module v0.4.1 (versionCode=8). Guest RUNNING.
 **Milestones complete:** 1 (kernel flash), 3 (guest renders on panel), 4 (input +
 phosh verified, cable-free round trip, §4 signed off), 6 (SF-death Zygisk hook +
 system_server freezer — full desktop-mode stability).
+
+**Milestone 5 native phase proven:** Turnip-on-KGSL + minigbm pass the native
+smoke gate, raw KMS scans out on DSI, and Plasma Mobile runs under KWin with
+zink/Turnip GPU compositing and touch. The remaining M5 headline is concurrent
+external convergence via the dmabuf→Android presenter bridge on DP-alt.
 
 **Wake path VERIFIED** (power button blank/unblank works). KEY_POWER quirk removed.
 
