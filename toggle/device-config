@@ -1,0 +1,78 @@
+#!/system/bin/sh
+# Shared device configuration for host-side Determination scripts.
+#
+# Values are discovered conservatively at runtime, then overridden by
+# /data/determination/etc/device.conf.  Profiles contain data only: do not put
+# commands or shell expansions in them.  `det-recon` will eventually generate
+# this file; until then a porter can copy etc/device.conf.example and edit it.
+
+DET=${DET:-/data/determination}
+
+det_first_path() {
+    for det_path in "$@"; do
+        [ -e "$det_path" ] && { echo "$det_path"; return 0; }
+    done
+    return 1
+}
+
+det_first_netdev() {
+    for det_path in /sys/class/net/wlan* /sys/class/net/wifi*; do
+        [ -e "$det_path" ] && { basename "$det_path"; return 0; }
+    done
+    return 1
+}
+
+# Portable defaults. Discovery deliberately prefers the active Android-facing
+# node names used by existing devices and falls back to the first viable node.
+DET_BACKLIGHT_PATH=${DET_BACKLIGHT_PATH:-$(det_first_path \
+    /sys/class/backlight/backlight/brightness \
+    /sys/class/backlight/panel0-backlight/brightness \
+    /sys/class/leds/lcd-backlight/brightness 2>/dev/null)}
+DET_BACKLIGHT_LEVEL=${DET_BACKLIGHT_LEVEL:-}
+DET_WIFI_IFACE=${DET_WIFI_IFACE:-$(det_first_netdev 2>/dev/null)}
+DET_DRM_CARD=${DET_DRM_CARD:-/dev/dri/card0}
+DET_BATTERY_GAUGE=${DET_BATTERY_GAUGE:-}
+DET_EXTRA_DEVICES=${DET_EXTRA_DEVICES:-}
+DET_INPUT_QUIRK=${DET_INPUT_QUIRK:-none}
+DET_HWC_OUTPUT=${DET_HWC_OUTPUT:-HWCOMPOSER-1}
+DET_PANEL_WIDTH=${DET_PANEL_WIDTH:-}
+DET_PANEL_HEIGHT=${DET_PANEL_HEIGHT:-}
+DET_OUTPUT_SCALE=${DET_OUTPUT_SCALE:-}
+
+DET_DEVICE_CONFIG="$DET/etc/device.conf"
+if [ -r "$DET_DEVICE_CONFIG" ]; then
+    # shellcheck disable=SC1090 -- fixed, root-owned on-device configuration.
+    . "$DET_DEVICE_CONFIG"
+fi
+
+# Android reports the unrotated physical panel size. This is safe for UI
+# scaling; cutouts and touch transforms are deliberately not inferred.
+if [ -z "$DET_PANEL_WIDTH" ] || [ -z "$DET_PANEL_HEIGHT" ]; then
+    det_wm_size=$(wm size 2>/dev/null | sed -n 's/.*Physical size: \([0-9][0-9]*\)x\([0-9][0-9]*\).*/\1 \2/p' | head -n 1)
+    [ -n "$det_wm_size" ] && {
+        DET_PANEL_WIDTH=${det_wm_size%% *}
+        DET_PANEL_HEIGHT=${det_wm_size#* }
+    }
+fi
+
+# Aim for roughly 360 logical pixels across, matching common mobile shells.
+if [ -z "$DET_OUTPUT_SCALE" ] && [ -n "$DET_PANEL_WIDTH" ]; then
+    DET_OUTPUT_SCALE=$(((DET_PANEL_WIDTH + 180) / 360))
+    [ "$DET_OUTPUT_SCALE" -lt 1 ] && DET_OUTPUT_SCALE=1
+    [ "$DET_OUTPUT_SCALE" -gt 4 ] && DET_OUTPUT_SCALE=4
+fi
+DET_OUTPUT_SCALE=${DET_OUTPUT_SCALE:-1}
+
+# Pick a usable brightness when a profile does not specify one: roughly one
+# third of the panel maximum, never zero. Existing guacamoleb installs retain
+# 1400 through their generated/profile config.
+if [ -z "$DET_BACKLIGHT_LEVEL" ] && [ -n "$DET_BACKLIGHT_PATH" ]; then
+    det_max=${DET_BACKLIGHT_PATH%/brightness}/max_brightness
+    det_max=$(cat "$det_max" 2>/dev/null || echo 4095)
+    DET_BACKLIGHT_LEVEL=$((det_max / 3))
+    [ "$DET_BACKLIGHT_LEVEL" -gt 0 ] 2>/dev/null || DET_BACKLIGHT_LEVEL=1
+fi
+
+export DET_BACKLIGHT_PATH DET_BACKLIGHT_LEVEL DET_WIFI_IFACE
+export DET_DRM_CARD DET_BATTERY_GAUGE DET_EXTRA_DEVICES DET_INPUT_QUIRK
+export DET_HWC_OUTPUT DET_PANEL_WIDTH DET_PANEL_HEIGHT DET_OUTPUT_SCALE

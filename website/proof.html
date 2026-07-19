@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Verified Determination hardware milestones and repository statistics.">
+  <title>Proof — Determination</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="inner-page proof-page">
+  <div class="noise" aria-hidden="true"></div><div class="progress" aria-hidden="true"></div>
+  <header class="nav enter" style="--delay:0ms">
+    <a class="brand link" href="index.html"><span class="brand-mark"><i></i></span> DETERMINATION</a>
+    <nav aria-label="Main navigation"><a class="link" href="architecture.html">Architecture</a><a class="link active" href="proof.html">Proof</a><a class="repo-button pressure" href="https://github.com/kriscrossapplesauce2004/decemberos">View source <span>↗</span></a></nav>
+  </header>
+  <main>
+    <section class="page-hero proof-hero">
+      <div class="page-number enter" style="--delay:80ms">02 / EVIDENCE</div>
+      <h1 class="enter" style="--delay:140ms">It boots.<br><i>It returns.</i></h1>
+      <p class="enter" style="--delay:260ms">The claims below are dated, captured, and running on the device. No concept renders required.</p>
+      <div class="page-sigil enter" style="--delay:340ms"><i></i><span>STATUS<br>DETERMINED</span></div>
+    </section>
+
+    <section class="proof proof-content">
+      <div class="stats" data-reveal-stagger>
+        <article><span class="stat" data-target="95">0</span><small>COMMITS<br>JUL 01 → JUL 18</small></article><article><span class="stat" data-target="164">0</span><small>TRACKED FILES<br>ACROSS THE STACK</small></article><article><span class="stat" data-target="9348">0</span><small>LINES OF SOURCE<br>+ DOCUMENTATION</small></article><article><span class="stat stat-text">GL 4.6</span><small>ZINK / TURNIP<br>NATIVE PATH</small></article>
+      </div>
+      <div class="device-proof" data-reveal>
+        <div class="capture-pair">
+          <figure class="capture"><img src="device-shots/android-home-clean.png" alt="Android 16 home screen running on the OnePlus 7"><figcaption>ANDROID / SURFACEFLINGER</figcaption></figure>
+          <figure class="capture capture-desktop"><img src="device-shots/determination-desktop.png" alt="Phosh desktop application grid running in the Determination Linux guest on the same OnePlus 7"><figcaption>DEBIAN / PHOC + PHOSH</figcaption></figure>
+        </div>
+        <div><div class="section-label"><span>01</span> SAME PANEL</div><h2>Two worlds.<br>One device.</h2><p>Android 16 and a Debian arm64 Wayland desktop, captured tonight from the same physical OnePlus 7 panel. The mode changed. The hardware did not.</p><span class="live-stamp"><i></i> CAPTURED ON DEVICE / 19 JUL 2026</span></div>
+      </div>
+      <div class="timeline" data-reveal-stagger>
+        <article><time>02 JUL</time><span></span><div><small>BOOT</small><h3>Custom kernel alive.</h3><p>4.14.357 running, namespaces confirmed, Wi-Fi restored with matching modules.</p></div></article>
+        <article><time>04 JUL</time><span></span><div><small>GRAPHICS</small><h3>GLES 3.2 on panel.</h3><p>libhybris clears the TLS wall and reaches the vendor composer.</p></div></article>
+        <article><time>11 JUL</time><span></span><div><small>HANDOFF</small><h3>Round trip complete.</h3><p>Companion app enters desktop. Guest exits. Android returns without a cable.</p></div></article>
+        <article><time>14 JUL</time><span></span><div><small>NATIVE KMS</small><h3>Plasma, GPU, touch.</h3><p>KWin on raw KMS with Turnip, Zink, minigbm, and working input.</p></div></article>
+      </div>
+    </section>
+    <a class="next-page" href="architecture.html" data-reveal><small>RETURN / 01</small><span>Architecture</span><b>←</b></a>
+  </main>
+  <footer data-reveal><a class="brand link" href="index.html"><span class="brand-mark"><i></i></span> DETERMINATION</a><p>Built on a OnePlus 7. Designed to travel further.</p><span>2026 / GPL-3.0</span></footer>
+  <script src="script.js"></script>
+</body>
+</html>

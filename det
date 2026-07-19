@@ -11,6 +11,7 @@
 #   det passwd            set melissa's guest password (needed before sudo works)
 #   det on | det off      enter / leave desktop mode (detached; panel changes!)
 #   det log [name] [n]    tail a /data/determination/log file (default toggle)
+#   det version           print the local project version and release state
 #   det status            connection, root, kernel, mode, guest state
 #   det recon             run the §9 recon
 #   det push-module       install/refresh the Magisk module zip on the phone
@@ -21,13 +22,18 @@
 
 set -eu
 cd "$(dirname "$0")"
+. release/version.sh
+det_load_version version.properties
 
 for pt in "$HOME"/platform-tools /tmp/claude-*/-home-melissa/*/scratchpad/platform-tools; do
     [ -x "$pt/adb" ] && PATH="$pt:$PATH" && break
 done
 
 mdns_addr() {
-    adb mdns services 2>/dev/null | awk '/_adb-tls-connect/ {print $3; exit}'
+    # Service instance names may contain spaces/suffixes (for example "(2)")
+    # after Android rotates its wireless-debugging port. The address is always
+    # the final field; positional $3 accidentally returned the service type.
+    adb mdns services 2>/dev/null | awk '/_adb-tls-connect/ {print $NF; exit}'
 }
 
 ensure() {
@@ -39,6 +45,8 @@ ensure() {
 }
 
 case "${1:-status}" in
+version)
+    echo "Determination v$DET_VERSION \"$DET_CODENAME\" (code $DET_VERSION_CODE, $DET_RELEASE_STATUS)" ;;
 find)
     addr=$(mdns_addr); [ -n "$addr" ] && echo "$addr" || { echo "not advertising" >&2; exit 1; } ;;
 connect)
@@ -48,7 +56,7 @@ shell)
     if [ $# -gt 0 ]; then
         # adb re-joins argv with spaces, so `adb shell su -c "$*"` reaches the
         # remote shell UNQUOTED: everything after the first ;/&&/| ran as the
-        # shell user (the exact CLAUDE.md quoting trap — this helper shipped
+        # shell user (the exact AGENTS.md quoting trap — this helper shipped
         # with it from day one, found 2026-07-11 masquerading as a "degraded
         # boot"). Single-quote the whole chain for the remote shell, escaping
         # embedded single quotes.
@@ -62,7 +70,7 @@ guest)
     # runuser -l reads /etc/group, so melissa keeps her supplementary groups
     # (video/android_input/…) — lxc-attach --uid would drop them. Absolute path:
     # lxc-attach hands a minimal PATH that omits /usr/sbin.
-    # The whole su -c argument must be ONE quoted string (see CLAUDE.md).
+    # The whole su -c argument must be ONE quoted string (see AGENTS.md).
     if [ $# -gt 0 ]; then
         adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /usr/sbin/runuser -l melissa -c \"$*\"'"
     else
@@ -109,6 +117,7 @@ log)
     adb shell "su -c 'tail -n ${3:-60} /data/determination/log/${2:-toggle}.log'" ;;
 status)
     ensure
+    echo "release: v$DET_VERSION \"$DET_CODENAME\" (code $DET_VERSION_CODE, $DET_RELEASE_STATUS)"
     echo "connected: $(adb devices | awk 'NR==2{print $1}')"
     adb shell su <<'EOF'
         echo "root: ok (`id -u`)"
@@ -123,8 +132,8 @@ recon)
     ensure && ./recon/recon.sh ;;
 push-module)
     ensure
-    zipf=$(ls magisk-module/determination-magisk-*.zip 2>/dev/null | tail -1)
-    [ -n "$zipf" ] || { echo "no zip — run magisk-module/build-module.sh" >&2; exit 1; }
+    zipf="magisk-module/determination-magisk-v$DET_VERSION.zip"
+    [ -f "$zipf" ] || { echo "missing $zipf — run magisk-module/build-module.sh" >&2; exit 1; }
     adb push "$zipf" /data/local/tmp/determination.zip
     adb shell su -c 'magisk --install-module /data/local/tmp/determination.zip && rm /data/local/tmp/determination.zip'
     echo "installed — reboot the phone to activate" ;;

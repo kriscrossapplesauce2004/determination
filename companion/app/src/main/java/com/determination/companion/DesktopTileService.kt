@@ -1,6 +1,7 @@
 package com.determination.companion
 
 import android.graphics.drawable.Icon
+import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import java.util.concurrent.Executors
@@ -31,14 +32,21 @@ class DesktopTileService : TileService() {
                 !hasRoot -> {
                     t.state = Tile.STATE_UNAVAILABLE
                     t.label = getString(R.string.app_name)
+                    if (Build.VERSION.SDK_INT >= 29) t.subtitle = getString(R.string.tile_no_root)
                 }
                 mode == "desktop" -> {
                     t.state = Tile.STATE_ACTIVE
                     t.label = getString(R.string.tile_active)
+                    if (Build.VERSION.SDK_INT >= 29) t.subtitle = getString(R.string.tile_tap_phone)
                 }
                 else -> {
                     t.state = Tile.STATE_INACTIVE
                     t.label = getString(R.string.tile_label)
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        t.subtitle = if (s["guest"] == "running")
+                            getString(R.string.tile_guest_ready)
+                        else getString(R.string.tile_guest_stopped)
+                    }
                 }
             }
             t.icon = Icon.createWithResource(this, R.drawable.ic_desktop)

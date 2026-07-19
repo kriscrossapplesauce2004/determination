@@ -441,14 +441,20 @@ echo "== battery translator (det-battery) =="
 cat > /usr/local/sbin/det-battery <<'EOS'
 #!/bin/sh
 set -u
-BMS=/sys/class/power_supply/bms/capacity
+DET_BATTERY_GAUGE=
+[ -r /etc/determination-device.conf ] && . /etc/determination-device.conf
+[ -n "$DET_BATTERY_GAUGE" ] && [ "$DET_BATTERY_GAUGE" != battery ] || {
+    echo "det-battery: no separate battery gauge configured — nothing to do"
+    exit 0
+}
+BMS="/sys/class/power_supply/$DET_BATTERY_GAUGE/capacity"
 CAP=/run/det-battery-capacity
-[ -r "$BMS" ] || { echo "det-battery: bms node not present — nothing to do"; exit 0; }
+[ -r "$BMS" ] || { echo "det-battery: $DET_BATTERY_GAUGE node not present — nothing to do"; exit 0; }
 
 seed=$(cat "$BMS" 2>/dev/null)
 case "$seed" in ''|*[!0-9]*) seed=50 ;; esac
 echo "$seed" > "$CAP"
-echo "det-battery: shadowing battery/capacity <- bms (seed ${seed})"
+echo "det-battery: shadowing battery/capacity <- $DET_BATTERY_GAUGE (seed ${seed})"
 
 # Poll the real gauge and KEEP the shadow bind alive. The bind must be
 # re-asserted every pass, not just once: the qpnp-smb5 charger re-enumerates
@@ -470,7 +476,7 @@ EOS
 chmod 0755 /usr/local/sbin/det-battery
 cat > /etc/systemd/system/det-battery.service <<EOF
 [Unit]
-Description=Determination: mirror the real (bms) battery level into UPower's node
+Description=Determination: mirror the configured battery gauge into UPower's node
 After=local-fs.target
 [Service]
 Type=simple

@@ -11,6 +11,7 @@ dist/
 artifacts/backups/
 zygisk/libs/
 zygisk/obj/
+.agents/
 
 # Standard ignores
 .DS_Store

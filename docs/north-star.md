@@ -6,6 +6,12 @@ priority; strike items as they land and keep this file honest.
 
 ## The big one: make it universal
 
+Implementation tracker and portability matrix: [`universalisation.md`](universalisation.md).
+The first slice is now live: runtime backlight/Wi-Fi discovery, exact-match
+device profiles, Magisk packaging, recon-generated `device.conf`, and runtime
+LXC device/binder generation. Guest display/input, battery, boot-image, and
+kernel-source generation remain.
+
 Everything so far is hand-fitted to one phone (guacamoleb / SM8150 /
 Adreno 640 / crDroid 12.11). The long-term goal is that Determination is a
 *method* any Android device can adopt, not a guacamoleb artifact. That

@@ -15,6 +15,11 @@ Runtime hooks inside `system_server` via Zygisk (Magisk 30.7, API v5).
    `magisk-module/post-fs-data.sh`).
 3. **Summon UX** — QS tile / gesture in SystemUI wired to
    `/data/determination/bin/desktop-on|off`, as a hook, not a replaced APK.
+4. **Companion root bridge** — the module stays loaded only in the Determination
+   app process and exposes a same-UID abstract Unix socket. Fixed commands are
+   relayed through Zygisk's root companion process; `enter`/`exit` therefore do
+   not spawn `su` or expose an exported root command surface. Older modules
+   degrade to the app's existing `su` path.
 
 ## Build
 

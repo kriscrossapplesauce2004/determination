@@ -158,7 +158,7 @@ fun ControlScreen(
             }
 
             Text(
-                "Determination v${BuildConfig.VERSION_NAME} · stay determined ❤",
+                "Determination v${BuildConfig.VERSION_NAME} “${BuildConfig.RELEASE_CODENAME}” · stay determined ❤",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp),

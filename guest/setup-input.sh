@@ -84,18 +84,31 @@ echo "udev db entries:"; grep -l ID_INPUT /run/udev/data/c13:* | while read -r f
     echo "  $f: $(tr '\n' ' ' < "$f")"
 done
 
-echo "== libinput quirk: touchpanel bogus axes =="
+echo "== device-class libinput quirks =="
 # The OnePlus touchpanel driver advertises ABS_MT_WIDTH_MAJOR and
 # ABS_MT_PRESSURE with min==max==0; libinput hard-rejects the whole device
 # ("kernel bug: device has min == max on ABS_MT_WIDTH_MAJOR", found
 # 2026-07-06). Strip the bogus axes via quirk — the good ones are
 # POSITION_X 0-1078, POSITION_Y 0-2338, TOUCH_MAJOR, SLOT 0-9, TRACKING_ID.
 mkdir -p /etc/libinput
+DET_INPUT_QUIRK=none
+[ -r /etc/determination-device.conf ] && . /etc/determination-device.conf
+case "$DET_INPUT_QUIRK" in
+oneplus-touchpanel-zero-axes)
 cat > /etc/libinput/local-overrides.quirks <<'EOF'
 [OnePlus 7 touchpanel]
 MatchName=touchpanel
 AttrEventCode=-ABS_MT_WIDTH_MAJOR;-ABS_MT_PRESSURE
 EOF
+    ;;
+none|'')
+    rm -f /etc/libinput/local-overrides.quirks
+    ;;
+*)
+    echo "WARN: unknown DET_INPUT_QUIRK=$DET_INPUT_QUIRK; installing no quirk"
+    rm -f /etc/libinput/local-overrides.quirks
+    ;;
+esac
 # Power key (history): 2026-07-06..11 KEY_POWER was quirked inert here
 # because a blank was permanent — "power button kills it". Root cause was
 # NOT the phoc hwcomposer backend: phosh has no internal unblank path at

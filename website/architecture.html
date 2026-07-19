@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="The Determination Android and Linux convergence architecture.">
+  <title>Architecture — Determination</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="inner-page">
+  <div class="noise" aria-hidden="true"></div><div class="progress" aria-hidden="true"></div>
+  <header class="nav enter" style="--delay:0ms">
+    <a class="brand link" href="index.html"><span class="brand-mark"><i></i></span> DETERMINATION</a>
+    <nav aria-label="Main navigation"><a class="link active" href="architecture.html">Architecture</a><a class="link" href="proof.html">Proof</a><a class="repo-button pressure" href="https://github.com/kriscrossapplesauce2004/decemberos">View source <span>↗</span></a></nav>
+  </header>
+  <main>
+    <section class="page-hero">
+      <div class="page-number enter" style="--delay:80ms">01 / SYSTEM</div>
+      <h1 class="enter" style="--delay:140ms">One kernel.<br><i>Two worlds.</i></h1>
+      <p class="enter" style="--delay:260ms">Android remains the phone. Linux gains the hardware. Neither is pretending to be the other.</p>
+      <div class="page-sigil enter" style="--delay:340ms"><i></i><span>OWNERSHIP<br>IS THE SYSTEM</span></div>
+    </section>
+
+    <section class="architecture architecture-page">
+      <div class="system-map" data-reveal>
+        <div class="map-column host"><div class="map-title">ANDROID HOST <span>ALWAYS LIVE</span></div><div class="node node-large" data-tilt><b>Android 16</b><small>init / system_server / SystemUI</small><span class="node-status">PID 1</span></div><div class="node" data-tilt><b>SurfaceFlinger</b><small>Internal panel owner</small></div></div>
+        <div class="bridge" aria-label="Shared kernel and hardware bridge"><span class="packet p1"></span><span class="packet p2"></span><div class="bridge-label">DISPLAY HANDOFF</div><div class="bridge-line"></div><div class="kernel-chip"><small>SHARED</small><b>4.14.357</b><span>DOWNSTREAM KERNEL</span></div><div class="bridge-line"></div><div class="bridge-label">LIBHYBRIS / DRM</div></div>
+        <div class="map-column guest"><div class="map-title">LINUX GUEST <span>ON DEMAND</span></div><div class="node node-large accent-node" data-tilt><b>Debian arm64</b><small>glibc userland inside LXC</small><span class="node-status">GUEST</span></div><div class="node" data-tilt><b>Wayland desktop</b><small>Plasma Mobile / KWin / wlroots</small></div></div>
+        <div class="hardware-rail"><span>ADRENO 640</span><span>KGSL + TURNIP</span><span>MINIGBM / DMABUF</span><span>DSI + DP-ALT</span></div>
+      </div>
+    </section>
+
+    <section class="ownership" data-reveal>
+      <div class="section-label"><span>02</span> INTERNAL DISPLAY</div>
+      <div class="ownership-grid">
+        <article><b>01</b><h2>Release.</h2><p>SurfaceFlinger stops and its respawn paths are masked. The single-client composer HAL becomes available.</p></article>
+        <article><b>02</b><h2>Acquire.</h2><p>The guest compositor binds the display. EVIOCGRAB prevents Android and Linux from receiving the same input.</p></article>
+        <article><b>03</b><h2>Return.</h2><p>The guest releases cleanly. SurfaceFlinger restarts. Android gets its panel and input back.</p></article>
+      </div>
+    </section>
+
+    <section class="mode-compare" data-reveal>
+      <div class="section-label"><span>03</span> TWO MODES</div>
+      <article><small>A / INTERNAL</small><h2>One display,<br>time-sliced.</h2><p>The phone becomes the desktop, then comes home again.</p><span>SF STOPPED / INPUT GRABBED</span></article>
+      <article><small>B / EXTERNAL</small><h2>Two displays,<br>concurrent.</h2><p>Android keeps the panel while Linux presents on DP-alt.</p><span>SF LIVE / PHONE UNTOUCHED</span></article>
+    </section>
+
+    <a class="next-page" href="proof.html" data-reveal><small>NEXT / 02</small><span>Proof</span><b>→</b></a>
+  </main>
+  <footer data-reveal><a class="brand link" href="index.html"><span class="brand-mark"><i></i></span> DETERMINATION</a><p>Built on a OnePlus 7. Designed to travel further.</p><span>2026 / GPL-3.0</span></footer>
+  <script src="script.js"></script>
+</body>
+</html>

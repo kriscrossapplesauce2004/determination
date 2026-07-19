@@ -7,6 +7,7 @@
 set -u
 DET=/data/determination
 LOG=$DET/log/toggle.log
+. "$DET/bin/device-config"
 # Rotate the append-forever log once it passes ~256K (keep the newest half).
 [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 262144 ] &&
     tail -c 131072 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
@@ -34,15 +35,15 @@ stop surfaceflinger
 #    The same loop doubles as the backlight keeper (see 4b): every SF stop —
 #    including the suppressor's own re-stops — zeroes the panel backlight, so
 #    re-asserting both in one loop is not just cheaper, it's more correct.
-BL_LEVEL=1400
-BL=/sys/class/backlight/backlight/brightness
+BL_LEVEL=$DET_BACKLIGHT_LEVEL
+BL=$DET_BACKLIGHT_PATH
 (
     while [ -f "$DET/run/desktop-mode" ]; do
         [ "$(getprop init.svc.surfaceflinger)" = "running" ] && {
             echo "suppressor: SF respawned, re-stopping ($(date))"
             stop surfaceflinger
         }
-        echo "$BL_LEVEL" > "$BL" 2>/dev/null
+        [ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
         sleep 1
     done
 ) &
@@ -92,7 +93,7 @@ sleep 1
 # session; lower luminance + the dark UI theme cut the burn-in rate. Still
 # very readable indoors. Bump it if you're outdoors. (BL_LEVEL/BL are set at
 # step 3 — the suppressor loop doubles as the keeper.)
-echo "$BL_LEVEL" > "$BL" 2>/dev/null
+[ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
 
 # 5. THE REAL COMPOSITOR (2026-07-06): phoc 0.47 (droidian group/102) on the
 #    droidian wlroots hwcomposer backend, built in-guest against upstream

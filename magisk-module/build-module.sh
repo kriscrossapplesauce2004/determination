@@ -5,6 +5,9 @@
 
 set -eu
 cd "$(dirname "$0")"
+REPO=$(cd .. && pwd)
+. "$REPO/release/version.sh"
+det_load_version "$REPO/version.properties"
 
 [ -f ../tools/evgrab/evgrab ] || { echo "build evgrab for aarch64 first (tools/evgrab, make CC=aarch64-linux-gnu-gcc)" >&2; exit 1; }
 file ../tools/evgrab/evgrab | grep -q aarch64 || { echo "evgrab is not an aarch64 build" >&2; exit 1; }
@@ -17,17 +20,20 @@ ZYGISK_32="../zygisk/libs/armeabi-v7a/libdetermination.so"
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 
-cp module.prop customize.sh post-fs-data.sh service.sh sepolicy.rule "$WORK/"
-mkdir -p "$WORK/tools" "$WORK/zygisk"
+cp customize.sh post-fs-data.sh service.sh sepolicy.rule "$WORK/"
+det_render_version_template module.prop.in "$WORK/module.prop"
+mkdir -p "$WORK/tools" "$WORK/zygisk" "$WORK/device-profiles"
 cp ../tools/evgrab/evgrab \
+   ../toggle/device-config ../toggle/generate-lxc-config ../toggle/generate-guest-config \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
+   ../toggle/native-plasma ../toggle/native-kms-gate ../toggle/native-restore \
    ../toggle/det-hostagent ../toggle/cycle-stress.sh "$WORK/tools/"
-cp ../guest/lxc/config "$WORK/tools/lxc-config"
+cp ../device-profiles/*.conf "$WORK/device-profiles/"
+cp ../guest/lxc/config "$WORK/tools/lxc-config-base"
 cp "$ZYGISK_64" "$WORK/zygisk/arm64-v8a.so"
 cp "$ZYGISK_32" "$WORK/zygisk/armeabi-v7a.so"
 
-VER=$(sed -n 's/^version=//p' module.prop)
-OUT="$PWD/determination-magisk-$VER.zip"
+OUT="$PWD/determination-magisk-v$DET_VERSION.zip"
 rm -f "$OUT"
 # python zipfile: no zip(1) dependency, deterministic enough for our use
 (cd "$WORK" && python3 -c "

@@ -2,7 +2,7 @@
 # Determination guest polish: mobile apps, notch (gmobile panel JSON), phosh
 # settings. Run INSIDE the container as root, in PHONE MODE (guest network
 # needs a stable Android framework — in desktop mode system_server
-# crash-loops and takes WiFi down, see CLAUDE.md §4 known issues).
+# crash-loops and takes WiFi down, see AGENTS.md §4 known issues).
 # Idempotent.
 set -e
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

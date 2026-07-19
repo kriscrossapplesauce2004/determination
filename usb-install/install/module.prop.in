@@ -1,0 +1,6 @@
+id=determination-kernel-install
+name=Determination @CODENAME@ kernel installer (action zip)
+version=v@VERSION@
+versionCode=@VERSION_CODE@
+author=melissa
+description=Flashes the Magisk-patched Determination boot image to the active boot slot, with exact-build, root-survival, backup verification, and dry-run support. Does not install as a module.

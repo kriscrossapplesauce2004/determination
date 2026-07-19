@@ -1,6 +1,0 @@
-id=determination-kernel-restore
-name=Determination kernel RESTORE (action zip)
-version=v0.2.1
-versionCode=3
-author=melissa
-description=Restores the pristine crDroid boot image dumped before the Determination kernel install (stock kernel + Magisk), backing up the current boot first; supports the determination-dryrun flag. Does not install as a module.

@@ -16,7 +16,7 @@
 # gcc >= 14 note: glibc 2.40+ declares mount_setattr itself; LXC 4.0's own
 # declaration trips -Wincompatible-pointer-types, an error by default now.
 # The structs are layout-identical — downgrade, don't patch (same policy as
-# the kernel's KCFLAGS -Wno- rule in CLAUDE.md).
+# the kernel's KCFLAGS -Wno- rule in AGENTS.md).
 #
 # Usage: guest/build-lxc.sh [--push]
 

@@ -41,6 +41,7 @@ restoring, so the restore is itself undoable.
 | `determination-kernel-install.zip` | action zip: flashes the patched image to the active slot |
 | `determination-kernel-restore.zip` | action zip: flashes the embedded pristine boot dump back (stock kernel + root; slot-guarded) |
 | `determination-magisk-v*.zip` | the actual Determination Magisk module (toggle scripts, evgrab, sepolicy) |
+| `determination-companion-v*.apk` | matching Android companion app |
 | `SHA256SUMS` | checksums for everything above |
 
 ## Install (3 steps, all in the Magisk app)

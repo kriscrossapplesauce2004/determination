@@ -19,6 +19,11 @@ Two modes:
 Full rationale, topology decision, and risk register: see
 [`docs/design-spec.md`](docs/design-spec.md).
 
+Current project release train: **Determination 0.5 "Aqua"** (in development).
+The Deltarune-character naming scheme, release scope, and actual ship gates are
+in [`RELEASES.md`](RELEASES.md); project-wide changes are in
+[`CHANGELOG.md`](CHANGELOG.md).
+
 ## Repo layout
 
 | Path | What |
@@ -62,9 +67,10 @@ Full rationale, topology decision, and risk register: see
       (flash via Magisk app + `dd`; rescue from a *bootloop* still needs a cable)
 - [x] **FLASHED AND BOOTING** (2026-07-02, via the USB-drive path): kernel
       `4.14.357-perf-g96adfa8256dc` live on device, PID/USER/IPC_NS confirmed.
-      WiFi initially dead (stock `qca_cld3_wlan.ko` vermagic mismatch) — fixed
-      by `magisk-module-wlan/` overlay rebuilt from the same tree. Full
-      hardware smoke test green. Determination module installed. Milestone 1 done.
+      WiFi initially exposed a `qca_cld3_wlan.ko` vermagic mismatch; the current
+      kernel build carries the matching module directly, so the old Magisk WLAN
+      overlay has been retired. Full hardware smoke test green. Determination
+      module installed. Milestone 1 done.
 - [x] Guest rootfs + libhybris smoke test on guacamoleb (2026-07-04, TLS wall
       cleared with upstream libhybris; `test_hwcomposer` GLES 3.2 on the panel)
 - [x] wlroots on the panel: phoc + phosh + squeekboard live, touch-verified

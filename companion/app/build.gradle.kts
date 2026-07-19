@@ -1,8 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val determinationVersion = Properties().apply {
+    rootProject.file("../version.properties").inputStream().use { load(it) }
+}
+val determinationVersionName = determinationVersion.getProperty("version")
+    ?: error("version.properties has no version")
+val determinationVersionCode = determinationVersion.getProperty("versionCode")?.toIntOrNull()
+    ?: error("version.properties has no numeric versionCode")
+val determinationCodename = determinationVersion.getProperty("codename")
+    ?: error("version.properties has no codename")
 
 android {
     namespace = "com.determination.companion"
@@ -12,8 +24,9 @@ android {
         applicationId = "com.determination.companion"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.5.6"
+        versionCode = determinationVersionCode
+        versionName = determinationVersionName
+        buildConfigField("String", "RELEASE_CODENAME", "\"$determinationCodename\"")
     }
 
     buildTypes {

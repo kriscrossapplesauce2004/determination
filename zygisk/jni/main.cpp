@@ -5,14 +5,76 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+#include <thread>
 #include <unistd.h>
 
 #include "zygisk.hpp"
 
 static constexpr const char *FLAG = "/data/determination/run/desktop-mode";
+static constexpr const char *APP_PROCESS = "com.determination.companion";
+static constexpr const char *BRIDGE_NAME = "determination.companion.bridge";
 static int (*orig_system_property_set)(const char *, const char *) = nullptr;
+
+static bool write_all(int fd, const void *data, size_t size) {
+    const auto *p = static_cast<const uint8_t *>(data);
+    while (size > 0) {
+        ssize_t n = write(fd, p, size);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) return false;
+        p += n;
+        size -= static_cast<size_t>(n);
+    }
+    return true;
+}
+
+static void launch_fixed_action(const char *command, int client) {
+    const char *script = nullptr;
+    if (strcmp(command, "enter") == 0) {
+        script = "/data/determination/bin/guest-start >/dev/null 2>&1; "
+                 "setsid sh -c 'nohup /data/determination/bin/desktop-on "
+                 ">/dev/null 2>&1' >/dev/null 2>&1 &";
+    } else if (strcmp(command, "exit") == 0) {
+        script = "setsid sh -c 'nohup /data/determination/bin/desktop-off "
+                 ">/dev/null 2>&1' >/dev/null 2>&1 &";
+    } else if (strcmp(command, "ping") == 0) {
+        write_all(client, "ok bridge\n", 10);
+        return;
+    } else {
+        write_all(client, "error unknown-command\n", 22);
+        return;
+    }
+
+    pid_t pid = fork();
+    if (pid == 0) {
+        setsid();
+        execl("/system/bin/sh", "sh", "-c", script, nullptr);
+        _exit(127);
+    }
+    if (pid < 0) write_all(client, "error fork\n", 11);
+    else write_all(client, "ok\n", 3);
+}
+
+// Runs in Magisk's root companion process. Only enumerated commands reach a
+// shell; no arbitrary command strings cross this privilege boundary.
+static void root_companion_handler(int client) {
+    char command[32] = {};
+    ssize_t n;
+    do n = read(client, command, sizeof(command) - 1);
+    while (n < 0 && errno == EINTR);
+    if (n <= 0) return;
+    command[n] = '\0';
+    char *newline = strpbrk(command, "\r\n");
+    if (newline) *newline = '\0';
+    launch_fixed_action(command, client);
+}
 
 static int hooked_system_property_set(const char *key, const char *value) {
     if (key && value &&
@@ -67,14 +129,77 @@ static bool find_lib(const char *name, dev_t *dev, ino_t *ino) {
 
 class DeterminationModule : public zygisk::ModuleBase {
     zygisk::Api *api_ = nullptr;
+    JNIEnv *env_ = nullptr;
+    bool is_companion_app_ = false;
 
-public:
-    void onLoad(zygisk::Api *api, JNIEnv *) override {
-        api_ = api;
+    void serve_app_bridge() {
+        int server = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        if (server < 0) return;
+
+        sockaddr_un address{};
+        address.sun_family = AF_UNIX;
+        const size_t name_len = strlen(BRIDGE_NAME);
+        address.sun_path[0] = '\0';
+        memcpy(address.sun_path + 1, BRIDGE_NAME, name_len);
+        socklen_t address_len = static_cast<socklen_t>(
+            offsetof(sockaddr_un, sun_path) + 1 + name_len);
+        if (bind(server, reinterpret_cast<sockaddr *>(&address), address_len) != 0 ||
+            listen(server, 4) != 0) {
+            close(server);
+            return;
+        }
+
+        const uid_t own_uid = getuid();
+        while (true) {
+            int app = accept4(server, nullptr, nullptr, SOCK_CLOEXEC);
+            if (app < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            ucred peer{};
+            socklen_t peer_len = sizeof(peer);
+            if (getsockopt(app, SOL_SOCKET, SO_PEERCRED, &peer, &peer_len) != 0 ||
+                peer.uid != own_uid) {
+                close(app);
+                continue;
+            }
+
+            char request[32] = {};
+            ssize_t n = read(app, request, sizeof(request) - 1);
+            if (n > 0) {
+                int root = api_->connectCompanion();
+                if (root >= 0) {
+                    write_all(root, request, static_cast<size_t>(n));
+                    shutdown(root, SHUT_WR);
+                    char response[128];
+                    while ((n = read(root, response, sizeof(response))) > 0)
+                        if (!write_all(app, response, static_cast<size_t>(n))) break;
+                    close(root);
+                } else {
+                    write_all(app, "error no-root-companion\n", 24);
+                }
+            }
+            close(app);
+        }
+        close(server);
     }
 
-    void preAppSpecialize(zygisk::AppSpecializeArgs *) override {
-        api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+public:
+    void onLoad(zygisk::Api *api, JNIEnv *env) override {
+        api_ = api;
+        env_ = env;
+    }
+
+    void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
+        const char *name = env_->GetStringUTFChars(args->nice_name, nullptr);
+        is_companion_app_ = name && strcmp(name, APP_PROCESS) == 0;
+        if (name) env_->ReleaseStringUTFChars(args->nice_name, name);
+        if (!is_companion_app_) api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+    }
+
+    void postAppSpecialize(const zygisk::AppSpecializeArgs *) override {
+        if (is_companion_app_)
+            std::thread([this] { serve_app_bridge(); }).detach();
     }
 
     void postServerSpecialize(const zygisk::ServerSpecializeArgs *) override {
@@ -107,3 +232,4 @@ public:
 };
 
 REGISTER_ZYGISK_MODULE(DeterminationModule)
+REGISTER_ZYGISK_COMPANION(root_companion_handler)

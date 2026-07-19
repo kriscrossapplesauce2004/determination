@@ -16,8 +16,9 @@ set -u
 DET=/data/determination
 LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
 GATE="$DET/run/native-gate"
-BL=/sys/class/backlight/backlight/brightness
-BL_LEVEL=1400
+. "$DET/bin/device-config"
+BL=$DET_BACKLIGHT_PATH
+BL_LEVEL=$DET_BACKLIGHT_LEVEL
 STAGE="${1:-kwin}"
 case "$STAGE" in
     kwin) HOLD=120;;
@@ -63,7 +64,7 @@ touch "$GATE"
 (
     while [ -f "$GATE" ]; do
         [ "$(getprop init.svc.surfaceflinger)" = "running" ] && stop surfaceflinger
-        echo "$BL_LEVEL" > "$BL" 2>/dev/null
+        [ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
         sleep 1
     done
 ) &

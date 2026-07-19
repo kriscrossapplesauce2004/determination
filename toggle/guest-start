@@ -7,11 +7,17 @@ set -u
 DET=/data/determination
 LXC="$DET/lxc/bin"  # static lxc build pushed alongside the rootfs
 export PATH="$LXC:$PATH"
+. "$DET/bin/device-config"
 
 # lxc-start pins the container rootfs here; must pre-exist or start fails.
 # run/control is the bind source for the guest->host channel (lxc config binds
 # it to guest /mnt/det-control); it must exist before lxc-start.
 mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/run/control" "$DET/log"
+
+# Generate device binds from the running phone. This runs before every start,
+# so an OTA that changes binder or allocator layout cannot leave a stale config.
+"$DET/bin/generate-lxc-config" || { echo "FATAL: LXC config generation failed"; exit 1; }
+"$DET/bin/generate-guest-config" || { echo "FATAL: guest config generation failed"; exit 1; }
 
 # 2026-07-11: lxc/bin rebuilt with --with-runtime-path=/data/determination/run
 # (guest/build-lxc.sh) — the /data/decemberos compat symlink is gone. Deploy
@@ -67,8 +73,10 @@ net_assert() {
     # NB `ip rule list` prints the table NUMBER (1030), not "wlan0", so match
     # on the pref+iif instead (the old "lookup wlan0" grep never matched and
     # we leaned on EEXIST — fine, but this also tolerates a renumbered table).
-    ip rule list | grep -q "^21000:.*iif determ0" ||
-        ip rule add pref 21000 iif determ0 lookup wlan0 2>/dev/null
+    [ -n "$DET_WIFI_IFACE" ] && {
+        ip rule list | grep -q "^21000:.*iif determ0" ||
+            ip rule add pref 21000 iif determ0 lookup "$DET_WIFI_IFACE" 2>/dev/null
+    }
 
     # Fallback egress table: during desktop-mode framework thrash netd can
     # DELETE the wlan0 table outright (2026-07-07) — the pref-21000 rule then
@@ -76,8 +84,8 @@ net_assert() {
     # Mirror the live default route into our own table 117 whenever the real
     # path is known; rule lookups fall through empty tables, so pref 21100
     # only carries traffic once netd's table is gone.
-    GW=$(ip route get 1.1.1.1 2>/dev/null | sed -n 's/.* via \([0-9.]*\) dev wlan0 .*/\1/p')
-    [ -n "$GW" ] && ip route replace default via "$GW" dev wlan0 table 117 2>/dev/null
+    GW=$(ip route get 1.1.1.1 2>/dev/null | sed -n "s/.* via \([0-9.]*\) dev $DET_WIFI_IFACE .*/\1/p")
+    [ -n "$GW" ] && ip route replace default via "$GW" dev "$DET_WIFI_IFACE" table 117 2>/dev/null
     ip rule list | grep -q "^21100:.*iif determ0" ||
         ip rule add pref 21100 iif determ0 lookup 117 2>/dev/null
 }
@@ -99,12 +107,12 @@ if ! kill -0 "$(cat "$DET/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
         while :; do
             net_assert 2>/dev/null
             if [ -f "$DET/run/desktop-mode" ]; then
-                if [ "$(cat /sys/class/net/wlan0/operstate 2>/dev/null)" = "up" ]; then
+                if [ -z "$DET_WIFI_IFACE" ] || [ "$(cat "/sys/class/net/$DET_WIFI_IFACE/operstate" 2>/dev/null)" = "up" ]; then
                     fails=0
                 else
                     fails=$((fails+1))
                     if [ "$fails" -eq 3 ] || [ $((fails % 9)) -eq 0 ]; then
-                        echo "wlan0 not up x$fails — svc wifi enable ($(date))" >> "$DET/log/net-keeper.log"
+                        echo "$DET_WIFI_IFACE not up x$fails — svc wifi enable ($(date))" >> "$DET/log/net-keeper.log"
                         timeout 15 svc wifi enable </dev/null >/dev/null 2>&1
                     fi
                 fi

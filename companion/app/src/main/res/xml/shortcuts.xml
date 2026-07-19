@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="enter-linux"
+        android:enabled="true"
+        android:icon="@drawable/ic_desktop"
+        android:shortcutShortLabel="@string/shortcut_enter_short"
+        android:shortcutLongLabel="@string/shortcut_enter_long">
+        <intent
+            android:action="com.determination.companion.action.ENTER_DESKTOP"
+            android:targetPackage="com.determination.companion"
+            android:targetClass="com.determination.companion.DesktopShortcutActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="controls"
+        android:enabled="true"
+        android:icon="@drawable/ic_soul"
+        android:shortcutShortLabel="@string/shortcut_open_short"
+        android:shortcutLongLabel="@string/shortcut_open_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.determination.companion"
+            android:targetClass="com.determination.companion.MainActivity" />
+    </shortcut>
+</shortcuts>

@@ -25,8 +25,9 @@ set -u
 DET=/data/determination
 LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
 GATE="$DET/run/native-gate"
-BL=/sys/class/backlight/backlight/brightness
-BL_LEVEL=1400
+. "$DET/bin/device-config"
+BL=$DET_BACKLIGHT_PATH
+BL_LEVEL=$DET_BACKLIGHT_LEVEL
 CONNECTOR=28          # DSI-1 (kms-probe 2026-07-13)
 MODE="#0"        # mode BY INDEX: downstream SDE mode NAME is 1080x2340x60x179431 (res x refresh x clock)
 
@@ -118,7 +119,7 @@ while [ "$(getprop init.svc.vendor.hwcomposer-2-4)" != "stopped" ]; do
     sleep 0.5
 done
 sleep 1
-echo "$BL_LEVEL" > "$BL" 2>/dev/null
+[ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
 dmesg -c > /dev/null 2>&1   # clear ring so the capture below is test-only
 
 # §3 trap, raw-KMS edition — solved by READING THE SOURCE (sde_connector.c):

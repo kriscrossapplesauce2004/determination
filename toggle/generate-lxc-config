@@ -1,0 +1,88 @@
+#!/system/bin/sh
+# Generate the LXC device-mount section from the Android host that will run it.
+# Usage: generate-lxc-config [base-config] [output-config]
+
+set -u
+DET=${DET:-/data/determination}
+. "$DET/bin/device-config"
+
+BASE=${1:-$DET/lxc/config.base}
+OUT=${2:-$DET/lxc/config}
+HOST_ROOT=${DET_HOST_ROOT:-}
+TMP="$OUT.new"
+MANIFEST="$DET/lxc/device-manifest"
+
+[ -r "$BASE" ] || { echo "FATAL: missing LXC base config: $BASE" >&2; exit 1; }
+mkdir -p "${OUT%/*}"
+
+# Strip the legacy/static device section. This keeps config.base compatible
+# with old installers while ensuring the generated file has no duplicate or
+# nonexistent device binds.
+while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+        'lxc.mount.entry = binder dev/binderfs '*|\
+        'lxc.mount.entry = /dev/binderfs/'*|\
+        'lxc.mount.entry = /dev/binder dev/binder '*|\
+        'lxc.mount.entry = /dev/hwbinder dev/hwbinder '*|\
+        'lxc.mount.entry = /dev/vndbinder dev/vndbinder '*|\
+        'lxc.mount.entry = /dev/kgsl-3d0 '*|\
+        'lxc.mount.entry = /dev/mali0 '*|\
+        'lxc.mount.entry = /dev/ion '*|\
+        'lxc.mount.entry = /dev/ashmem '*|\
+        'lxc.mount.entry = /dev/dma_heap '*|\
+        'lxc.mount.entry = /dev/dri '*|\
+        'lxc.mount.entry = /dev/input '*|\
+        'lxc.mount.entry = /dev/snd '*|\
+        'lxc.mount.entry = /dev/graphics '*) ;;
+        *) echo "$line" ;;
+    esac
+done < "$BASE" > "$TMP"
+
+echo >> "$TMP"
+echo '# --- Generated device mounts ---' >> "$TMP"
+: > "$MANIFEST.new"
+
+append_node() {
+    source_path=$1
+    target_path=${source_path#/}
+    host_path="$HOST_ROOT$source_path"
+    [ -e "$host_path" ] || return 0
+    if [ -d "$host_path" ]; then
+        echo "lxc.mount.entry = $source_path $target_path none rbind,create=dir,optional 0 0" >> "$TMP"
+    else
+        echo "lxc.mount.entry = $source_path $target_path none bind,create=file,optional 0 0" >> "$TMP"
+    fi
+    echo "$source_path" >> "$MANIFEST.new"
+}
+
+# Private binder context for guest processes, when binderfs is supported.
+if grep -qw binder "$HOST_ROOT/proc/filesystems" 2>/dev/null || [ -e "$HOST_ROOT/dev/binderfs/binder-control" ]; then
+    echo 'lxc.mount.entry = binder dev/binderfs binder nosuid,noexec,nodev,optional 0 0' >> "$TMP"
+fi
+
+# Android HAL traffic must use the host binder contexts. Layouts differ:
+# binderfs-based Android exposes them below /dev/binderfs; older devices place
+# them directly in /dev. Emit exactly one source for each guest target.
+for binder_name in binder hwbinder vndbinder; do
+    binder_source=
+    for candidate in "/dev/binderfs/$binder_name" "/dev/$binder_name"; do
+        [ -e "$HOST_ROOT$candidate" ] && { binder_source=$candidate; break; }
+    done
+    [ -n "$binder_source" ] || continue
+    echo "lxc.mount.entry = $binder_source dev/$binder_name none bind,create=file,optional 0 0" >> "$TMP"
+    echo "$binder_source -> /dev/$binder_name" >> "$MANIFEST.new"
+done
+
+# Common GPU/display families plus allocator, input, and audio directories.
+# Missing paths are omitted, rather than papered over with optional mounts.
+for device_path in \
+    /dev/kgsl-3d0 /dev/mali0 /dev/pvr_sync /dev/galcore \
+    /dev/ashmem /dev/ion /dev/dma_heap /dev/dri \
+    /dev/input /dev/snd /dev/graphics $DET_EXTRA_DEVICES; do
+    append_node "$device_path"
+done
+
+mv -f "$TMP" "$OUT"
+mv -f "$MANIFEST.new" "$MANIFEST"
+chmod 0644 "$OUT" "$MANIFEST"
+echo "Generated $OUT ($(wc -l < "$MANIFEST") device mounts)"

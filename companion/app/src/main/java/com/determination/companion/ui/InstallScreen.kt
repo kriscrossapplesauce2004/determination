@@ -114,6 +114,12 @@ fun InstallScreen(
 
 @Composable
 private fun InventoryCard(inv: Map<String, String>) {
+    val expectedModuleVersion = "v${BuildConfig.VERSION_NAME}"
+    val moduleVersion = inv["module_ver"]?.takeIf { it.isNotBlank() }
+    val moduleEnabled = moduleVersion != null && inv["module_state"] != "disabled"
+    val moduleMatches = moduleVersion == expectedModuleVersion &&
+        inv["module_code"]?.toIntOrNull() == BuildConfig.VERSION_CODE
+
     GlassCard {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             InventoryRow(
@@ -124,10 +130,15 @@ private fun InventoryCard(inv: Map<String, String>) {
             )
             InventoryRow(
                 Icons.Rounded.Archive, "Magisk module",
-                inv["module_ver"]?.takeIf { it.isNotBlank() }
+                moduleVersion
                     ?.let { "$it (${inv["module_code"] ?: "?"})" } ?: "not installed",
-                ok = !inv["module_ver"].isNullOrBlank() && inv["module_state"] != "disabled",
-                okText = "enabled", badText = if (inv["module_state"] == "disabled") "disabled" else "missing",
+                ok = moduleEnabled && moduleMatches,
+                okText = "matches this app",
+                badText = when {
+                    inv["module_state"] == "disabled" -> "disabled"
+                    moduleVersion == null -> "missing"
+                    else -> "different release"
+                },
             )
             InventoryRow(
                 Icons.Rounded.Storage, "Guest rootfs",
@@ -137,7 +148,7 @@ private fun InventoryCard(inv: Map<String, String>) {
             )
             InventoryRow(
                 Icons.Rounded.Android, "Companion app",
-                "v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                "v${BuildConfig.VERSION_NAME} “${BuildConfig.RELEASE_CODENAME}” (${BuildConfig.VERSION_CODE})",
                 ok = true, okText = "this app", badText = "",
             )
             val slot = inv["slot"]

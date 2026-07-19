@@ -2,20 +2,30 @@
 # Lays down the on-device toolkit under /data/determination; the module dir
 # itself only carries the boot hooks + sepolicy.
 
-ui_print "- Determination $(grep_prop version "$MODPATH/module.prop")"
+ui_print "- $(grep_prop name "$MODPATH/module.prop") $(grep_prop version "$MODPATH/module.prop")"
 
 DET=/data/determination
-mkdir -p "$DET/bin" "$DET/log" "$DET/run" "$DET/lxc"
+mkdir -p "$DET/bin" "$DET/etc" "$DET/log" "$DET/run" "$DET/lxc"
 
-for f in evgrab guest-start desktop-on desktop-off det-hostagent cycle-stress.sh; do
+for f in evgrab device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
     [ -f "$MODPATH/tools/$f" ] || abort "! missing $f in zip"
     cp -f "$MODPATH/tools/$f" "$DET/bin/$f"
     chmod 0755 "$DET/bin/$f"
 done
-cp -f "$MODPATH/tools/lxc-config" "$DET/lxc/config"
+cp -f "$MODPATH/tools/lxc-config-base" "$DET/lxc/config.base"
+
+# Install a known profile only on a matching device. Unknown devices use the
+# runtime discovery defaults and receive no silently-wrong vendor assumptions.
+DEVICE=$(getprop ro.product.device)
+[ ! -f "$DET/etc/device.conf" ] && [ -f "$MODPATH/device-profiles/$DEVICE.conf" ] && {
+    cp -f "$MODPATH/device-profiles/$DEVICE.conf" "$DET/etc/device.conf"
+    chmod 0644 "$DET/etc/device.conf"
+    ui_print "- Device profile: $DEVICE"
+}
+[ -f "$DET/etc/device.conf" ] && ui_print "- Config: $DET/etc/device.conf"
 
 # Keep the payload out of the mounted module dir.
-rm -rf "$MODPATH/tools"
+rm -rf "$MODPATH/tools" "$MODPATH/device-profiles"
 
 # Running the Determination kernel? Warn, don't block — module install before
 # kernel flash is a legitimate order of operations.

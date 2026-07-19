@@ -107,8 +107,10 @@ object Root {
             [ -e $DET/run/hostagent.pid ] && echo "agent=up" || echo "agent=down"
             echo "installed=${'$'}([ -x $BIN/desktop-on ] && echo yes || echo no)"
             echo "ip=${'$'}($LXC/lxc-info -P $DET -n guest 2>/dev/null | awk '/IP:/{print ${'$'}2; exit}')"
-            echo "batt=${'$'}(cat /sys/class/power_supply/bms/capacity 2>/dev/null)"
-            echo "battmv=${'$'}(( ${'$'}(cat /sys/class/power_supply/bms/voltage_now 2>/dev/null || echo 0) / 1000 ))"
+            gauge=${'$'}(sed -n 's/^DET_BATTERY_GAUGE=//p' $DET/etc/device.conf 2>/dev/null | tail -n 1)
+            [ -n "${'$'}gauge" ] || gauge=battery
+            echo "batt=${'$'}(cat /sys/class/power_supply/${'$'}gauge/capacity 2>/dev/null)"
+            echo "battmv=${'$'}(( ${'$'}(cat /sys/class/power_supply/${'$'}gauge/voltage_now 2>/dev/null || echo 0) / 1000 ))"
             echo "battstat=${'$'}(cat /sys/class/power_supply/battery/status 2>/dev/null)"
             up=${'$'}(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
             echo "uptime=${'$'}((up / 3600))h ${'$'}(( (up % 3600) / 60 ))m"
@@ -132,14 +134,34 @@ object Root {
      * DETACHED (setsid + nohup) so it survives this app being killed when
      * SurfaceFlinger stops and the Android UI disappears a moment later.
      */
-    fun enterDesktop(): Result = run(
+    fun enterDesktop(): Result = ZygiskBridge.command("enter") ?: run(
         "$BIN/guest-start >/dev/null 2>&1; " +
             "setsid sh -c 'nohup $BIN/desktop-on >/dev/null 2>&1' >/dev/null 2>&1 &",
-        20
+        20,
     )
 
     /** Return to phone mode (restarts SurfaceFlinger). */
-    fun exitDesktop(): Result = run("$BIN/desktop-off", 30)
+    fun exitDesktop(): Result = ZygiskBridge.command("exit") ?: run("$BIN/desktop-off", 30)
+
+    /** Copy an Android share-sheet staging file into Linux, guest running or not. */
+    fun importToGuest(sourcePath: String, displayName: String): Result {
+        val safeName = displayName
+            .filter { it.code >= 32 && it !in "/\\" }
+            .take(120)
+            .ifBlank { "Shared file" }
+        val inbox = "$DET/guest/home/melissa/Downloads/From Android"
+        val destination = "$inbox/$safeName"
+        return run(
+            "install -d -m 0755 -o 1000 -g 1000 ${shellQuote(inbox)}; " +
+                "cp -f ${shellQuote(sourcePath)} ${shellQuote(destination)}; " +
+                "chown 1000:1000 ${shellQuote(destination)}; " +
+                "chmod 0644 ${shellQuote(destination)}",
+            30,
+        )
+    }
+
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'\"'\"'") + "'"
 
     /**
      * Recover a wedged desktop session without a full toggle: kill phoc; the

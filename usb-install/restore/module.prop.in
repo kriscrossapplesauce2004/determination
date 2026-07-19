@@ -1,0 +1,6 @@
+id=determination-kernel-restore
+name=Determination @CODENAME@ kernel RESTORE (action zip)
+version=v@VERSION@
+versionCode=@VERSION_CODE@
+author=melissa
+description=Restores the pristine boot image paired with Determination @VERSION@ "@CODENAME@", backing up the current boot first and supporting dry-run. Does not install as a module.

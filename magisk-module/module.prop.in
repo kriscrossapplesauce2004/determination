@@ -1,0 +1,6 @@
+id=determination
+name=Determination - @CODENAME@
+version=v@VERSION@
+versionCode=@VERSION_CODE@
+author=melissa
+description=Determination @VERSION@ "@CODENAME@": Android convergence layer with an LXC glibc desktop guest. Requires the Determination custom kernel.
