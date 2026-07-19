@@ -23,10 +23,7 @@ mkdir -p "$DET/run"
 # the launch is bounded: transition failure must never block display recovery.
 TRANSITION=com.determination.companion/.ModeTransitionActivity
 launch_transition() {
-    # -W waits for the activity first frame. Without it, a cold companion
-    # start can consume the entire 650ms animation allowance before anything
-    # reaches SurfaceFlinger.
-    am start -W --user 0 -n "$TRANSITION" --es direction "$1" >/dev/null 2>&1 &
+    am start --user 0 -n "$TRANSITION" --es direction "$1" >/dev/null 2>&1 &
     am_pid=$!
     ( sleep 2; kill "$am_pid" 2>/dev/null ) &
     guard_pid=$!

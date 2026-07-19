@@ -67,9 +67,7 @@ done
 TRANSITION=com.determination.companion/.ModeTransitionActivity
 transition_started=0
 start_phone_transition() {
-    # Count the reveal timing from the first rendered frame, not the launch
-    # request; the companion may be cold after system_server restarts.
-    am start -W --user 0 -n "$TRANSITION" --es direction phone >/dev/null 2>&1 &
+    am start --user 0 -n "$TRANSITION" --es direction phone >/dev/null 2>&1 &
     am_pid=$!
     ( sleep 2; kill "$am_pid" 2>/dev/null ) &
     guard_pid=$!
