@@ -6,7 +6,7 @@
 # kiosk trick), and systemd-logind DOES run in the container (verified
 # 2026-07-13). Started/stopped by toggle/native-plasma, NOT enabled at boot.
 [Unit]
-Description=Determination native Plasma session (raw KMS + zink)
+Description=Determination experimental native Plasma session (raw KMS + Mesa/Zink)
 After=systemd-logind.service dbus.service
 Wants=systemd-logind.service
 

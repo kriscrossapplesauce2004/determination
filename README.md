@@ -83,6 +83,15 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
       guest networking alive throughout desktop mode
 - [x] Milestone 5 phase 1: native graphics/KMS path proven (2026-07-13/14) —
       Turnip on KGSL, minigbm allocation, dmabuf→Vulkan import, raw DSI KMS
-      scanout, and Plasma Mobile under KWin with GPU compositing + touch
+      scanout, and Plasma Mobile under KWin with GPU compositing + touch.
+      This is retained as an explicit native-Mesa experiment, not the portable
+      product renderer.
+- [ ] Compatibility KWin path: vendor EGL/GLES through libhybris, Android
+      gralloc allocation, and minigbm as the compositor-facing GBM layer. The
+      first shared-buffer interop gate passed on-device (2026-07-19): vendor
+      Adreno rendered through a reconstructed full native handle, pixel readback
+      through the original allocation matched, and minigbm imported/re-exported
+      its pixel dma-buf. Direct KWin integration, authoritative plane metadata,
+      and sync-fence transport remain.
 - [ ] Milestone 5 phase 2: concurrent external convergence — Android/SF keeps
       the panel while a guest-rendered dmabuf is presented on DP-alt

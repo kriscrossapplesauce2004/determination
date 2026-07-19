@@ -67,8 +67,16 @@ design avoids ever needing that.
 ## 3. Guest + display acquisition
 
 Guest: Debian glibc rootfs in LXC, sharing the kernel, with `libhybris` and the
-`/vendor` blob paths bind-mounted in. Compositor binds the display through
-**libhybris → hwcomposer HAL**.
+`/vendor` blob paths bind-mounted in. Vendor EGL/GLES through libhybris is the
+product GPU interface across device families. Native Mesa drivers are optional
+diagnostics and optimisations, never the compatibility baseline.
+
+The proven compositor binds the display through **libhybris → hwcomposer HAL**.
+For compositors whose modern backends require GBM, the target is Android
+gralloc allocation plus a minigbm-facing GBM facade. Minigbm provides the Linux
+buffer API; it does not replace vendor EGL or choose the GPU driver. The full
+gralloc native handle and synchronization fences are part of the buffer
+contract. See `docs/graphics-architecture.md`.
 
 The composer HAL is **single-client** (whether HIDL `graphics.composer@2.x` or
 AIDL `composer3`, depending on your Halium base's Android level). SF holds that
@@ -83,14 +91,16 @@ against the actual `guacamoleb` vendor image, not assumptions.
 | Backend integration | Unlocks |
 |---|---|
 | wlroots ↔ hwcomposer | Hyprland, sway, Phosh — the whole wlroots clan, one integration |
-| KWin ↔ hwcomposer | KDE Plasma / Plasma Mobile — separate integration, prior art on Halium |
+| KWin ↔ Android-backed GBM/EGL winsys | KDE Plasma / Plasma Mobile — in development; libhybris vendor rendering plus minigbm API |
 
 wlroots first (best compositor-per-effort ratio). KWin is a distinct second
 integration, not a variant of the first.
 
-a6xx-through-libhybris is the most-trodden path in the ecosystem; GPU-acquisition
-risk on this chip is low. Smoke-test with the libhybris hwcomposer/EGL bring-up
-test before wiring the toggle, then move on — no ceremony needed.
+The libhybris vendor path is deliberately GPU-family-neutral: Adreno, Mali,
+PowerVR and other Android-supported GPUs keep their shipped blobs. Smoke-test
+vendor EGL, gralloc and hwcomposer independently before enabling a compositor.
+The native Turnip/KGSL result on guacamoleb is retained as evidence and a
+performance experiment, not used to classify other devices as supported.
 
 ---
 
@@ -131,14 +141,18 @@ release.
 
 ---
 
-## 5. External convergence (concurrent, cheap)
+## 5. External convergence (concurrent presenter)
 
-External output (DP-alt) has two independent surfaces, so no arbitration: SF keeps
-the internal panel with SystemUI live, the guest compositor drives the external
-display, both run at once. This is the plain Maru case. The only real work is
-DP-alt mode negotiation and display enumeration through hwcomposer on this SoC —
-device-specific, but far lighter than §4. Do it *after* the internal toggle; its
-apparent glamour understates how much cheaper it is.
+SurfaceFlinger must remain the sole composer client while Android stays live, so
+the guest cannot concurrently acquire hwcomposer merely because DP is a second
+surface. The guest renders into Android-gralloc buffers with vendor EGL through
+libhybris; an Android-side presenter imports those buffers and places them on
+the external display. Input returns through uinput. Native DRM leases are not
+available on the proven 4.14 kernel.
+
+The portable direction is Android-owned allocation. A device-proven reverse
+import from minigbm allocation may remove overhead, but never replaces the
+gralloc/native-handle compatibility path.
 
 | | External (§5) | Internal on-demand (§4) |
 |---|---|---|
@@ -146,7 +160,7 @@ apparent glamour understates how much cheaper it is.
 | Surfaces | two, independent | one, arbitrated |
 | SF | running | stopped + respawn-masked |
 | Input | untouched | EVIOCGRAB handoff |
-| Difficulty | light | the core work |
+| Difficulty | buffer transport + presenter | display-owner arbitration |
 
 ---
 

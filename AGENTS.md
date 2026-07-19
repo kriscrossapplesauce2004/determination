@@ -110,7 +110,7 @@ Same post-start block remounts `/` suid (nosuid /data would break sudo — see n
 **ReZygisk:** native Zygisk MUST stay disabled (`zygisk=0`) or ReZygisk skips
 module loading. Both ABI .so files required (arm64-v8a + armeabi-v7a).
 
-## Current state (2026-07-14)
+## Current state (2026-07-19)
 
 **Kernel #4 running** (`4.14.357-perf-g96adfa8256dc #2`, distro clang 22).
 pstore/ramoops enabled. Device module v0.4.1 (versionCode=8); Aqua
@@ -120,10 +120,18 @@ v0.5.0-alpha.1 (versionCode=12) is the current source release. Guest RUNNING.
 phosh verified, cable-free round trip, §4 signed off), 6 (SF-death Zygisk hook +
 system_server freezer — full desktop-mode stability).
 
-**Milestone 5 native phase proven:** Turnip-on-KGSL + minigbm pass the native
-smoke gate, raw KMS scans out on DSI, and Plasma Mobile runs under KWin with
-zink/Turnip GPU compositing and touch. The remaining M5 headline is concurrent
-external convergence via the dmabuf→Android presenter bridge on DP-alt.
+**Milestone 5 native experiment proven:** Turnip-on-KGSL + minigbm pass the
+native smoke gate, raw KMS scans out on DSI, and Plasma Mobile runs under KWin
+with zink/Turnip GPU compositing and touch. Product graphics policy is now
+compatibility-first: vendor EGL/GLES always goes through libhybris; Android
+gralloc owns buffers; minigbm supplies the compositor-facing GBM layer. The
+first shared-allocation gate passes on-device: the complete QTI gralloc handle
+round-trips through libhybris, vendor EGL renders through the reconstructed
+object, and minigbm imports/re-exports its pixel dma-buf. The handle contained 2
+fds plus 22 private ints, so the direct compositor bridge must keep the complete
+Android native handle and sync fences rather than reducing it to one generic
+dma-buf. The remaining M5 headline is concurrent external convergence through
+an Android presenter on DP-alt. See `docs/graphics-architecture.md`.
 
 **Wake path VERIFIED** (power button blank/unblank works). KEY_POWER quirk removed.
 

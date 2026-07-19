@@ -11,7 +11,7 @@ Host-side scripts source `/data/determination/bin/device-config`. It discovers
 safe defaults at runtime and then applies the data-only overrides in
 `/data/determination/etc/device.conf`.
 
-Currently configurable end to end:
+Currently generated and consumed, with incomplete paths called out below:
 
 | Key | Discovery/default | Consumers |
 |---|---|---|
@@ -24,9 +24,17 @@ Currently configurable end to end:
 | `DET_BATTERY_GAUGE` | unset | guest battery translator |
 | `DET_INPUT_QUIRK` | `none` | classified libinput workaround |
 | `DET_DRM_CARD` | `/dev/dri/card0` | reserved for generated native-display config |
+| `DET_DRM_RENDER_NODE` | first render node, then card | minigbm and graphics interop probes |
+| `DET_GRAPHICS_RENDERER` | `libhybris` | graphics policy; native Mesa requires an explicit diagnostic override |
+| `DET_GBM_PROVIDER` | `minigbm` | compositor-facing GBM policy; not the GPU renderer |
 
 `DET_DRM_CARD` is emitted by recon but is not yet wired through every native
 display consumer. It must not be advertised as complete portability.
+
+The graphics keys now enforce the product default and guard the old native-Mesa
+launcher, but they do not imply that the direct KWin compatibility winsys is
+finished. Its remaining plane-metadata and fence work is tracked in
+`docs/graphics-architecture.md`.
 
 `recon/recon.sh` now records identity, backlights, network interfaces, power
 supplies, and DRM connectors and emits `device.conf` beside the raw report.
@@ -55,7 +63,8 @@ runtime discovery rather than inheriting OnePlus-specific values.
 |---|---|---|
 | Composer | HIDL 2.x, AIDL composer3 | HIDL 2.x proven; AIDL unsupported |
 | Allocator | gralloc3/4, mapper3/4, AHardwareBuffer | QTI gralloc4 proven |
-| GPU | Adreno vendor EGL, Turnip/KGSL, Mali, PowerVR | Adreno a6xx proven |
+| GPU | Android vendor EGL/GLES through libhybris | Adreno vendor blob proven; other families require device ports |
+| Compositor buffers | Android gralloc + minigbm GBM facade | full-handle shared-buffer round trip passed on QTI gralloc4/minigbm; plane metadata and fence bridge pending |
 | Display | HWC exclusive, native DRM exclusive, Android presenter external | first two proven on SM8150 |
 | Kernel | vendor 4.x through modern GKI | 4.14 proven; fragment partly generic |
 | Input | evdev + `EVIOCGRAB`, uinput return path | evdev handoff proven |

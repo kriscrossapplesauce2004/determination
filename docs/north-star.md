@@ -60,10 +60,12 @@ thrash that caused guest-network instability in desktop mode.
 
 ## Milestone 5: external convergence (the last milestone)
 
-6. Architecture pinned 2026-07-13 (plan + tasks #1–#4; no nested-under-phoc
-   — melissa's call). Two chained phases on the **minigbm/native-DRM track**:
+6. Graphics policy revised 2026-07-19: compatibility outranks peak native
+   performance. Vendor EGL/GLES through libhybris is the product renderer;
+   minigbm is the compositor-facing GBM layer, not a Turnip delivery system.
+   See [`graphics-architecture.md`](graphics-architecture.md).
 
-   **Exclusive first:** downstream SDE is a real atomic KMS driver
+   **Proven experimental path:** downstream SDE is a real atomic KMS driver
    (`msm_drm` on card0 — 5 CRTCs, 16 planes, dumb buffers, PRIME, DSI + DP
    + writeback connectors; `artifacts/kms-probe-20260713.txt`). Stack: Mesa
    Turnip-KGSL + zink (`guest/build-mesa.sh`, `/opt/mesa`) + minigbm msm
@@ -75,18 +77,30 @@ thrash that caused guest-network instability in desktop mode.
    **PASSED 2026-07-13**, `toggle/native-kms-gate`, bars on panel with
    brightness control; atomic + flip-event delivery still to verify). Payoff: vendor GL exits the
    guest (Adreno varying hack, android_wlegl all retire) and unmodified
-   desktops return — **Plasma Mobile under KWin is now verified on-panel with
-   zink/Turnip GPU compositing and touch (2026-07-14)**. GNOME/Mutter remains
+   desktops return — **Plasma Mobile under KWin is verified on-panel with
+   zink/Turnip GPU compositing and touch (2026-07-14)**. This proves KWin and
+   the KMS driver; it is not the universal renderer and is now guarded behind
+   an explicit `DET_GRAPHICS_RENDERER=mesa` diagnostic override. GNOME/Mutter remains
    deferred (logind-hard; phosh IS GNOME).
    phosh-on-monitor already works today via the hwc backend, plug-and-play —
    the gap this fixes is a desktop-grade DE, not the hardware path.
 
-   **Then concurrent (the headline):** SF alive on the panel; guest renders
-   headless on the same Mesa stack; minigbm dmabuf ⇄ AHardwareBuffer bridge
-   (same UBWC layouts as gralloc — that's the whole trick) into an Android
-   presenter on the DP display; input back via uinput; summon UX = the
-   presenter's show/hide. True concurrency is ONLY reachable this way on
-   4.14: one DRM master per card, no DRM leases, single composer client.
+   **Compatibility path now:** Android gralloc owns buffers; libhybris vendor
+   EGL renders; minigbm imports them for compositor-facing GBM. The first
+   executable shared-allocation gate, `guest/hybris-minigbm-probe.c`, **PASSED
+   2026-07-19** on guacamoleb: full native-handle gralloc round trip + vendor
+   Adreno EGL render + exact CPU readback through the original allocation +
+   minigbm import/re-export. Its native handle had two fds and 22 private ints
+   (`artifacts/hybris-minigbm-20260719.txt`).
+   Complete native handles and sync fences must cross the production bridge;
+   UBWC coincidence is an optional Qualcomm optimisation, never the portable
+   contract.
+
+   **Then concurrent (the headline):** SF remains alive on the panel and an
+   Android presenter consumes the same gralloc-origin buffers on DP. Input
+   returns through uinput; summon UX is presenter show/hide. True concurrency
+   still needs this presenter on 4.14: one DRM master per card, no DRM leases,
+   and a single composer client.
 
 ## Standing discipline
 

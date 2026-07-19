@@ -11,6 +11,14 @@ export LANG=C.UTF-8 TMPDIR=/tmp
 [ -n "${XDG_RUNTIME_DIR:-}" ] || export XDG_RUNTIME_DIR=/run/user/0
 install -d -m 700 "$XDG_RUNTIME_DIR"
 
+[ -r /etc/determination-device.conf ] && . /etc/determination-device.conf
+[ -r /run/det-plasma.env ] && . /run/det-plasma.env
+DET_GRAPHICS_RENDERER=${DET_GRAPHICS_RENDERER:-libhybris}
+if [ "$DET_GRAPHICS_RENDERER" != mesa ]; then
+    echo "FATAL: det-plasma-session is the experimental Mesa/Zink launcher; renderer is $DET_GRAPHICS_RENDERER" >&2
+    exit 2
+fi
+
 . /opt/mesa/env.sh
 export QT_QPA_PLATFORM=wayland XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
 # Diagnostics (2026-07-14 run 1 failed GL init + touch with no evidence):
@@ -21,7 +29,6 @@ export QT_LOGGING_RULES="kwin_*.debug=true"
 # force a GLES context — zink's GLES 3.2 passes all of KWin's checks.
 export KWIN_COMPOSE=O2ES
 
-[ -f /run/det-plasma.env ] && . /run/det-plasma.env
 CLIENT="${DET_PLASMA_CLIENT:-foot}"
 # Plasma Mobile needs the full startplasmamobile env (PLASMA_DEFAULT_SHELL
 # etc.) — det-plasma-client wraps that; plain plasmashell insta-crashes with

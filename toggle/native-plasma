@@ -20,6 +20,17 @@ GATE="$DET/run/native-gate"
 BL=$DET_BACKLIGHT_PATH
 BL_LEVEL=$DET_BACKLIGHT_LEVEL
 STAGE="${1:-kwin}"
+
+# This script is the old native-Mesa experiment. Production Determination
+# deliberately defaults to vendor EGL/GLES through libhybris for GPU breadth.
+# Requiring an explicit override prevents a diagnostic Turnip stack from
+# silently becoming the product graphics architecture again.
+if [ "$DET_GRAPHICS_RENDERER" != mesa ]; then
+    echo "FATAL: native-plasma uses Mesa/Zink, but DET_GRAPHICS_RENDERER=$DET_GRAPHICS_RENDERER"
+    echo "Use the libhybris compositor path. For the archived experiment only:"
+    echo "  DET_GRAPHICS_RENDERER=mesa sh $0 $STAGE"
+    exit 2
+fi
 case "$STAGE" in
     kwin) HOLD=120;;
     plasma) HOLD=180;;
@@ -127,9 +138,9 @@ echo "== 5. launch kwin ($STAGE) via det-plasma.service =="
 # (mesa /opt/mesa env). KWin 6 DRM backend is atomic-only: this doubles as
 # the atomic probe modetest couldn't deliver.
 if [ "$STAGE" = plasma ]; then
-    $LXC /bin/sh -c 'echo DET_PLASMA_CLIENT=plasmashell > /run/det-plasma.env'
+    $LXC /bin/sh -c 'printf "DET_GRAPHICS_RENDERER=mesa\nDET_PLASMA_CLIENT=plasmashell\n" > /run/det-plasma.env'
 else
-    $LXC /bin/sh -c 'echo DET_PLASMA_CLIENT=foot > /run/det-plasma.env'
+    $LXC /bin/sh -c 'printf "DET_GRAPHICS_RENDERER=mesa\nDET_PLASMA_CLIENT=foot\n" > /run/det-plasma.env'
 fi
 $LXC /bin/sh -c 'export PATH=/usr/sbin:/usr/bin:/sbin:/bin; systemctl daemon-reload; systemctl restart det-plasma; sleep 2; systemctl is-active det-plasma; loginctl list-sessions --no-legend 2>/dev/null' 2>&1
 

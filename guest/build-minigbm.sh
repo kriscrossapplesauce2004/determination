@@ -1,16 +1,18 @@
 #!/bin/sh
-# M5 native-DRM track, Phase 0.3: build minigbm (ChromeOS's GBM
-# implementation) with the msm backend as a libgbm drop-in, into /opt/minigbm.
+# Build minigbm (ChromeOS's GBM implementation) as the compositor-facing GBM
+# layer, into /opt/minigbm. The current device build enables its msm backend.
 # Run INSIDE the container as root. Fast (small C library).
 #
-# WHY MINIGBM: mesa's gbm allocates through a gallium driver and nothing can
-# drive kgsl there; minigbm's msm backend speaks the msm DRM GEM ioctls
-# directly and knows Qualcomm's real layouts (UBWC included) — the same
-# layouts QTI gralloc produces, which is what makes the Phase 2 buffer
-# bridge (dmabuf <-> AHardwareBuffer) possible at all.
+# WHY MINIGBM: it gives desktop compositors a compact, driver-neutral GBM API
+# without selecting the GPU renderer. Compatibility rendering remains Android
+# vendor EGL/GLES through libhybris. Android gralloc owns product-path buffers;
+# minigbm imports compositor-facing objects from them. Direct minigbm allocation
+# is retained only for the explicitly selected native-Mesa experiment until
+# authoritative mapper plane metadata and fence transport are proven.
 #
 # WHY ITS OWN PREFIX: system libgbm (mesa's, /usr/lib) stays untouched;
-# native sessions prepend /opt/minigbm/lib so gbm_* resolves to minigbm.
+# native-Mesa diagnostic sessions prepend /opt/minigbm/lib so gbm_* resolves
+# to minigbm.
 # If the downstream driver rejects MSM_GEM_NEW, minigbm's dumb_driver
 # fallback still yields scanout-capable linear buffers — the self-test below
 # prints which backend actually engaged.

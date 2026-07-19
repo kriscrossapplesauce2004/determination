@@ -15,6 +15,11 @@ different and are recorded in the release manifest.
 - Stable desktop-mode networking through the `system_server` freezer path.
 - Native Turnip/KGSL + minigbm graphics path, raw KMS scanout, and Plasma
   Mobile under KWin with GPU compositing and touch.
+- Compatibility-first graphics policy: vendor EGL/GLES through libhybris,
+  Android-gralloc buffer ownership, and minigbm as the compositor GBM layer.
+- A display-safe gralloc/vendor-EGL/minigbm shared-buffer interoperability
+  probe, passed on guacamoleb, with the native Mesa launcher guarded as an
+  explicit experiment.
 - Runtime device discovery and exact-match device-profile foundations.
 - Verified boot-image install, backup, restore, and dry-run paths.
 
