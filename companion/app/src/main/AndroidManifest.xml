@@ -46,6 +46,17 @@
             android:noHistory="true"
             android:theme="@style/Theme.Determination.Dialog" />
 
+        <!-- Brief, non-interactive cover for the SurfaceFlinger handoff. The
+             root toggle scripts launch it explicitly; it never owns the mode
+             switch and is deliberately not exported to third-party apps. -->
+        <activity
+            android:name=".ModeTransitionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:screenOrientation="unspecified"
+            android:theme="@style/Theme.Determination.Transition" />
+
         <activity
             android:name=".ShareToLinuxActivity"
             android:exported="true"

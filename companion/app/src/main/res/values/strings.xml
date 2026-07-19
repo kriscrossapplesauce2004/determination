@@ -23,6 +23,11 @@
     <string name="exiting">Returning to phone mode…</string>
     <string name="exit_failed">Exit failed: %1$s</string>
 
+    <string name="transition_desktop">DESKTOP MODE</string>
+    <string name="transition_desktop_detail">DISPLAY HANDOFF</string>
+    <string name="transition_phone">PHONE MODE</string>
+    <string name="transition_phone_detail">ANDROID RESUMED</string>
+
     <string name="recover_go">Recover Desktop (restart phoc)</string>
     <string name="recovering">Recovering the compositor…</string>
 

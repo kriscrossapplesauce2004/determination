@@ -60,6 +60,27 @@ until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
     sleep 0.5
 done
 
+# Prepare the matching phone-mode reveal while bootanim still covers the
+# freshly restarted framework. The activity holds black for its first 205ms;
+# a short head start lets its first frame land before bootanim disappears.
+# Optional and timeout-bounded so a missing/broken companion cannot hold exit.
+TRANSITION=com.determination.companion/.ModeTransitionActivity
+transition_started=0
+start_phone_transition() {
+    am start --user 0 -n "$TRANSITION" --es direction phone >/dev/null 2>&1 &
+    am_pid=$!
+    ( sleep 2; kill "$am_pid" 2>/dev/null ) &
+    guard_pid=$!
+    wait "$am_pid"
+    rc=$?
+    kill "$guard_pid" 2>/dev/null
+    wait "$guard_pid" 2>/dev/null
+    if [ "$rc" = 0 ]; then
+        transition_started=1
+        sleep 0.12
+    fi
+}
+
 # 3b. A restarted SF replays the boot animation and waits for a "boot
 # finished" signal that never comes on an already-booted system — the
 # animation loops over a healthy UI forever (melissa hit this 2026-07-03).
@@ -73,6 +94,7 @@ if [ "$(getprop sys.boot_completed)" = "1" ]; then
         i=$((i+1)); sleep 0.5
     done
     if [ "$(getprop init.svc.bootanim)" = "running" ]; then
+        start_phone_transition
         setprop service.bootanim.exit 1
         setprop service.bootanim.progress 1
         i=0
@@ -84,6 +106,9 @@ if [ "$(getprop sys.boot_completed)" = "1" ]; then
         echo "boot animation cleared"
     fi
 fi
+# ROMs that skip bootanim still get the reveal, without adding delay to the
+# normal path above.
+[ "$transition_started" = 1 ] || start_phone_transition
 
 # 4. Release the input grab last, once Android UI is back to receive events.
 #    Usually a no-op since §4: desktop-on already killed evgrab at the
