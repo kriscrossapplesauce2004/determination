@@ -15,29 +15,4 @@
         <item name="colorPrimary">@color/det_soul</item>
     </style>
 
-    <!-- Translucent by design: the exit animation fades this black cover away
-         to the already-restored Android UI. No framework window animation;
-         ModeTransitionActivity owns the complete, bounded choreography. -->
-    <style name="Theme.Determination.Transition" parent="android:style/Theme.Material.NoActionBar">
-        <item name="android:fontFamily">sans</item>
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowAnimationStyle">@style/Animation.Determination.None</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:windowDisablePreview">true</item>
-        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
-        <item name="android:windowIsTranslucent">true</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowTranslucentNavigation">true</item>
-        <item name="android:windowTranslucentStatus">true</item>
-        <item name="android:windowNoDisplay">false</item>
-    </style>
-
-    <style name="Animation.Determination.None" parent="android:style/Animation.Activity">
-        <item name="android:activityOpenEnterAnimation">@null</item>
-        <item name="android:activityOpenExitAnimation">@null</item>
-        <item name="android:activityCloseEnterAnimation">@null</item>
-        <item name="android:activityCloseExitAnimation">@null</item>
-    </style>
-
 </resources>

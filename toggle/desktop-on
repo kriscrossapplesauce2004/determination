@@ -18,23 +18,6 @@ echo "--- desktop-on $(date)"
 [ -f "$DET/run/desktop-mode" ] && { echo "already in desktop mode"; exit 0; }
 mkdir -p "$DET/run"
 
-# 0b. Cosmetic handoff cover. It settles onto an opaque final frame before SF
-# stops, avoiding the hard Android->black cut. The companion is optional and
-# the launch is bounded: transition failure must never block display recovery.
-TRANSITION=com.determination.companion/.ModeTransitionActivity
-launch_transition() {
-    am start --user 0 -n "$TRANSITION" --es direction "$1" >/dev/null 2>&1 &
-    am_pid=$!
-    ( sleep 2; kill "$am_pid" 2>/dev/null ) &
-    guard_pid=$!
-    wait "$am_pid"
-    rc=$?
-    kill "$guard_pid" 2>/dev/null
-    wait "$guard_pid" 2>/dev/null
-    return "$rc"
-}
-launch_transition desktop && sleep 0.65
-
 # 1. Input first: grab evdev nodes so Android stops seeing events *before* its
 #    UI disappears (avoids a window where touches land on invisible UI).
 #    evgrab holds EVIOCGRAB on every touchscreen/key node until killed.
