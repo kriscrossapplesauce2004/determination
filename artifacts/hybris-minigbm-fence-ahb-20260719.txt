@@ -1,0 +1,16 @@
+== libhybris vendor EGL + Android gralloc + minigbm gate ==
+library "libadreno_app_profiles.so" not found
+vendor: Android / Adreno (TM) 640
+gralloc: PASS (256x256 RGBA8888 stride=256)
+native-handle: fds=2 private-ints=22
+native-handle: fd[0]=12 size=262144
+native-handle: fd[1]=13 size=32768
+native-handle: PASS full-handle gralloc round trip
+native-fence: PASS vendor EGL export, sync-file signal, and EGL import
+vendor-egl: PASS (texture-backed EGLImage render target)
+gralloc-readback: PASS (RGBA=64,128,191,255)
+minigbm: node=/dev/dri/renderD128 backend=msm_drm
+minigbm: PASS (stride=256 modifier=0xffffffffffffff re-export-fd=16)
+ahardwarebuffer: PASS full native handle over Unix socket (256x256 format=1 stride=256)
+metadata: NOTE multi-fd Android handle; direct compositor support must preserve the complete native handle
+HYBRIS-MINIGBM: PASS vendor blobs and minigbm share one gralloc buffer

@@ -58,7 +58,11 @@ Vulkan code. It:
 5. creates a vendor EGLImage for the reconstructed object, renders through it
    with vendor GLES, and verifies pixels through the original allocation;
 6. selects the probable pixel dma-buf for this diagnostic only;
-7. imports and re-exports it through minigbm.
+7. imports and re-exports it through minigbm;
+8. exports a vendor EGL native fence, waits its sync-file, and re-imports it;
+9. wraps the complete native handle as an `AHardwareBuffer`, transports it
+   over an AF_UNIX socket using Android's native API, and verifies its metadata
+   at the receiver.
 
 Build inside the guest:
 
@@ -67,9 +71,10 @@ sh /root/build-hybris-minigbm-probe.sh /root/hybris-minigbm-probe.c
 ```
 
 The probe is safe in phone mode: the null EGL platform initializes vendor EGL
-and gralloc without acquiring hwcomposer. A pass establishes only the first
-seam. Multi-plane metadata, explicit synchronization, compositor allocation,
-HWC/presenter submission and recovery each need their own gate.
+and gralloc without acquiring hwcomposer. A pass now establishes shared
+allocation, explicit producer-fence transport, and Android's complete-handle
+IPC primitive. Authoritative multi-plane metadata, compositor integration,
+HWC/presenter submission and recovery each retain their own gate.
 
 ### Result on guacamoleb
 
@@ -79,9 +84,14 @@ vendor Adreno EGL rendered RGBA `64,128,191,255` through that reconstructed
 object and CPU gralloc readback through the original allocation returned the
 same value. Minigbm's `msm_drm` backend then imported and re-exported the 256 KiB
 pixel dma-buf. The second 32 KiB fd is further evidence that a one-fd GBM
-abstraction is not the complete Android buffer contract.
+abstraction is not the complete Android buffer contract. Vendor EGL also
+exported a signalling native fence which survived sync-file polling and EGL
+re-import. Finally the complete handle was cloned into an `AHardwareBuffer`,
+sent through Android's Unix-socket transport, received, and described as the
+same 256x256 RGBA8888 allocation.
 
-Captured output: `artifacts/hybris-minigbm-20260719.txt`.
+Captured outputs: `artifacts/hybris-minigbm-20260719.txt` and
+`artifacts/hybris-minigbm-fence-ahb-20260719.txt`.
 
 ## Performance gate
 
@@ -122,7 +132,8 @@ session launcher:
 2. expose authoritative plane fd, offset, stride and modifier metadata through
    mapper-version adapters;
 3. create vendor EGLImages with `EGL_NATIVE_BUFFER_HYBRIS`, not dma-buf import;
-4. carry acquire and release `sync_file` fds through every ownership transfer;
+4. carry the now-proven acquire and release `sync_file` primitive through every
+   ownership transfer;
 5. implement linear/copy fallback when native zero-copy import is unavailable;
 6. integrate the winsys with KWin without teaching KWin about any GPU vendor.
 

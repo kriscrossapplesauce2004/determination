@@ -28,7 +28,7 @@ cc -std=c11 -O2 -Wall -Wextra -Werror \
     "$SRC" -o "$OUT" \
     -L/usr/local/lib -L/opt/minigbm/lib \
     -Wl,-rpath,/usr/local/lib -Wl,-rpath,/opt/minigbm/lib \
-    -lEGL -lGLESv2 -lgbm
+    -lEGL -lGLESv2 -lgbm -lhybris-common
 
 echo "== libhybris vendor EGL + Android gralloc + minigbm gate =="
 export LD_LIBRARY_PATH=/usr/local/lib:/opt/minigbm/lib
