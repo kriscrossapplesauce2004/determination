@@ -15,6 +15,7 @@
 #   det status            connection, root, kernel, mode, guest state
 #   det recon             run the §9 recon
 #   det hybrid-probe      build/run the libhybris + gralloc + minigbm gate
+#   det hybrid-bench      benchmark that shared-buffer path without display use
 #   det push-module       install/refresh the Magisk module zip on the phone
 #   det publish           push dist/usb-payload/ to the phone's USB drive
 #                         (falls back to /sdcard/Determination if no drive)
@@ -147,6 +148,18 @@ hybrid-probe)
     adb push guest/hybris-minigbm-probe.c /data/local/tmp/hybris-minigbm-probe.c >/dev/null
     adb push guest/build-hybris-minigbm-probe.sh /data/local/tmp/build-hybris-minigbm-probe.sh >/dev/null
     adb shell "su -c 'cp /data/local/tmp/hybris-minigbm-probe.c $G/guest/root/hybris-minigbm-probe.c; cp /data/local/tmp/build-hybris-minigbm-probe.sh $G/guest/root/build-hybris-minigbm-probe.sh; chmod 0755 $G/guest/root/build-hybris-minigbm-probe.sh; $G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh /root/build-hybris-minigbm-probe.sh /root/hybris-minigbm-probe.c'" ;;
+hybrid-bench)
+    ensure
+    G=/data/determination
+    bench_args=
+    if [ $# -gt 1 ]; then
+        [ $# -eq 4 ] || { echo "usage: det hybrid-bench [width height frames]" >&2; exit 2; }
+        case "$2$3$4" in *[!0-9]*) echo "benchmark arguments must be integers" >&2; exit 2;; esac
+        bench_args="$2 $3 $4"
+    fi
+    adb push guest/hybris-minigbm-probe.c /data/local/tmp/hybris-minigbm-probe.c >/dev/null
+    adb push guest/build-hybris-minigbm-probe.sh /data/local/tmp/build-hybris-minigbm-probe.sh >/dev/null
+    adb shell "su -c 'cp /data/local/tmp/hybris-minigbm-probe.c $G/guest/root/hybris-minigbm-probe.c; cp /data/local/tmp/build-hybris-minigbm-probe.sh $G/guest/root/build-hybris-minigbm-probe.sh; chmod 0755 $G/guest/root/build-hybris-minigbm-probe.sh; $G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh /root/build-hybris-minigbm-probe.sh /root/hybris-minigbm-probe.c benchmark $bench_args'" ;;
 push-module)
     ensure
     zipf="magisk-module/determination-magisk-v$DET_VERSION.zip"

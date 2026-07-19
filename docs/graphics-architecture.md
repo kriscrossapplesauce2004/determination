@@ -83,6 +83,35 @@ abstraction is not the complete Android buffer contract.
 
 Captured output: `artifacts/hybris-minigbm-20260719.txt`.
 
+## Performance gate
+
+Run the display-safe benchmark with:
+
+```sh
+./det hybrid-bench
+# Optional reproducible geometry/count override:
+./det hybrid-bench 1080 2340 240
+```
+
+On guacamoleb at 1080x2340, 30 warmup + 240 measured frames produced:
+
+| Operation | Mean | p95 | p99 |
+|---|---:|---:|---:|
+| vendor EGL clear + `glFinish` | 0.920 ms | 1.115 ms | 1.180 ms |
+| four fullscreen textured/blended layers + `glFinish` | 4.263 ms | 4.468 ms | 4.625 ms |
+| full native-handle import/release | 8 us | 8 us | 9 us |
+| minigbm import/export | 92 us | 116 us | 161 us |
+
+The four-layer result repeated within 0.5% for mean frame time across three
+full-resolution runs. It fits comfortably inside a 16.67 ms 60 Hz budget and
+inside an 8.33 ms 120 Hz budget for this synthetic workload. That is GPU-path
+headroom, not an end-to-end desktop claim: KWin scheduling, presentation,
+explicit fences, display vsync and the Android presenter are not implemented in
+this benchmark. Handle and minigbm imports are buffer-pool setup costs and
+should not occur every frame.
+
+Raw results: `artifacts/hybris-minigbm-benchmark-20260719.txt`.
+
 ## Remaining direct-KWin work
 
 The direct path needs an Android-backed GBM/EGL winsys rather than a Turnip

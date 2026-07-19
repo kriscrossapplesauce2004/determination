@@ -1,0 +1,29 @@
+Determination libhybris + Android gralloc + minigbm benchmark
+Device: OnePlus 7 guacamoleb, Adreno 640 vendor EGL
+Mode: phone mode, SurfaceFlinger left running, EGL null platform
+Geometry: 1080x2340 RGBA8888
+Samples: 30 warmup frames, 240 measured frames
+Workload: offscreen glFinish per frame; four fullscreen textured alpha-blended layers
+
+Final run:
+BENCH full-handle-roundtrip mean=8us p50=8us p95=8us p99=9us samples=100
+BENCH vendor-clear         mean=920us p50=913us p95=1115us p99=1180us rate=1086.9/s samples=240
+BENCH vendor-4layer        mean=4263us p50=4245us p95=4468us p99=4625us rate=234.5/s samples=240
+BENCH minigbm-import-export mean=92us p50=109us p95=116us p99=161us samples=300
+HYBRIS-MINIGBM-BENCH: PASS
+
+Prior full-resolution repeats:
+run A: clear mean=964us p99=1413us; 4layer mean=4266us p99=4743us; minigbm mean=90us p99=155us
+run B: clear mean=983us p99=1411us; 4layer mean=4284us p99=4705us; minigbm mean=101us p99=213us
+
+Temperature observations across the benchmark series:
+battery: 31.2 C before, 31.9 C after
+thermal_zone0: 33.9 C before, 35.1 C after
+
+Interpretation limits:
+- Vendor EGL renders into the original full-resolution Android gralloc object.
+- Full native-handle round-trip cost is measured separately and is buffer setup,
+  not per-frame work when a compositor reuses a buffer pool.
+- Minigbm import/export is also setup cost and does not select the GPU renderer.
+- This does not include KWin, display presentation, vsync, input latency,
+  explicit-fence transport, an Android external-display presenter, or power draw.

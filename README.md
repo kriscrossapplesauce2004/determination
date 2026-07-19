@@ -91,7 +91,10 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
       first shared-buffer interop gate passed on-device (2026-07-19): vendor
       Adreno rendered through a reconstructed full native handle, pixel readback
       through the original allocation matched, and minigbm imported/re-exported
-      its pixel dma-buf. Direct KWin integration, authoritative plane metadata,
-      and sync-fence transport remain.
+      its pixel dma-buf. The display-safe 1080x2340 benchmark completes four
+      fullscreen textured/blended layers in 4.263 ms mean / 4.625 ms p99;
+      full-handle and minigbm setup cost 8 us and 92 us mean respectively.
+      Direct KWin integration, authoritative plane metadata, presentation, and
+      sync-fence transport remain.
 - [ ] Milestone 5 phase 2: concurrent external convergence — Android/SF keeps
       the panel while a guest-rendered dmabuf is presented on DP-alt

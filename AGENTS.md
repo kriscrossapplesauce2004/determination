@@ -133,6 +133,12 @@ Android native handle and sync fences rather than reducing it to one generic
 dma-buf. The remaining M5 headline is concurrent external convergence through
 an Android presenter on DP-alt. See `docs/graphics-architecture.md`.
 
+**Compatibility graphics benchmark (2026-07-19):** display-safe vendor EGL at
+1080x2340 completes four fullscreen textured/blended layers in 4.263 ms mean,
+4.625 ms p99 (240 measured frames); full native-handle round trip averages 8 us
+and minigbm import/export 92 us. This excludes KWin, presentation/vsync and
+explicit-fence transport. Evidence: `artifacts/hybris-minigbm-benchmark-20260719.txt`.
+
 **Wake path VERIFIED** (power button blank/unblank works). KEY_POWER quirk removed.
 
 **Desktop-mode crash loop FIXED (2026-07-12):** The `ss-freezer` loop in

@@ -5,6 +5,7 @@ set -eu
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 SRC=${1:-/root/hybris-minigbm-probe.c}
+MODE=${2:-probe}
 OUT=/usr/local/bin/hybris-minigbm-probe
 
 [ -r "$SRC" ] || {
@@ -47,4 +48,22 @@ export ANDROID_ROOT=/system
 # Null owns no display but still initializes vendor EGL and gralloc. This gate
 # is safe in phone mode and cannot steal hwcomposer from SurfaceFlinger.
 export EGL_PLATFORM=null HYBRIS_EGLPLATFORM=null
-exec "$OUT" "${DET_DRM_RENDER_NODE:-/dev/dri/renderD128}"
+case "$MODE" in
+    probe)
+        exec "$OUT" "${DET_DRM_RENDER_NODE:-/dev/dri/renderD128}"
+        ;;
+    benchmark)
+        fb_size=$(cat /sys/class/graphics/fb0/virtual_size 2>/dev/null || true)
+        bench_width=${3:-${DET_PANEL_WIDTH:-${fb_size%,*}}}
+        bench_height=${4:-${DET_PANEL_HEIGHT:-${fb_size#*,}}}
+        bench_frames=${5:-240}
+        bench_width=${bench_width:-1080}
+        bench_height=${bench_height:-2340}
+        exec "$OUT" "${DET_DRM_RENDER_NODE:-/dev/dri/renderD128}" \
+            --benchmark "$bench_width" "$bench_height" "$bench_frames"
+        ;;
+    *)
+        echo "FATAL: mode must be probe or benchmark" >&2
+        exit 2
+        ;;
+esac

@@ -20,6 +20,8 @@ different and are recorded in the release manifest.
 - A display-safe gralloc/vendor-EGL/minigbm shared-buffer interoperability
   probe, passed on guacamoleb, with the native Mesa launcher guarded as an
   explicit experiment.
+- A reproducible offscreen compatibility benchmark with frame-time percentiles,
+  full native-handle setup cost, and minigbm import/export timing.
 - Runtime device discovery and exact-match device-profile foundations.
 - Verified boot-image install, backup, restore, and dry-run paths.
 
