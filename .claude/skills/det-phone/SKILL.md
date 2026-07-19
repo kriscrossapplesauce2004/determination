@@ -12,7 +12,7 @@ description: >-
 
 # Talking to the phone (Determination / OnePlus 7 `guacamoleb`)
 
-Run everything through the **`det`** helper in `~/decemberos` — it hides the
+Run everything through the **`det`** helper in `~/determination` — it hides the
 wireless-adb dance, uses the right platform-tools, and never drops root the
 wrong way. `det` subcommands: `find`, `connect`, `shell [cmd…]`, `status`,
 `recon`, `push-module`, `publish`.
