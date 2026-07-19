@@ -60,6 +60,27 @@ until [ "$(getprop init.svc.surfaceflinger)" = "running" ]; do
     sleep 0.5
 done
 
+# Restore Night Light before bootanim uncovers Android. Rewriting the same
+# secure value is not enough on every SettingsProvider build, so an enabled
+# state is deliberately pulsed 0->1 to make ColorDisplayService submit a new
+# SurfaceFlinger matrix. This is hidden behind bootanim and preserves off too.
+if [ -r "$DET/run/night-display-state" ]; then
+    android_user=0
+    night_display=
+    read android_user night_display < "$DET/run/night-display-state" || true
+    case "$night_display" in
+        1)
+            settings --user "$android_user" put secure night_display_activated 0 2>/dev/null
+            settings --user "$android_user" put secure night_display_activated 1 2>/dev/null
+            echo "Night Light transform reapplied for user $android_user"
+            ;;
+        0)
+            settings --user "$android_user" put secure night_display_activated 0 2>/dev/null
+            ;;
+    esac
+    rm -f "$DET/run/night-display-state"
+fi
+
 # 3b. A restarted SF replays the boot animation and waits for a "boot
 # finished" signal that never comes on an already-booted system — the
 # animation loops over a healthy UI forever (melissa hit this 2026-07-03).

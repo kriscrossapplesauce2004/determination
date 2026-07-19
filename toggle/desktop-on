@@ -18,6 +18,17 @@ echo "--- desktop-on $(date)"
 [ -f "$DET/run/desktop-mode" ] && { echo "already in desktop mode"; exit 0; }
 mkdir -p "$DET/run"
 
+# Preserve the accessibility colour transform across the system_server/SF
+# restart. The secure setting can survive while ColorDisplayService comes back
+# with an identity matrix, leaving the Night Light tile looking enabled but the
+# panel cold. desktop-off force-reapplies this snapshot behind bootanim.
+android_user=$(am get-current-user 2>/dev/null || echo 0)
+night_display=$(settings --user "$android_user" get secure night_display_activated 2>/dev/null)
+case "$night_display" in
+    0|1) echo "$android_user $night_display" > "$DET/run/night-display-state" ;;
+    *) rm -f "$DET/run/night-display-state" ;;
+esac
+
 # 1. Input first: grab evdev nodes so Android stops seeing events *before* its
 #    UI disappears (avoids a window where touches land on invisible UI).
 #    evgrab holds EVIOCGRAB on every touchscreen/key node until killed.
