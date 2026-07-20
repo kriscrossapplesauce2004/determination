@@ -845,6 +845,28 @@ changes remain only long enough to measure against and replace; they are not a
 product dependency. Both workstreams are picked up once the state/API spine can
 observe and control their independent lifetimes.
 
+### 20.1 Implementation checkpoint — 2026-07-20
+
+The first batch is now implemented through source/build gates:
+
+- `detd`, `detctl`, durable transitions, Zygisk forwarding and the native guest
+  endpoint are built and packaged; boot is intentionally still observe-only;
+- explicit app intents and signature AIDL expose fixed native operations;
+- doctor/metrics understand guest, presenter and audio-owner contradictions;
+- the presenter is independent of audio and enforces peer, buffer, pixel,
+  in-flight, metadata, serial and fence bounds;
+- the AudioTrack/AAudio app path is retired and absent from the APK permissions;
+- direct audio has cross-namespace inventory, a journalled exact-profile owner,
+  claim marker, guest PipeWire lifetime, zero-holder restore gate and rollback
+  tests;
+- host, Android arm64, guest arm64, both companion ABIs and Magisk packaging
+  pass locally.
+
+Hardware claims remain deliberately incomplete: the approval/usage layer
+blocked further phone writes after the earlier observe-only deployment. The
+phone therefore still runs that verified observe-only daemon, while newer
+transition, presenter and audio builds await deployment and recovery testing.
+
 ## 21. Things this plan refuses to fake
 
 - One device with many config keys is not universal support.
