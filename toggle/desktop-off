@@ -52,6 +52,22 @@ while pgrep -x phoc >/dev/null 2>&1; do
 done
 sleep 0.5
 
+# 2b. Direct audio is a separate ownership transaction. Withdraw the guest
+# claim, wait for PipeWire to release every ALSA fd, then restore only the
+# Android owners recorded in the journal. Display recovery continues if audio
+# restore fails, but doctor will keep reporting the failed audio phase.
+if [ -x "$DET/bin/det-audio-owner" ] && \
+   [ -f "$DET/etc/audio-owner.conf" ] && \
+   [ -f "$DET/run/audio-owner.state" ]; then
+    audio_phase=$(sed -n 's/^phase=//p' "$DET/run/audio-owner.state" | tail -n 1)
+    case "$audio_phase" in
+        claimed|restoring|restore-failed)
+            "$DET/bin/det-audio-owner" restore --apply ||
+                echo "WARN: direct audio restore failed; run detctl doctor"
+            ;;
+    esac
+fi
+
 # 3. Restart SF; verify panel re-init (no dead/black transition).
 start surfaceflinger
 i=0

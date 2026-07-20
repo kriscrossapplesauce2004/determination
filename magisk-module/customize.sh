@@ -13,7 +13,7 @@ for f in evgrab detd detctl det-audio-probe det-audio-owner device-config genera
     chmod 0755 "$DET/bin/$f"
 done
 cp -f "$MODPATH/tools/lxc-config-base" "$DET/lxc/config.base"
-for f in det-guest-agent det-audio-probe; do
+for f in det-guest-agent det-audio-probe det-audio-session; do
   if [ -f "$MODPATH/guest-tools/$f" ]; then
     cp -f "$MODPATH/guest-tools/$f" "$DET/guest-tools/$f"
     chmod 0755 "$DET/guest-tools/$f"

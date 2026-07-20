@@ -279,9 +279,11 @@ echo $! > "$DET/run/compositor.pid"
             # Reboot to the host (log out == back to phone). Give it a beat to
             # acquire the name; harmless if the shim is absent (old rootfs).
             SM=$(command -v det-session-manager || true)
+            AUDIO=$(command -v det-audio-session || true)
+            command -v pipewire >/dev/null 2>&1 || AUDIO=
             if [ -n "$PHOSH" ]; then
                 exec dbus-run-session -- /bin/sh -c \
-                    "${SM:+$SM & sleep 0.3;} squeekboard & exec $PHOSH"
+                    "${SM:+$SM & sleep 0.3;} ${AUDIO:+$AUDIO & }squeekboard & exec $PHOSH"
             fi
             exec foot -- /bin/bash -l
         ' >> "$CLOG" 2>&1

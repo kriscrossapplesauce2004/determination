@@ -43,18 +43,32 @@ grep -q running "$FIXTURE/services/audioserver"
 $OWNER claim --apply $COMMON | grep -q 'hardware claimed'
 grep -q stopped "$FIXTURE/services/audioserver"
 grep -q stopped "$FIXTURE/services/vendor.audio-hal"
+test -f "$FIXTURE/det/run/control/audio-claimed"
 # shellcheck disable=SC2086 -- fixture paths contain no whitespace.
 $OWNER status --root "$FIXTURE/det" | grep -q '"phase":"claimed"'
 
+# A post-claim guest holder must block Android restoration until it releases.
+mkdir -p "$FIXTURE/root/proc/77/fd"
+printf 'guest-pipewire\n' > "$FIXTURE/root/proc/77/comm"
+printf 'guest-pipewire\000' > "$FIXTURE/root/proc/77/cmdline"
+ln -s /dev/snd/pcmC0D0p "$FIXTURE/root/proc/77/fd/9"
+if $OWNER restore --apply $COMMON >/dev/null 2>&1; then
+    echo "audio owner restored Android while guest still held ALSA" >&2
+    exit 1
+fi
+grep -q stopped "$FIXTURE/services/audioserver"
+test ! -e "$FIXTURE/det/run/control/audio-claimed"
+rm -f "$FIXTURE/root/proc/77/fd/9"
 # shellcheck disable=SC2086 -- fixture paths contain no whitespace.
-$OWNER restore --apply $COMMON | grep -q 'ownership restored'
+$OWNER recover --apply $COMMON | grep -q 'ownership restored'
+
+# shellcheck disable=SC2086 -- fixture paths contain no whitespace.
 grep -q running "$FIXTURE/services/audioserver"
 grep -q running "$FIXTURE/services/vendor.audio-hal"
 # shellcheck disable=SC2086 -- fixture paths contain no whitespace.
 $OWNER status --root "$FIXTURE/det" | grep -q '"phase":"restored"'
 
 # A surviving /dev/snd holder must abort the claim and restore both services.
-mkdir -p "$FIXTURE/root/proc/77/fd"
 printf 'still-owning-audio\n' > "$FIXTURE/root/proc/77/comm"
 printf 'still-owning-audio\000' > "$FIXTURE/root/proc/77/cmdline"
 ln -s /dev/snd/pcmC0D0p "$FIXTURE/root/proc/77/fd/9"

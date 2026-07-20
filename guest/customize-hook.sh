@@ -8,6 +8,7 @@
 
 set -eu
 R="$1"
+HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 
 # Droidian repo for libhybris, libhybris-utils (test_hwcomposer), their
 # patched wlroots and phoc. 2026-07: repositories.droidian.org is dead;
@@ -89,3 +90,9 @@ apt install -y libhybris libhybris-utils
 test_hwcomposer
 EOF
 chmod +x "$R/root/firstboot.sh"
+
+# Direct audio is dormant until the host ownership journal publishes its claim.
+install -d "$R/usr/local/bin"
+install -m 0755 "$HERE/det-audio-session" "$R/usr/local/bin/det-audio-session"
+install -m 0755 "$HERE/setup-audio.sh" "$R/root/setup-audio.sh"
+chroot "$R" /root/setup-audio.sh --configure-only

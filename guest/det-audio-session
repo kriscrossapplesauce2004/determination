@@ -1,0 +1,75 @@
+#!/bin/sh
+# Direct guest audio lifetime. This process never opens PCM itself; it starts
+# PipeWire only while the host's journalled owner publishes audio-claimed.
+set -u
+
+MARKER=${DET_AUDIO_MARKER:-/mnt/det-control/audio-claimed}
+RUNTIME=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}
+LOG="$RUNTIME/determination-audio.log"
+pipewire_pid=
+pulse_pid=
+wireplumber_pid=
+
+stop_graph() {
+    for pid in "$wireplumber_pid" "$pulse_pid" "$pipewire_pid"; do
+        [ -z "$pid" ] || kill -TERM "$pid" 2>/dev/null || true
+    done
+    tries=0
+    while [ "$tries" -lt 20 ]; do
+        alive=false
+        for pid in "$wireplumber_pid" "$pulse_pid" "$pipewire_pid"; do
+            [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null || alive=true
+        done
+        [ "$alive" = true ] || break
+        tries=$((tries + 1))
+        sleep 0.05
+    done
+    for pid in "$wireplumber_pid" "$pulse_pid" "$pipewire_pid"; do
+        [ -z "$pid" ] || kill -KILL "$pid" 2>/dev/null || true
+    done
+    wireplumber_pid=
+    pulse_pid=
+    pipewire_pid=
+}
+
+start_graph() {
+    for command in pipewire pipewire-pulse wireplumber; do
+        command -v "$command" >/dev/null 2>&1 || {
+            printf 'direct audio unavailable: missing %s\n' "$command" >> "$LOG"
+            return 1
+        }
+    done
+    : > "$LOG"
+    printf '%s\n' "starting direct PipeWire graph $(date)" >> "$LOG"
+    pipewire >> "$LOG" 2>&1 &
+    pipewire_pid=$!
+    sleep 0.2
+    pipewire-pulse >> "$LOG" 2>&1 &
+    pulse_pid=$!
+    wireplumber >> "$LOG" 2>&1 &
+    wireplumber_pid=$!
+}
+
+graph_alive() {
+    [ -n "$pipewire_pid" ] && kill -0 "$pipewire_pid" 2>/dev/null &&
+    [ -n "$pulse_pid" ] && kill -0 "$pulse_pid" 2>/dev/null &&
+    [ -n "$wireplumber_pid" ] && kill -0 "$wireplumber_pid" 2>/dev/null
+}
+
+trap 'exit 0' HUP INT TERM
+trap 'stop_graph' EXIT
+mkdir -p "$RUNTIME"
+[ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -le 131072 ] || : > "$LOG"
+
+while :; do
+    if [ -f "$MARKER" ]; then
+        if ! graph_alive; then
+            stop_graph
+            start_graph || sleep 9
+        fi
+    elif [ -n "$pipewire_pid" ]; then
+        printf '%s\n' "audio claim withdrawn; stopping graph $(date)" >> "$LOG"
+        stop_graph
+    fi
+    sleep 1
+done

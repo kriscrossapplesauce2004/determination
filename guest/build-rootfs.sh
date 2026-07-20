@@ -25,6 +25,7 @@ else
 fi
 
 PKGS="systemd-sysv,dbus,sudo,udev,libinput-tools,seatd,wayland-protocols"
+PKGS="$PKGS,pipewire,pipewire-pulse,wireplumber,alsa-utils"
 # Compositor + hybris stack; sway is the first wlroots target (spec §3).
 PKGS="$PKGS,sway,foot,wmenu"
 

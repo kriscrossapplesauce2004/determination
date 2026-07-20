@@ -34,6 +34,12 @@ The Android binary is packaged as `/data/determination/bin/det-audio-probe`.
 The guest binary is installed as `/usr/local/bin/det-audio-probe` on each guest
 start. Neither binary opens a PCM or mutates a mixer.
 
+`det-audio-session` is the unprivileged guest lifetime guard. It starts
+PipeWire, pipewire-pulse, and WirePlumber only while the host's fsync'd
+`audio-claimed` marker is visible; marker withdrawal terminates the graph.
+Normal owner restore then requires a fresh zero-holder probe before it restarts
+Android's HAL. This prevents PipeWire and Android racing the same codec.
+
 ## Ownership transaction
 
 Internal display mode needs an exclusive codec transaction. This becomes a

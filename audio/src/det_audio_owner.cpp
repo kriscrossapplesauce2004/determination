@@ -314,6 +314,61 @@ struct CommandResult {
     return options.root + "/run/audio-owner.state";
 }
 
+[[nodiscard]] std::string claim_marker_path(const Options &options) {
+    return options.root + "/run/control/audio-claimed";
+}
+
+[[nodiscard]] bool remove_claim_marker(const Options &options,
+                                       std::string *error) {
+    const std::string path = claim_marker_path(options);
+    if (unlink(path.c_str()) != 0 && errno != ENOENT) {
+        *error = std::strerror(errno);
+        return false;
+    }
+    const std::string parent = parent_directory(path);
+    const int directory = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (directory >= 0) {
+        fsync(directory);
+        close(directory);
+    }
+    return true;
+}
+
+[[nodiscard]] bool write_claim_marker(const Options &options,
+                                      const Journal &journal,
+                                      std::string *error) {
+    const std::string path = claim_marker_path(options);
+    const std::string parent = parent_directory(path);
+    if (!ensure_directory(parent)) {
+        *error = "cannot create audio claim marker directory";
+        return false;
+    }
+    const std::string temporary = path + ".new." + std::to_string(getpid());
+    const int fd = open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC,
+                        0640);
+    if (fd < 0) {
+        *error = std::strerror(errno);
+        return false;
+    }
+    const std::string content = "schema=1\nprofile=" + journal.profile_id +
+        "\nboot_id=" + journal.boot_id + "\n";
+    const bool okay = write_all(fd, content) && fsync(fd) == 0;
+    const int saved_errno = errno;
+    close(fd);
+    if (!okay || rename(temporary.c_str(), path.c_str()) != 0) {
+        *error = std::strerror(okay ? errno : saved_errno);
+        unlink(temporary.c_str());
+        return false;
+    }
+    chmod(path.c_str(), 0640);
+    const int directory = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (directory >= 0) {
+        fsync(directory);
+        close(directory);
+    }
+    return true;
+}
+
 [[nodiscard]] bool save_journal(const Options &options, const Journal &journal,
                                 std::string *error) {
     const std::string path = journal_path(options);
@@ -462,10 +517,41 @@ struct CommandResult {
     return false;
 }
 
+[[nodiscard]] bool wait_for_unowned(const Options &options,
+                                    const Profile &profile,
+                                    std::string *error) {
+    const auto deadline = std::chrono::steady_clock::now() +
+                          std::chrono::milliseconds(profile.timeout_ms);
+    do {
+        const CommandResult probe = run_command(
+            options.probe, {"--root", options.probe_root, "--require-unowned"},
+            profile.timeout_ms);
+        if (probe.status == 0) return true;
+        if (probe.status != 3) {
+            *error = probe.timed_out ? "ownership probe timed out" :
+                                      "ownership probe failed";
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    } while (std::chrono::steady_clock::now() < deadline);
+    *error = "guest did not release ALSA hardware before restore deadline";
+    return false;
+}
+
 [[nodiscard]] bool restore_services(const Options &options, const Profile &profile,
-                                    Journal *journal, std::string *error) {
+                                    Journal *journal, bool require_release,
+                                    std::string *error) {
     journal->phase = "restoring";
     if (!save_journal(options, *journal, error)) return false;
+    if (!remove_claim_marker(options, error)) return false;
+    if (require_release && !wait_for_unowned(options, profile, error)) {
+        journal->phase = "restore-failed";
+        journal->error = *error;
+        std::string ignored;
+        const bool journal_saved = save_journal(options, *journal, &ignored);
+        (void)journal_saved;
+        return false;
+    }
     for (auto service = journal->services.rbegin();
          service != journal->services.rend(); ++service) {
         if (service->state != "running" && service->state != "restarting") continue;
@@ -488,7 +574,7 @@ struct CommandResult {
                                      const Profile &profile, Journal *journal,
                                      const std::string &cause,
                                      std::string *error) {
-    if (!restore_services(options, profile, journal, error)) return false;
+    if (!restore_services(options, profile, journal, false, error)) return false;
     journal->phase = "rolled-back";
     journal->error = cause;
     return save_journal(options, *journal, error);
@@ -582,6 +668,13 @@ struct CommandResult {
         if (!restored) std::cerr << "rollback also failed: " << error << '\n';
         return 1;
     }
+    if (!write_claim_marker(options, journal, &error)) {
+        const bool restored = rollback_services(
+            options, profile, &journal, "cannot publish guest audio claim", &error);
+        std::cerr << "cannot publish guest audio claim marker\n";
+        if (!restored) std::cerr << "rollback also failed: " << error << '\n';
+        return 1;
+    }
     std::cout << "direct audio hardware claimed; PCM transport remains in guest ALSA\n";
     return 0;
 }
@@ -615,7 +708,11 @@ struct CommandResult {
                   << json_escape(journal.phase) << "\"}\n";
         return 0;
     }
-    if (!restore_services(options, profile, &journal, &error)) {
+    const bool require_release =
+        journal.phase == "claimed" || journal.phase == "restoring" ||
+        journal.phase == "restore-failed" ||
+        access(claim_marker_path(options).c_str(), F_OK) == 0;
+    if (!restore_services(options, profile, &journal, require_release, &error)) {
         std::cerr << "audio restore failed: " << error << '\n';
         return 1;
     }

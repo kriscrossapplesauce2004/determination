@@ -33,7 +33,7 @@ cp -f "$DET/lxc/config" "$DET/guest/config"
 # Native guest control agent. Keep the staged copy outside the rootfs so module
 # upgrades can refresh it before every container start; the guest binary is
 # glibc/aarch64 and deliberately separate from host bionic detd/detctl.
-for det_guest_tool in det-guest-agent det-audio-probe; do
+for det_guest_tool in det-guest-agent det-audio-probe det-audio-session; do
     if [ -f "$DET/guest-tools/$det_guest_tool" ]; then
         mkdir -p "$DET/guest/usr/local/bin"
         cp -f "$DET/guest-tools/$det_guest_tool" \
