@@ -9,6 +9,9 @@
 #   det guest [cmd...]    shell inside the LXC guest AS melissa (bash -l if no cmd)
 #   det guest-root [cmd]  root shell inside the guest (admin escape hatch)
 #   det passwd            set melissa's guest password (needed before sudo works)
+#   det ssh-setup [key]   install sshd + authorize key (default: dedicated key)
+#   det ssh-route         route the guest subnet directly through the phone
+#   det ssh [command...]  direct SSH to melissa@192.168.117.2
 #   det on | det off      enter / leave desktop mode (detached; panel changes!)
 #   det log [name] [n]    tail a /data/determination/log file (default toggle)
 #   det version           print the local project version and release state
@@ -23,7 +26,21 @@
 #                         (run once when upgrading a DecemberOS-era device)
 
 set -eu
-cd "$(dirname "$0")"
+# Resolve symlinks before changing directory. This keeps `det` usable through
+# /usr/local/bin/det or ~/.local/bin/det instead of looking for release files
+# beside the symlink itself.
+DET_SOURCE=$0
+while [ -L "$DET_SOURCE" ]; do
+    DET_SOURCE_DIR=$(CDPATH= cd -P "$(dirname "$DET_SOURCE")" && pwd)
+    DET_LINK=$(readlink "$DET_SOURCE")
+    case "$DET_LINK" in
+        /*) DET_SOURCE=$DET_LINK ;;
+        *) DET_SOURCE=$DET_SOURCE_DIR/$DET_LINK ;;
+    esac
+done
+DET_SOURCE_DIR=$(CDPATH= cd -P "$(dirname "$DET_SOURCE")" && pwd)
+cd "$DET_SOURCE_DIR"
+SELF=$DET_SOURCE_DIR/$(basename "$DET_SOURCE")
 . release/version.sh
 det_load_version version.properties
 
@@ -115,6 +132,79 @@ passwd)
         adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /usr/sbin/chpasswd'"
     then echo 'det: password set — sudo now works for melissa' >&2
     else echo 'det: chpasswd failed' >&2; exit 1; fi ;;
+ssh-setup)
+    ensure
+    key_file=${2:-"$HOME/.ssh/determination_ed25519.pub"}
+    case "$key_file" in *.pub) private_key=${key_file%.pub} ;; *) private_key= ;; esac
+    if [ ! -r "$key_file" ]; then
+        [ "$key_file" = "$HOME/.ssh/determination_ed25519.pub" ] || {
+            echo "det: public key not readable: $key_file" >&2; exit 1;
+        }
+        command -v ssh-keygen >/dev/null || { echo 'det: ssh-keygen is not installed' >&2; exit 1; }
+        mkdir -p "$HOME/.ssh"
+        chmod 0700 "$HOME/.ssh"
+        ssh-keygen -q -t ed25519 -N '' -C 'melissa@determination' \
+            -f "$private_key"
+        echo "det: generated dedicated client key: $private_key" >&2
+    fi
+    G=/data/determination
+    # Avoid re-running guest-start for a live container. In desktop mode its
+    # Android framework probes can block because system_server is deliberately
+    # frozen. When a start is actually needed, detach keeper-process streams.
+    if ! adb shell "su -c '$G/lxc/bin/lxc-info -P $G -n guest 2>/dev/null'" |
+            grep -q RUNNING; then
+        adb shell "su -c '$G/bin/guest-start </dev/null >/dev/null 2>&1'"
+    fi
+    adb push guest/setup-ssh.sh /data/local/tmp/determination-setup-ssh.sh >/dev/null
+    adb push "$key_file" /data/local/tmp/determination-authorized-key.pub >/dev/null
+    if ! adb shell "su -c 'cp /data/local/tmp/determination-setup-ssh.sh $G/guest/root/setup-ssh.sh && cp /data/local/tmp/determination-authorized-key.pub $G/guest/root/authorized-key.pub && chmod 0700 $G/guest/root/setup-ssh.sh && $G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh /root/setup-ssh.sh /root/authorized-key.pub'"; then
+        adb shell "su -c 'rm -f /data/local/tmp/determination-setup-ssh.sh /data/local/tmp/determination-authorized-key.pub'" >/dev/null
+        echo 'det: guest SSH setup failed' >&2
+        exit 1
+    fi
+    adb shell "su -c 'rm -f /data/local/tmp/determination-setup-ssh.sh /data/local/tmp/determination-authorized-key.pub'" >/dev/null
+    # Keep host SSH policy in a drop-in. The main Include is added once without
+    # replacing any unrelated user configuration.
+    install -d -m 0700 "$HOME/.ssh" "$HOME/.ssh/config.d"
+    printf '%s\n' \
+        'Host 192.168.117.2' \
+        '    User melissa' \
+        '    IdentityFile ~/.ssh/determination_ed25519' \
+        '    IdentitiesOnly yes' \
+        > "$HOME/.ssh/config.d/determination"
+    chmod 0600 "$HOME/.ssh/config.d/determination"
+    if ! grep -Eq '^[[:space:]]*Include[[:space:]]+.*\.ssh/config\.d/' \
+            "$HOME/.ssh/config" 2>/dev/null; then
+        config_tmp=$(mktemp "$HOME/.ssh/config.XXXXXX")
+        { printf 'Include ~/.ssh/config.d/*\n\n'; cat "$HOME/.ssh/config" 2>/dev/null || true; } > "$config_tmp"
+        chmod 0600 "$config_tmp"
+        mv "$config_tmp" "$HOME/.ssh/config"
+    fi
+    echo 'det: public-key SSH server ready' >&2
+    "$SELF" ssh-route ;;
+ssh-route)
+    ensure
+    phone_ip=$(adb shell "ip -4 -brief address show wlan0" 2>/dev/null |
+        awk '{ split($3, a, "/"); print a[1]; exit }' | tr -d '\r')
+    [ -n "$phone_ip" ] || { echo 'det: phone has no wlan0 IPv4 address' >&2; exit 1; }
+    host_dev=$(ip -4 route get "$phone_ip" 2>/dev/null |
+        awk '{ for (i=1; i<=NF; i++) if ($i == "dev") { print $(i+1); exit } }')
+    [ -n "$host_dev" ] || { echo "det: no host route to phone at $phone_ip" >&2; exit 1; }
+    if [ "$(id -u)" -eq 0 ]; then
+        ip route replace 192.168.117.0/24 via "$phone_ip" dev "$host_dev"
+    elif sudo -n true 2>/dev/null; then
+        sudo ip route replace 192.168.117.0/24 via "$phone_ip" dev "$host_dev"
+    elif command -v pkexec >/dev/null; then
+        pkexec ip route replace 192.168.117.0/24 via "$phone_ip" dev "$host_dev"
+    else
+        echo "det: root needed; run: sudo ip route replace 192.168.117.0/24 via $phone_ip dev $host_dev" >&2
+        exit 1
+    fi
+    echo "det: direct route ready via $phone_ip ($host_dev)" >&2
+    echo 'det: connect with: ssh melissa@192.168.117.2' >&2 ;;
+ssh)
+    shift
+    exec ssh melissa@192.168.117.2 "$@" ;;
 on)
     ensure
     # setsid-detach: the SF handoff must not die with this adb session.

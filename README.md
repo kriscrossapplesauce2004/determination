@@ -53,6 +53,22 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
 4. **wlroots on the panel**, then **the toggle** (`toggle/`), cycle-stressed.
 5. External convergence, KWin, summon UX — in that order.
 
+## Guest SSH
+
+The guest SSH server is public-key-only. The host routes the private guest
+subnet through the phone's current Wi-Fi address, giving the container a real
+directly reachable address:
+
+```sh
+det ssh-setup                    # server, public key, SSH config, host route
+ssh melissa@192.168.117.2        # exactly this; no ProxyCommand
+det ssh-route                    # refresh after phone DHCP or host route changes
+```
+
+Pass an existing public key to `det ssh-setup` if preferred. Set
+its matching private key in `~/.ssh/config.d/determination` when it is not the
+default dedicated `~/.ssh/determination_ed25519` key.
+
 ## Status
 
 - [x] Repo scaffolding, recon script, kernel fragment, Magisk module, guest
