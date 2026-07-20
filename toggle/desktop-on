@@ -106,6 +106,13 @@ sleep 1
 # step 3 — the suppressor loop doubles as the keeper.)
 [ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
 
+# 4c. Standalone owner transition. SF is gone and phoc has not started yet, so
+# this finite libhybris/GLES client can acquire HWC without fighting either
+# system. It lands on black and releases cleanly. Cosmetic and timeout-bounded:
+# display recovery always wins if the renderer is absent or broken.
+"$DET/bin/run-transition" desktop ||
+    echo "WARN: native desktop transition skipped/failed rc=$? (see log/transition.log)"
+
 # 5. THE REAL COMPOSITOR (2026-07-06): phoc 0.47 (droidian group/102) on the
 #    droidian wlroots hwcomposer backend, built in-guest against upstream
 #    libhybris — guest/build-wlroots-phoc.sh. First light + 40s soak:

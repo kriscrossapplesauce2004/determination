@@ -134,14 +134,14 @@ object Root {
      * DETACHED (setsid + nohup) so it survives this app being killed when
      * SurfaceFlinger stops and the Android UI disappears a moment later.
      */
-    fun enterDesktop(): Result = ZygiskBridge.command("enter") ?: run(
+    fun enterDesktop(): Result = run(
         "$BIN/guest-start >/dev/null 2>&1; " +
             "setsid sh -c 'nohup $BIN/desktop-on >/dev/null 2>&1' >/dev/null 2>&1 &",
         20,
     )
 
     /** Return to phone mode (restarts SurfaceFlinger). */
-    fun exitDesktop(): Result = ZygiskBridge.command("exit") ?: run("$BIN/desktop-off", 30)
+    fun exitDesktop(): Result = run("$BIN/desktop-off", 30)
 
     /** Copy an Android share-sheet staging file into Linux, guest running or not. */
     fun importToGuest(sourcePath: String, displayName: String): Result {
