@@ -5,7 +5,7 @@
 ui_print "- $(grep_prop name "$MODPATH/module.prop") $(grep_prop version "$MODPATH/module.prop")"
 
 DET=/data/determination
-mkdir -p "$DET/bin" "$DET/etc" "$DET/log" "$DET/run" "$DET/lxc"
+mkdir -p "$DET/bin" "$DET/etc" "$DET/log" "$DET/run" "$DET/lxc" "$DET/guest-tools"
 
 for f in evgrab detd detctl device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
     [ -f "$MODPATH/tools/$f" ] || abort "! missing $f in zip"
@@ -13,6 +13,15 @@ for f in evgrab detd detctl device-config generate-lxc-config generate-guest-con
     chmod 0755 "$DET/bin/$f"
 done
 cp -f "$MODPATH/tools/lxc-config-base" "$DET/lxc/config.base"
+if [ -f "$MODPATH/guest-tools/det-guest-agent" ]; then
+    cp -f "$MODPATH/guest-tools/det-guest-agent" "$DET/guest-tools/det-guest-agent"
+    chmod 0755 "$DET/guest-tools/det-guest-agent"
+    if [ -d "$DET/guest/usr/local/bin" ]; then
+        cp -f "$MODPATH/guest-tools/det-guest-agent" \
+            "$DET/guest/usr/local/bin/det-guest-agent"
+        chmod 0755 "$DET/guest/usr/local/bin/det-guest-agent"
+    fi
+fi
 
 # Install a known profile only on a matching device. Unknown devices use the
 # runtime discovery defaults and receive no silently-wrong vendor assumptions.
@@ -25,7 +34,7 @@ DEVICE=$(getprop ro.product.device)
 [ -f "$DET/etc/device.conf" ] && ui_print "- Config: $DET/etc/device.conf"
 
 # Keep the payload out of the mounted module dir.
-rm -rf "$MODPATH/tools" "$MODPATH/device-profiles"
+rm -rf "$MODPATH/tools" "$MODPATH/guest-tools" "$MODPATH/device-profiles"
 
 # Running the Determination kernel? Warn, don't block — module install before
 # kernel flash is a legitimate order of operations.

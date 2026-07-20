@@ -21,6 +21,7 @@ enum class Operation : std::uint32_t {
     ModeGet = 0x100,
     ModeSet = 0x101,
     ModeRecover = 0x102,
+    GuestReport = 0x200,
 };
 
 enum class Status : std::int32_t {
@@ -73,4 +74,3 @@ std::string operation_name(Operation operation);
 std::string status_name(Status status);
 
 } // namespace determination::control
-

@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(detcontrol STATIC
     src/adapter.cpp
+    src/policy.cpp
     src/protocol.cpp
     src/state.cpp
     src/system.cpp
@@ -22,6 +23,14 @@ target_compile_options(detd PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_executable(detctl src/detctl.cpp)
 target_link_libraries(detctl PRIVATE detcontrol)
 target_compile_options(detctl PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+if(NOT ANDROID)
+    add_executable(det-guest-agent src/det_guest_agent.cpp)
+    target_link_libraries(det-guest-agent PRIVATE detcontrol)
+    target_compile_options(det-guest-agent PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+    )
+endif()
 
 if(ANDROID)
     target_link_libraries(detcontrol PUBLIC log)

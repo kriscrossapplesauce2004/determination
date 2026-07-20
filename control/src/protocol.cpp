@@ -136,6 +136,7 @@ std::string operation_name(Operation operation)
     case Operation::ModeGet: return "mode-get";
     case Operation::ModeSet: return "mode-set";
     case Operation::ModeRecover: return "mode-recover";
+    case Operation::GuestReport: return "guest-report";
     }
     return "unknown";
 }
@@ -159,4 +160,3 @@ std::string status_name(Status status)
 }
 
 } // namespace determination::control
-

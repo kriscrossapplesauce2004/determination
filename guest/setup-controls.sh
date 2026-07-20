@@ -23,14 +23,24 @@ echo "== det-signal helper =="
 install -d /usr/local/sbin
 cat > /usr/local/sbin/det-signal <<EOF
 #!/bin/sh
-# Ask the Determination host agent to run a host-privileged action. The guest
-# cannot leave desktop mode or power the phone itself — it drops a command file
-# the agent (Android root) consumes. See toggle/det-hostagent.
+# Ask the native Determination control plane to run a capability-scoped host
+# action. During the migration release, unsupported/rejected requests fall back
+# to the old command file consumed by toggle/det-hostagent.
 CTRL=$CTRL
 case "\${1:-}" in
     exit|reboot|poweroff) ;;
     *) echo "usage: det-signal exit|reboot|poweroff" >&2; exit 2 ;;
 esac
+if [ -x /usr/local/bin/det-guest-agent ]; then
+    case "\$1" in
+        exit)
+            if /usr/local/bin/det-guest-agent signal exit >/dev/null 2>&1; then
+                echo "det-signal: requested 'exit' through detd"
+                exit 0
+            fi
+            ;;
+    esac
+fi
 if [ ! -d "\$CTRL" ]; then
     echo "det-signal: control channel \$CTRL not mounted — is the guest" >&2
     echo "            started under the current lxc config? (needs restart)" >&2
@@ -39,6 +49,30 @@ fi
 : > "\$CTRL/\$1" && echo "det-signal: requested '\$1' from host"
 EOF
 chmod 0755 /usr/local/sbin/det-signal
+
+echo "== det-guest-agent service =="
+if [ -x /usr/local/bin/det-guest-agent ]; then
+    cat > /etc/systemd/system/det-guest-agent.service <<'EOF'
+[Unit]
+Description=Determination guest health and control agent
+After=local-fs.target
+
+[Service]
+Type=simple
+User=melissa
+ExecStart=/usr/local/bin/det-guest-agent serve
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    systemctl daemon-reload 2>/dev/null || true
+    systemctl enable --now det-guest-agent.service 2>/dev/null ||
+        echo "note: det-guest-agent will start on the next guest boot"
+else
+    echo "note: det-guest-agent binary not staged yet; file fallback retained"
+fi
 
 echo "== det-session-manager (org.gnome.SessionManager shim) =="
 # phosh + squeekboard both try to register with org.gnome.SessionManager and

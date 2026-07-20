@@ -30,6 +30,16 @@ mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/run/control" "$DET/log"
 # Always refresh so config updates propagate.
 cp -f "$DET/lxc/config" "$DET/guest/config"
 
+# Native guest control agent. Keep the staged copy outside the rootfs so module
+# upgrades can refresh it before every container start; the guest binary is
+# glibc/aarch64 and deliberately separate from host bionic detd/detctl.
+if [ -f "$DET/guest-tools/det-guest-agent" ]; then
+    mkdir -p "$DET/guest/usr/local/bin"
+    cp -f "$DET/guest-tools/det-guest-agent" \
+        "$DET/guest/usr/local/bin/det-guest-agent"
+    chmod 0755 "$DET/guest/usr/local/bin/det-guest-agent"
+fi
+
 # /data is mounted nodev: device nodes inside the rootfs would be dead.
 # Bind-remount just the guest subtree with dev,exec,suid.
 if ! grep -q " $DET/guest " /proc/mounts; then

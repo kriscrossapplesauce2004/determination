@@ -153,6 +153,56 @@ bool ensure_directory(const std::string &path, unsigned int mode,
     return true;
 }
 
+bool atomic_write_file(const std::string &path, const std::string &value,
+                       unsigned int mode, std::string *error)
+{
+    const std::size_t slash = path.rfind('/');
+    const std::string parent = slash == std::string::npos ? "." : path.substr(0, slash);
+    if (parent != "." && !ensure_directory(parent, 0750, error)) return false;
+    const std::string temporary = path + ".new." + std::to_string(getpid());
+    unlink(temporary.c_str());
+    const int fd = open(temporary.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC,
+                        static_cast<mode_t>(mode));
+    if (fd < 0) {
+        if (error) *error = std::strerror(errno);
+        return false;
+    }
+    std::size_t offset = 0;
+    while (offset < value.size()) {
+        ssize_t written;
+        do {
+            written = write(fd, value.data() + offset, value.size() - offset);
+        } while (written < 0 && errno == EINTR);
+        if (written <= 0) {
+            const int saved = errno;
+            close(fd);
+            unlink(temporary.c_str());
+            if (error) *error = std::strerror(saved);
+            return false;
+        }
+        offset += static_cast<std::size_t>(written);
+    }
+    if (fsync(fd) != 0) {
+        const int saved = errno;
+        close(fd);
+        unlink(temporary.c_str());
+        if (error) *error = std::strerror(saved);
+        return false;
+    }
+    close(fd);
+    if (rename(temporary.c_str(), path.c_str()) != 0) {
+        if (error) *error = std::strerror(errno);
+        unlink(temporary.c_str());
+        return false;
+    }
+    const int directory = open(parent.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
+    if (directory >= 0) {
+        fsync(directory);
+        close(directory);
+    }
+    return true;
+}
+
 std::uint64_t fnv1a64(const std::string &value)
 {
     std::uint64_t hash = 14695981039346656037ULL;

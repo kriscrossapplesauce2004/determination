@@ -28,16 +28,29 @@ build_android() {
     cmake --build "$CONTROL/build/android-arm64"
 }
 
+build_guest() {
+    command -v aarch64-linux-gnu-g++ >/dev/null 2>&1 || {
+        echo "aarch64-linux-gnu-g++ is required for the Debian guest agent" >&2
+        exit 1
+    }
+    cmake -S "$CONTROL" -B "$CONTROL/build/guest-arm64" -G Ninja \
+        -DCMAKE_BUILD_TYPE=MinSizeRel \
+        -DCMAKE_SYSTEM_NAME=Linux \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+        -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+    cmake --build "$CONTROL/build/guest-arm64" --target det-guest-agent
+}
+
 case "$MODE" in
     host) build_host ;;
     android) build_android ;;
-    all) build_host; build_android ;;
+    guest) build_guest ;;
+    all) build_host; build_android; build_guest ;;
     clean)
         rm -rf "$CONTROL/build"
         ;;
     *)
-        echo "usage: $0 [host|android|all|clean]" >&2
+        echo "usage: $0 [host|android|guest|all|clean]" >&2
         exit 2
         ;;
 esac
-

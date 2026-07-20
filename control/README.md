@@ -4,6 +4,8 @@ This directory contains the host-side bionic control-plane foundation:
 
 - `detd`: the single state/API owner;
 - `detctl`: the reference CLI and protocol client;
+- `det-guest-agent`: Debian/glibc health reporter and capability-scoped guest
+  client;
 - `libdetcontrol`: versioned protocol, durable state, system probes and the
   bounded fixed-argv adapter runner.
 
@@ -24,6 +26,7 @@ Build and test on the host, then cross-build for Android arm64:
 ```sh
 ./control/build.sh host
 ./control/build.sh android
+./control/build.sh guest
 ```
 
 For an isolated host smoke test:
@@ -42,6 +45,13 @@ detctl mode desktop --wait --deadline 120
 detctl mode phone --wait --deadline 60
 detctl recover --wait
 ```
+
+The daemon also creates `/data/determination/run/control/detd.sock`, which the
+existing LXC bind exposes as `/mnt/det-control/detd.sock`. Only host uid 0 and
+the unmapped guest uid 1000 may connect. That endpoint may report guest health
+and request PHONE/recovery; it may never request DESKTOP. The old command-file
+host agent remains a migration fallback for power actions and observe-only
+deployments.
 
 Protocol and state details are documented in
 [`docs/platform-overhaul.md`](../docs/platform-overhaul.md).

@@ -16,7 +16,8 @@ char process_state(const std::string &name);
 bool path_exists(const std::string &path);
 bool ensure_directory(const std::string &path, unsigned int mode,
                       std::string *error);
+bool atomic_write_file(const std::string &path, const std::string &value,
+                       unsigned int mode, std::string *error);
 std::uint64_t fnv1a64(const std::string &value);
 
 } // namespace determination::control
-

@@ -14,6 +14,7 @@ file ../tools/evgrab/evgrab | grep -q aarch64 || { echo "evgrab is not an aarch6
 
 DETD="../control/build/android-arm64/detd"
 DETCTL="../control/build/android-arm64/detctl"
+DET_GUEST_AGENT="../control/build/guest-arm64/det-guest-agent"
 for binary in "$DETD" "$DETCTL"; do
     [ -f "$binary" ] || {
         echo "build the native control plane first (./control/build.sh android)" >&2
@@ -24,6 +25,14 @@ for binary in "$DETD" "$DETCTL"; do
         exit 1
     }
 done
+[ -f "$DET_GUEST_AGENT" ] || {
+    echo "build the Debian guest agent first (./control/build.sh guest)" >&2
+    exit 1
+}
+file "$DET_GUEST_AGENT" | grep -q 'ARM aarch64' || {
+    echo "$DET_GUEST_AGENT is not a Linux aarch64 build" >&2
+    exit 1
+}
 
 ZYGISK_64="../zygisk/libs/arm64-v8a/libdetermination.so"
 ZYGISK_32="../zygisk/libs/armeabi-v7a/libdetermination.so"
@@ -35,7 +44,7 @@ trap 'rm -rf "$WORK"' EXIT
 
 cp customize.sh post-fs-data.sh service.sh sepolicy.rule "$WORK/"
 det_render_version_template module.prop.in "$WORK/module.prop"
-mkdir -p "$WORK/tools" "$WORK/zygisk" "$WORK/device-profiles"
+mkdir -p "$WORK/tools" "$WORK/guest-tools" "$WORK/zygisk" "$WORK/device-profiles"
 cp ../tools/evgrab/evgrab \
    "$DETD" "$DETCTL" \
    ../toggle/device-config ../toggle/generate-lxc-config ../toggle/generate-guest-config \
@@ -44,6 +53,7 @@ cp ../tools/evgrab/evgrab \
    ../toggle/native-plasma ../toggle/native-kms-gate ../toggle/native-restore \
    ../toggle/det-hostagent ../toggle/cycle-stress.sh "$WORK/tools/"
 cp ../device-profiles/*.conf "$WORK/device-profiles/"
+cp "$DET_GUEST_AGENT" "$WORK/guest-tools/det-guest-agent"
 cp ../guest/lxc/config "$WORK/tools/lxc-config-base"
 cp "$ZYGISK_64" "$WORK/zygisk/arm64-v8a.so"
 cp "$ZYGISK_32" "$WORK/zygisk/armeabi-v7a.so"

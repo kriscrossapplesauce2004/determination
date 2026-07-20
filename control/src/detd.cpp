@@ -1,4 +1,5 @@
 #include "determination/control/protocol.hpp"
+#include "determination/control/policy.hpp"
 #include "determination/control/state.hpp"
 #include "determination/control/system.hpp"
 #include "determination/control/transition.hpp"
@@ -10,6 +11,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
+#include <poll.h>
 #include <sstream>
 #include <sys/file.h>
 #include <sys/socket.h>
@@ -156,6 +158,8 @@ std::string status_payload(const Options &options, const StateRecord &state)
     const std::string voltage = trim(read_file(battery_root + "/voltage_now", 64));
     std::uint64_t millivolts = std::strtoull(voltage.c_str(), nullptr, 10) / 1000U;
     const Mode live = observed_mode(options.root);
+    const std::string guest_report = trim(
+        read_file(options.root + "/run/guest-health.json", 8192));
     std::ostringstream output;
     output << "{\"protocol\":\"1.0\""
            << ",\"observe_only\":" << (options.observe_only ? "true" : "false")
@@ -167,6 +171,10 @@ std::string status_payload(const Options &options, const StateRecord &state)
            << ",\"phosh\":" << process_state_json("phosh") << '}'
            << ",\"memory\":{\"available\":\"" << json_escape(memory_value("MemAvailable"))
            << "\",\"swap_free\":\"" << json_escape(memory_value("SwapFree")) << "\"}"
+           << ",\"guest_report\":"
+           << (guest_report.empty()
+                   ? "null"
+                   : std::string("\"") + json_escape(guest_report) + '"')
            << ",\"profile_digest\":\"" << std::hex << fnv1a64(profile) << std::dec << '"'
            << ",\"compat\":{\"uid\":\"0\",\"kernel\":\""
            << json_escape(trim(read_file("/proc/sys/kernel/osrelease", 256)))
@@ -212,8 +220,10 @@ std::string doctor_payload(const Options &options, const StateRecord &state)
 }
 
 Packet response_for(const Packet &request, const Options &options,
-                    TransitionController *controller, uid_t peer_uid)
+                    TransitionController *controller, uid_t peer_uid,
+                    bool guest_endpoint)
 {
+    const Endpoint endpoint = guest_endpoint ? Endpoint::Guest : Endpoint::Admin;
     const StateRecord state = controller->snapshot();
     Packet response;
     response.header.operation = request.header.operation;
@@ -241,18 +251,21 @@ Packet response_for(const Packet &request, const Options &options,
     case Operation::Capabilities:
         response.payload = "{\"operations\":[\"hello\",\"ping\",\"status\","
                            "\"doctor\",\"capabilities\",\"mode-get\","
-                           "\"mode-set\",\"mode-recover\"],\"transitions\":" +
+                           "\"mode-set\",\"mode-recover\",\"guest-report\"],"
+                           "\"guest_endpoint\":" +
+                           std::string(guest_endpoint ? "true" : "false") +
+                           ",\"transitions\":" +
                            std::string(options.observe_only ? "false" : "true") +
                            ",\"structured_state\":true,"
                            "\"authenticated_peer_credentials\":true}";
         break;
     case Operation::ModeSet: {
-        if (peer_uid != 0) {
+        const Mode target = parse_mode(request.payload);
+        if (!mode_request_allowed(endpoint, peer_uid, target)) {
             response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
             response.payload = "{\"error\":\"mutating operation requires root peer\"}";
             break;
         }
-        const Mode target = parse_mode(request.payload);
         const TransitionRequestResult transition = controller->request(
             target, request.header.request_id, request.header.deadline_ms);
         response.header.status = static_cast<std::int32_t>(transition.status);
@@ -262,7 +275,7 @@ Packet response_for(const Packet &request, const Options &options,
         break;
     }
     case Operation::ModeRecover: {
-        if (peer_uid != 0) {
+        if (!recovery_request_allowed(endpoint, peer_uid)) {
             response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
             response.payload = "{\"error\":\"recovery requires root peer\"}";
             break;
@@ -275,6 +288,28 @@ Packet response_for(const Packet &request, const Options &options,
                            "\",\"state\":" + state_json(transition.state) + "}";
         break;
     }
+    case Operation::GuestReport: {
+        if (!guest_report_allowed(endpoint, peer_uid)) {
+            response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
+            response.payload = "{\"error\":\"guest report requires guest endpoint\"}";
+            break;
+        }
+        if (request.payload.size() > 8192U || request.payload.size() < 2U ||
+            request.payload.front() != '{' || request.payload.back() != '}') {
+            response.header.status = static_cast<std::int32_t>(Status::InvalidRequest);
+            response.payload = "{\"error\":\"invalid guest report\"}";
+            break;
+        }
+        std::string write_error;
+        if (!atomic_write_file(options.root + "/run/guest-health.json",
+                               request.payload + "\n", 0640, &write_error)) {
+            response.header.status = static_cast<std::int32_t>(Status::InternalError);
+            response.payload = "{\"error\":\"" + json_escape(write_error) + "\"}";
+            break;
+        }
+        response.payload = "{\"ok\":true}";
+        break;
+    }
     default:
         response.header.status = static_cast<std::int32_t>(Status::InvalidRequest);
         response.payload = "{\"error\":\"unknown operation\"}";
@@ -283,7 +318,7 @@ Packet response_for(const Packet &request, const Options &options,
     return response;
 }
 
-int create_server(const std::string &path, std::string *error)
+int create_server(const std::string &path, gid_t group, std::string *error)
 {
     sockaddr_un address{};
     address.sun_family = AF_UNIX;
@@ -308,7 +343,9 @@ int create_server(const std::string &path, std::string *error)
         return -1;
     }
 #ifdef __ANDROID__
-    if (getuid() == 0) chown(path.c_str(), 0, 1000);
+    if (getuid() == 0) chown(path.c_str(), 0, group);
+#else
+    (void)group;
 #endif
     return server;
 }
@@ -322,6 +359,7 @@ int main(int argc, char **argv)
 
     std::string error;
     if (!ensure_directory(options.root + "/run", 0750, &error) ||
+        !ensure_directory(options.root + "/run/control", 0770, &error) ||
         !ensure_directory(options.root + "/state", 0750, &error)) {
         std::cerr << "detd: create state directories: " << error << '\n';
         return 1;
@@ -342,11 +380,21 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const int server = create_server(options.socket, &error);
+    chmod((options.root + "/run/control").c_str(), 0770);
+#ifdef __ANDROID__
+    if (getuid() == 0) chown((options.root + "/run/control").c_str(), 0, 1000);
+#endif
+
+    const int server = create_server(options.socket, 1000, &error);
     if (server < 0) {
         std::cerr << "detd: create socket: " << error << '\n';
         close(lock);
         return 1;
+    }
+    const std::string guest_socket = options.root + "/run/control/detd.sock";
+    const int guest_server = create_server(guest_socket, 1000, &error);
+    if (guest_server < 0) {
+        std::cerr << "detd: guest socket unavailable: " << error << '\n';
     }
 
     struct sigaction action{};
@@ -356,17 +404,39 @@ int main(int argc, char **argv)
     sigaction(SIGINT, &action, nullptr);
     signal(SIGPIPE, SIG_IGN);
 
-    std::cout << "detd: observe-only protocol 1.0 on " << options.socket << '\n';
+    std::cout << "detd: protocol 1.0 "
+              << (options.observe_only ? "observe-only" : "transitions-enabled")
+              << " on " << options.socket << '\n';
     while (running.load()) {
-        const int client = accept4(server, nullptr, nullptr, SOCK_CLOEXEC);
+        pollfd listeners[2] = {
+            {.fd = server, .events = POLLIN, .revents = 0},
+            {.fd = guest_server, .events = POLLIN, .revents = 0},
+        };
+        const nfds_t listener_count = guest_server >= 0 ? 2U : 1U;
+        const int ready = poll(listeners, listener_count, -1);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            std::cerr << "detd: poll: " << std::strerror(errno) << '\n';
+            break;
+        }
+        for (nfds_t listener = 0; listener < listener_count; ++listener) {
+        if ((listeners[listener].revents & POLLIN) == 0) continue;
+        const bool is_guest = listener == 1U;
+        const int client = accept4(listeners[listener].fd, nullptr, nullptr,
+                                   SOCK_CLOEXEC);
         if (client < 0) {
             if (errno == EINTR) continue;
             std::cerr << "detd: accept: " << std::strerror(errno) << '\n';
-            break;
+            continue;
         }
         ucred peer{};
         socklen_t peer_size = sizeof(peer);
         if (getsockopt(client, SOL_SOCKET, SO_PEERCRED, &peer, &peer_size) != 0) {
+            close(client);
+            continue;
+        }
+        if (!endpoint_peer_allowed(is_guest ? Endpoint::Guest : Endpoint::Admin,
+                                   peer.uid)) {
             close(client);
             continue;
         }
@@ -377,17 +447,21 @@ int main(int argc, char **argv)
             response.header.status = static_cast<std::int32_t>(received.status);
             response.payload = "{\"error\":\"" + json_escape(received.error) + "\"}";
         } else {
-            response = response_for(received.packet, options, &controller, peer.uid);
+            response = response_for(received.packet, options, &controller,
+                                    peer.uid, is_guest);
         }
         std::string send_error;
         if (!send_packet(client, response, &send_error)) {
             std::cerr << "detd: response: " << send_error << '\n';
         }
         close(client);
+        }
     }
 
     close(server);
+    if (guest_server >= 0) close(guest_server);
     unlink(options.socket.c_str());
+    unlink(guest_socket.c_str());
     close(lock);
     return 0;
 }

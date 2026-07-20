@@ -1,4 +1,5 @@
 #include "determination/control/adapter.hpp"
+#include "determination/control/policy.hpp"
 #include "determination/control/protocol.hpp"
 #include "determination/control/state.hpp"
 #include "determination/control/system.hpp"
@@ -252,6 +253,24 @@ void utility_contracts()
     CHECK(sizeof(PacketHeader) == 48);
     const char own_state = process_state(trim(read_file("/proc/self/comm", 256)));
     CHECK(own_state == 'R' || own_state == 'S' || own_state == 'D');
+    CHECK(endpoint_peer_allowed(Endpoint::Admin, 0));
+    CHECK(endpoint_peer_allowed(Endpoint::Admin, 1000));
+    CHECK(!endpoint_peer_allowed(Endpoint::Admin, 2000));
+    CHECK(mode_request_allowed(Endpoint::Admin, 0, Mode::Desktop));
+    CHECK(!mode_request_allowed(Endpoint::Admin, 1000, Mode::Phone));
+    CHECK(mode_request_allowed(Endpoint::Guest, 1000, Mode::Phone));
+    CHECK(!mode_request_allowed(Endpoint::Guest, 1000, Mode::Desktop));
+    CHECK(!mode_request_allowed(Endpoint::Guest, 0, Mode::Desktop));
+    CHECK(recovery_request_allowed(Endpoint::Guest, 1000));
+    CHECK(guest_report_allowed(Endpoint::Guest, 1000));
+    CHECK(!guest_report_allowed(Endpoint::Admin, 0));
+    const std::string atomic_root = temporary_directory();
+    const std::string atomic_path = atomic_root + "/nested/value";
+    std::string write_error;
+    CHECK(atomic_write_file(atomic_path, "first\n", 0640, &write_error));
+    CHECK(trim(read_file(atomic_path)) == "first");
+    CHECK(atomic_write_file(atomic_path, "second\n", 0640, &write_error));
+    CHECK(trim(read_file(atomic_path)) == "second");
 }
 
 } // namespace
