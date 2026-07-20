@@ -54,8 +54,10 @@ thrash that caused guest-network instability in desktop mode.
 
 ## Features
 
-4. **Audio (pipewire) in the guest** — gives volume keys meaning; the
-   prerequisite for calls-less phone basics.
+4. **Direct audio (PipeWire → ALSA hardware)** — inventory and journalled
+   Android-owner arbitration are implemented in `audio/`; the app/AAudio bridge
+   is retired. Next is the guacamoleb mixer snapshot, direct PCM route, exact
+   restore, then PipeWire/volume-key qualification. See `audio-architecture.md`.
 5. **Phosh polish** — feedbackd (haptics), backgrounds, session niceties.
 
 ## Milestone 5: external convergence (the last milestone)

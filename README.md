@@ -20,6 +20,9 @@ Full rationale, topology decision, and risk register: see
 [`docs/design-spec.md`](docs/design-spec.md).
 The post-proof platform overhaul and hardware-gated execution order are in
 [`docs/platform-overhaul.md`](docs/platform-overhaul.md).
+Direct audio's no-Android-framework contract is in
+[`docs/audio-architecture.md`](docs/audio-architecture.md); the permissioned
+app facade is documented in [`docs/app-api.md`](docs/app-api.md).
 
 Current project release train: **Determination 0.5 "Aqua"** (in development).
 The Deltarune-character naming scheme, release scope, and actual ship gates are
@@ -37,7 +40,8 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
 | `guest/` | Debian arm64 rootfs builder + LXC config (binder/kgsl/dmabuf `/dev`, `/vendor`, property area bind-mounts, libhybris) |
 | `toggle/` | §4 internal-panel handoff: SF stop + respawn suppression + compositor swap + input grab; plus `det-hostagent` (guest→host control channel) |
 | `control/` | native `detd` state/API owner, `detctl` client, durable-state/protocol core, and host tests |
-| `companion/` | native Android app: enter desktop mode + live status + Quick Settings tile (phone-side control) |
+| `audio/` | direct ALSA hardware inventory and journalled ownership binaries; no AudioFlinger/app PCM bridge |
+| `companion/` | Android UI and permission facade: mode confirmation, status/API, Quick Settings, share sheet, optional external presenter |
 | `tools/evgrab/` | small C daemon that holds `EVIOCGRAB` on evdev nodes during desktop mode |
 | `usb-install/` | cable-free install: Magisk action zips that flash/restore the kernel from a USB drive on the phone itself |
 | `zygisk/` | Zygisk/LSPosed module for `system_server` hooks (desktop-mode flags, summon UX) — milestone 6 |
@@ -118,3 +122,6 @@ default dedicated `~/.ssh/determination_ed25519` key.
       sync-fence transport remain.
 - [ ] Milestone 5 phase 2: concurrent external convergence — Android/SF keeps
       the panel while a guest-rendered dmabuf is presented on DP-alt
+- [ ] Direct audio — native host/guest topology probe and journalled exclusive
+      ownership/rollback are implemented and packaged. On-device mixer/PCM
+      route capture, PipeWire qualification, latency, and failure testing remain.

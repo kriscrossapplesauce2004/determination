@@ -59,4 +59,11 @@
     <string name="share_working">Sending to Linux…</string>
     <string name="share_done">Sent to Linux Downloads</string>
     <string name="share_failed">Couldn’t send to Linux: %1$s</string>
+
+    <string name="control_permission_label">Control Determination</string>
+    <string name="control_permission_description">Read native Determination state and request Linux or phone display mode without a confirmation dialog.</string>
+    <string name="api_enter_title">Allow Linux desktop mode?</string>
+    <string name="api_enter_body">Another app requested Linux desktop mode. Android’s internal display will be handed to the guest until you exit back to phone mode.</string>
+    <string name="api_exit_title">Return to phone mode?</string>
+    <string name="api_exit_body">Another app requested that Determination release the display and restore Android phone mode.</string>
 </resources>

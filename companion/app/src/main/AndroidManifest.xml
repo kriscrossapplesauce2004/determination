@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <permission
+        android:name="com.determination.permission.CONTROL"
+        android:description="@string/control_permission_description"
+        android:label="@string/control_permission_label"
+        android:protectionLevel="signature" />
+
     <!-- The companion is a UI and the optional Android external-display
          presenter. Determination audio is direct ALSA/PipeWire hardware access;
          this app intentionally has no media-playback or network permission. -->
@@ -50,6 +56,42 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+
+        <!-- Ordinary apps may ask the user to change mode; no app can silently
+             acquire display ownership through this activity. -->
+        <activity
+            android:name=".DeterminationModeRequestActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.Determination.Dialog">
+            <intent-filter>
+                <action android:name="com.determination.action.REQUEST_MODE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Permissionless but read-only. Call as an explicit ordered broadcast
+             and consume result extras; there is no su fallback. -->
+        <receiver
+            android:name=".DeterminationStatusReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.determination.action.STATUS" />
+                <action android:name="com.determination.action.CAPABILITIES" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Trusted integrations use generated IDeterminationControl AIDL.
+             Signature permission prevents arbitrary silent transitions. -->
+        <service
+            android:name=".DeterminationControlService"
+            android:exported="true"
+            android:permission="com.determination.permission.CONTROL">
+            <intent-filter>
+                <action android:name="com.determination.action.BIND_CONTROL" />
+            </intent-filter>
+        </service>
 
         <!-- Quick Settings tile: one tap to enter/leave desktop mode. -->
         <service
