@@ -10,6 +10,7 @@
 #   det guest-root [cmd]  root shell inside the guest (admin escape hatch)
 #   det passwd            set melissa's guest password (needed before sudo works)
 #   det ssh-setup [key]   install sshd + authorize key (default: dedicated key)
+#   det motd-setup        install/refresh the guest login MOTD
 #   det ssh-route         route the guest subnet directly through the phone
 #   det ssh [command...]  direct SSH to melissa@192.168.117.2
 #   det on | det off      enter / leave desktop mode (detached; panel changes!)
@@ -71,6 +72,17 @@ ensure() {
     [ -n "$addr" ] || { echo "phone not advertising — is Wireless debugging on?" >&2; exit 1; }
     adb connect "$addr" >/dev/null
     adb get-state >/dev/null 2>&1 || { echo "connect to $addr failed (re-pair?)" >&2; exit 1; }
+}
+
+install_guest_motd() {
+    G=/data/determination
+    adb push guest/setup-motd.sh /data/local/tmp/determination-setup-motd.sh >/dev/null
+    if ! adb shell "su -c 'cp /data/local/tmp/determination-setup-motd.sh $G/guest/root/setup-motd.sh && chmod 0700 $G/guest/root/setup-motd.sh && $G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh /root/setup-motd.sh \"$DET_VERSION\" \"$DET_CODENAME\"'"; then
+        adb shell "su -c 'rm -f /data/local/tmp/determination-setup-motd.sh'" >/dev/null
+        echo 'det: guest MOTD setup failed' >&2
+        return 1
+    fi
+    adb shell "su -c 'rm -f /data/local/tmp/determination-setup-motd.sh'" >/dev/null
 }
 
 case "${1:-status}" in
@@ -155,6 +167,7 @@ ssh-setup)
             grep -q RUNNING; then
         adb shell "su -c '$G/bin/guest-start </dev/null >/dev/null 2>&1'"
     fi
+    install_guest_motd
     adb push guest/setup-ssh.sh /data/local/tmp/determination-setup-ssh.sh >/dev/null
     adb push "$key_file" /data/local/tmp/determination-authorized-key.pub >/dev/null
     if ! adb shell "su -c 'cp /data/local/tmp/determination-setup-ssh.sh $G/guest/root/setup-ssh.sh && cp /data/local/tmp/determination-authorized-key.pub $G/guest/root/authorized-key.pub && chmod 0700 $G/guest/root/setup-ssh.sh && $G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh /root/setup-ssh.sh /root/authorized-key.pub'"; then
@@ -182,6 +195,14 @@ ssh-setup)
     fi
     echo 'det: public-key SSH server ready' >&2
     "$SELF" ssh-route ;;
+motd-setup)
+    ensure
+    G=/data/determination
+    if ! adb shell "su -c '$G/lxc/bin/lxc-info -P $G -n guest 2>/dev/null'" |
+            grep -q RUNNING; then
+        adb shell "su -c '$G/bin/guest-start </dev/null >/dev/null 2>&1'"
+    fi
+    install_guest_motd ;;
 ssh-route)
     ensure
     phone_ip=$(adb shell "ip -4 -brief address show wlan0" 2>/dev/null |
