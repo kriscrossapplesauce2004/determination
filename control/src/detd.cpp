@@ -1,6 +1,7 @@
 #include "determination/control/protocol.hpp"
 #include "determination/control/state.hpp"
 #include "determination/control/system.hpp"
+#include "determination/control/transition.hpp"
 
 #include <atomic>
 #include <cerrno>
@@ -35,7 +36,8 @@ struct Options {
 void usage(const char *program)
 {
     std::cerr << "usage: " << program
-              << " [--root PATH] [--socket PATH] [--foreground] [--observe-only]\n";
+              << " [--root PATH] [--socket PATH] [--foreground] "
+                 "[--observe-only|--allow-transitions]\n";
 }
 
 bool parse_options(int argc, char **argv, Options *options)
@@ -48,6 +50,8 @@ bool parse_options(int argc, char **argv, Options *options)
             else options->socket = value;
         } else if (argument == "--foreground" || argument == "--observe-only") {
             options->observe_only = true;
+        } else if (argument == "--allow-transitions") {
+            options->observe_only = false;
         } else if (argument == "--help") {
             usage(argv[0]);
             return false;
@@ -106,10 +110,13 @@ std::string doctor_payload(const Options &options, const StateRecord &state)
 {
     const bool marker = path_exists(options.root + "/run/desktop-mode");
     const bool mismatch = marker != (state.observed == Mode::Desktop);
+    const bool recovery = state.observed == Mode::Recovery;
+    const bool stable = state.observed == Mode::Phone || state.observed == Mode::Desktop;
     const bool guest_tools = path_exists(options.root + "/lxc/bin/lxc-info");
     const bool emergency = path_exists(options.root + "/bin/desktop-off");
     std::ostringstream output;
-    output << "{\"healthy\":" << (!mismatch && emergency ? "true" : "false")
+    output << "{\"healthy\":"
+           << (!mismatch && !recovery && stable && emergency ? "true" : "false")
            << ",\"state\":" << state_json(state)
            << ",\"checks\":{\"state_marker_consistent\":" << (!mismatch ? "true" : "false")
            << ",\"emergency_phone_restore\":" << (emergency ? "true" : "false")
@@ -123,8 +130,9 @@ std::string doctor_payload(const Options &options, const StateRecord &state)
 }
 
 Packet response_for(const Packet &request, const Options &options,
-                    const StateRecord &state, uid_t peer_uid)
+                    TransitionController *controller, uid_t peer_uid)
 {
+    const StateRecord state = controller->snapshot();
     Packet response;
     response.header.operation = request.header.operation;
     response.header.flags = kFlagResponse;
@@ -135,7 +143,8 @@ Packet response_for(const Packet &request, const Options &options,
     switch (operation) {
     case Operation::Hello:
         response.payload = "{\"service\":\"detd\",\"protocol_major\":1,"
-                           "\"protocol_minor\":0,\"observe_only\":true}";
+                           "\"protocol_minor\":0,\"observe_only\":" +
+                           std::string(options.observe_only ? "true" : "false") + "}";
         break;
     case Operation::Ping:
         response.payload = "{\"ok\":true}";
@@ -149,18 +158,41 @@ Packet response_for(const Packet &request, const Options &options,
         break;
     case Operation::Capabilities:
         response.payload = "{\"operations\":[\"hello\",\"ping\",\"status\","
-                           "\"doctor\",\"capabilities\",\"mode-get\"],"
-                           "\"transitions\":false,\"structured_state\":true,"
+                           "\"doctor\",\"capabilities\",\"mode-get\","
+                           "\"mode-set\",\"mode-recover\"],\"transitions\":" +
+                           std::string(options.observe_only ? "false" : "true") +
+                           ",\"structured_state\":true,"
                            "\"authenticated_peer_credentials\":true}";
         break;
-    case Operation::ModeSet:
-    case Operation::ModeRecover:
-        response.header.status = static_cast<std::int32_t>(
-            peer_uid == 0 ? Status::Rejected : Status::PermissionDenied);
-        response.payload = peer_uid == 0
-            ? "{\"error\":\"detd is observe-only; use the proven transition path\"}"
-            : "{\"error\":\"mutating operation requires root peer\"}";
+    case Operation::ModeSet: {
+        if (peer_uid != 0) {
+            response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
+            response.payload = "{\"error\":\"mutating operation requires root peer\"}";
+            break;
+        }
+        const Mode target = parse_mode(request.payload);
+        const TransitionRequestResult transition = controller->request(
+            target, request.header.request_id, request.header.deadline_ms);
+        response.header.status = static_cast<std::int32_t>(transition.status);
+        response.header.generation = transition.state.generation;
+        response.payload = "{\"message\":\"" + json_escape(transition.message) +
+                           "\",\"state\":" + state_json(transition.state) + "}";
         break;
+    }
+    case Operation::ModeRecover: {
+        if (peer_uid != 0) {
+            response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
+            response.payload = "{\"error\":\"recovery requires root peer\"}";
+            break;
+        }
+        const TransitionRequestResult transition = controller->request(
+            Mode::Phone, request.header.request_id, request.header.deadline_ms);
+        response.header.status = static_cast<std::int32_t>(transition.status);
+        response.header.generation = transition.state.generation;
+        response.payload = "{\"message\":\"" + json_escape(transition.message) +
+                           "\",\"state\":" + state_json(transition.state) + "}";
+        break;
+    }
     default:
         response.header.status = static_cast<std::int32_t>(Status::InvalidRequest);
         response.payload = "{\"error\":\"unknown operation\"}";
@@ -221,32 +253,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    StateStore store(options.root + "/state/control.state");
-    StateRecord state;
-    std::string load_error;
-    if (!store.load(&state, &load_error)) {
-        state.boot_id = boot_id();
-        state.observed = observed_mode(options.root);
-        state.desired = state.observed == Mode::Desktop ? Mode::Desktop : Mode::Phone;
-        state.generation = 1;
-        state.step = "observe";
-    } else if (state.boot_id != boot_id()) {
-        state.boot_id = boot_id();
-        state.generation++;
-        state.desired = Mode::Phone;
-        state.observed = observed_mode(options.root);
-        state.step = "boot-reconcile";
-        state.last_error = "previous boot state reconciled to phone baseline";
-    } else if (state.observed == Mode::Entering || state.observed == Mode::Exiting) {
-        state.generation++;
-        state.observed = Mode::Recovery;
-        state.step = "daemon-restart-reconcile";
-        state.last_error = "daemon restarted during an incomplete transition";
-    } else {
-        state.observed = observed_mode(options.root);
-    }
-    if (!store.save(state, &error)) {
-        std::cerr << "detd: save state: " << error << '\n';
+    TransitionController controller(options.root, !options.observe_only);
+    if (!controller.initialise(&error)) {
+        std::cerr << "detd: initialise state: " << error << '\n';
         close(lock);
         return 1;
     }
@@ -286,7 +295,7 @@ int main(int argc, char **argv)
             response.header.status = static_cast<std::int32_t>(received.status);
             response.payload = "{\"error\":\"" + json_escape(received.error) + "\"}";
         } else {
-            response = response_for(received.packet, options, state, peer.uid);
+            response = response_for(received.packet, options, &controller, peer.uid);
         }
         std::string send_error;
         if (!send_packet(client, response, &send_error)) {
@@ -300,4 +309,3 @@ int main(int argc, char **argv)
     close(lock);
     return 0;
 }
-

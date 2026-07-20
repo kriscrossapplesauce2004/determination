@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <cstddef>
+#include <atomic>
 #include <string>
 #include <vector>
 
@@ -18,7 +19,7 @@ struct AdapterResult {
 AdapterResult run_adapter(const std::string &path,
                           const std::vector<std::string> &arguments,
                           std::chrono::milliseconds timeout,
-                          std::size_t output_limit = 64U * 1024U);
+                          std::size_t output_limit = 64U * 1024U,
+                          const std::atomic<bool> *cancelled = nullptr);
 
 } // namespace determination::control
-

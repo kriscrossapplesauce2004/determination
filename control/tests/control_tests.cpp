@@ -2,12 +2,15 @@
 #include "determination/control/protocol.hpp"
 #include "determination/control/state.hpp"
 #include "determination/control/system.hpp"
+#include "determination/control/transition.hpp"
 
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -32,6 +35,37 @@ std::string temporary_directory()
     return directory;
 }
 
+void write_executable(const std::string &path, const std::string &contents)
+{
+    const int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC,
+                        0755);
+    CHECK(fd >= 0);
+    std::size_t offset = 0;
+    while (offset < contents.size()) {
+        const ssize_t written = write(fd, contents.data() + offset,
+                                      contents.size() - offset);
+        CHECK(written > 0);
+        offset += static_cast<std::size_t>(written);
+    }
+    CHECK(close(fd) == 0);
+    CHECK(chmod(path.c_str(), 0755) == 0);
+}
+
+void prepare_fake_adapters(const std::string &root, bool fail_enter)
+{
+    std::string error;
+    CHECK(ensure_directory(root + "/bin", 0755, &error));
+    CHECK(ensure_directory(root + "/run", 0755, &error));
+    CHECK(ensure_directory(root + "/state", 0755, &error));
+    write_executable(root + "/bin/guest-start", "#!/bin/sh\nexit 0\n");
+    write_executable(
+        root + "/bin/desktop-on",
+        "#!/bin/sh\nmkdir -p '" + root + "/run'\ntouch '" + root +
+            "/run/desktop-mode'\n" + (fail_enter ? "exit 7\n" : "exit 0\n"));
+    write_executable(root + "/bin/desktop-off",
+                     "#!/bin/sh\nrm -f '" + root + "/run/desktop-mode'\nexit 0\n");
+}
+
 void state_round_trip()
 {
     const std::string root = temporary_directory();
@@ -44,6 +78,7 @@ void state_round_trip()
     original.observed = Mode::Entering;
     original.transition_id = 99;
     original.step = "adapter desktop-on";
+    original.completed_steps = {"guest-start", "input-grab"};
     original.started_monotonic_ms = 1000;
     original.deadline_monotonic_ms = 9000;
     original.adapter_status = 7;
@@ -59,9 +94,97 @@ void state_round_trip()
     CHECK(loaded.desired == Mode::Desktop);
     CHECK(loaded.observed == Mode::Entering);
     CHECK(loaded.step == original.step);
+    CHECK(loaded.completed_steps == original.completed_steps);
     CHECK(loaded.last_error == original.last_error);
     CHECK(loaded.adapter_output == original.adapter_output);
     CHECK(state_json(loaded).find("\"generation\":42") != std::string::npos);
+}
+
+void transition_success_and_rollback()
+{
+    const std::string root = temporary_directory();
+    prepare_fake_adapters(root, false);
+    TransitionController controller(root, true);
+    std::string error;
+    CHECK(controller.initialise(&error));
+
+    TransitionRequestResult request = controller.request(Mode::Desktop, 101, 5000);
+    CHECK(request.status == Status::Accepted);
+    CHECK(controller.wait_for_idle(3000));
+    StateRecord state = controller.snapshot();
+    CHECK(state.observed == Mode::Desktop);
+    CHECK(state.step == "idle");
+    CHECK(state.completed_steps.size() == 2);
+    CHECK(state.completed_steps[0] == "guest-start");
+    CHECK(state.completed_steps[1] == "desktop-on");
+
+    request = controller.request(Mode::Phone, 102, 5000);
+    CHECK(request.status == Status::Accepted);
+    CHECK(controller.wait_for_idle(3000));
+    state = controller.snapshot();
+    CHECK(state.observed == Mode::Phone);
+    CHECK(state.completed_steps.size() == 1);
+    CHECK(state.completed_steps[0] == "desktop-off");
+
+    const std::string failing_root = temporary_directory();
+    prepare_fake_adapters(failing_root, true);
+    TransitionController failing(failing_root, true);
+    CHECK(failing.initialise(&error));
+    request = failing.request(Mode::Desktop, 103, 5000);
+    CHECK(request.status == Status::Accepted);
+    CHECK(failing.wait_for_idle(3000));
+    state = failing.snapshot();
+    CHECK(state.observed == Mode::Phone);
+    CHECK(state.step == "rollback-complete");
+    CHECK(state.last_error.find("desktop-on") != std::string::npos);
+    CHECK(!path_exists(failing_root + "/run/desktop-mode"));
+}
+
+void transition_conflicts_and_reconciliation()
+{
+    const std::string root = temporary_directory();
+    prepare_fake_adapters(root, false);
+    write_executable(
+        root + "/bin/desktop-on",
+        "#!/bin/sh\nsleep 0.3\ntouch '" + root + "/run/desktop-mode'\nexit 0\n");
+    TransitionController controller(root, true);
+    std::string error;
+    CHECK(controller.initialise(&error));
+    TransitionRequestResult request = controller.request(Mode::Desktop, 201, 5000);
+    CHECK(request.status == Status::Accepted);
+    request = controller.request(Mode::Desktop, 202, 5000);
+    CHECK(request.status == Status::Accepted);
+    CHECK(request.message.find("coalesced") != std::string::npos);
+    request = controller.request(Mode::Phone, 203, 5000);
+    CHECK(request.status == Status::Busy);
+    CHECK(controller.wait_for_idle(3000));
+    CHECK(controller.snapshot().observed == Mode::Desktop);
+
+    const std::string recovery_root = temporary_directory();
+    prepare_fake_adapters(recovery_root, false);
+    CHECK(path_exists(recovery_root + "/run"));
+    write_executable(recovery_root + "/run/desktop-mode", "stale marker\n");
+    StateRecord interrupted;
+    interrupted.boot_id = boot_id();
+    interrupted.generation = 7;
+    interrupted.desired = Mode::Desktop;
+    interrupted.observed = Mode::Entering;
+    interrupted.step = "desktop-on";
+    StateStore store(recovery_root + "/state/control.state");
+    CHECK(store.save(interrupted, &error));
+
+    TransitionController recovering(recovery_root, true);
+    CHECK(recovering.initialise(&error));
+    StateRecord state = recovering.snapshot();
+    CHECK(state.observed == Mode::Recovery);
+    CHECK(state.desired == Mode::Phone);
+    CHECK(state.step == "daemon-restart-reconcile");
+    request = recovering.request(Mode::Phone, 204, 5000);
+    CHECK(request.status == Status::Accepted);
+    CHECK(recovering.wait_for_idle(3000));
+    state = recovering.snapshot();
+    CHECK(state.observed == Mode::Phone);
+    CHECK(!path_exists(recovery_root + "/run/desktop-mode"));
 }
 
 void packet_round_trip()
@@ -139,6 +262,8 @@ int main()
     packet_round_trip();
     invalid_packet_is_rejected();
     adapter_runner();
+    transition_success_and_rollback();
+    transition_conflicts_and_reconciliation();
     utility_contracts();
     std::cout << "all control-plane tests passed\n";
     return 0;

@@ -87,6 +87,27 @@ bool write_all(int fd, const std::string &value)
     return true;
 }
 
+std::string join_steps(const std::vector<std::string> &steps)
+{
+    std::string joined;
+    for (const std::string &step : steps) {
+        if (!joined.empty()) joined.push_back('\n');
+        joined.append(step);
+    }
+    return joined;
+}
+
+std::vector<std::string> split_steps(const std::string &joined)
+{
+    std::vector<std::string> steps;
+    std::istringstream input(joined);
+    std::string step;
+    while (std::getline(input, step)) {
+        if (!step.empty()) steps.push_back(std::move(step));
+    }
+    return steps;
+}
+
 } // namespace
 
 std::string mode_name(Mode mode)
@@ -153,6 +174,7 @@ bool StateStore::load(StateRecord *state, std::string *error) const
     candidate.desired = parse_mode(values["desired"]);
     candidate.observed = parse_mode(values["observed"]);
     candidate.step = values["step"];
+    candidate.completed_steps = split_steps(values["completed_steps"]);
     candidate.last_error = values["last_error"];
     candidate.adapter_output = values["adapter_output"];
     if (candidate.desired == Mode::Unknown || candidate.observed == Mode::Unknown ||
@@ -177,6 +199,7 @@ bool StateStore::save(const StateRecord &state, std::string *error) const
            << "observed=" << mode_name(state.observed) << '\n'
            << "transition_id=" << state.transition_id << '\n'
            << "step=" << encode(state.step) << '\n'
+           << "completed_steps=" << encode(join_steps(state.completed_steps)) << '\n'
            << "started_ms=" << state.started_monotonic_ms << '\n'
            << "deadline_ms=" << state.deadline_monotonic_ms << '\n'
            << "adapter_status=" << state.adapter_status << '\n'
@@ -237,6 +260,12 @@ std::string state_json(const StateRecord &state)
            << ",\"observed\":\"" << mode_name(state.observed) << '"'
            << ",\"transition_id\":" << state.transition_id
            << ",\"step\":\"" << json_escape(state.step) << '"'
+           << ",\"completed_steps\":[";
+    for (std::size_t index = 0; index < state.completed_steps.size(); ++index) {
+        if (index != 0) output << ',';
+        output << '"' << json_escape(state.completed_steps[index]) << '"';
+    }
+    output << ']'
            << ",\"started_monotonic_ms\":" << state.started_monotonic_ms
            << ",\"deadline_monotonic_ms\":" << state.deadline_monotonic_ms
            << ",\"adapter_status\":" << state.adapter_status
@@ -246,4 +275,3 @@ std::string state_json(const StateRecord &state)
 }
 
 } // namespace determination::control
-

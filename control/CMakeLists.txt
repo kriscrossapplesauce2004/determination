@@ -10,6 +10,7 @@ add_library(detcontrol STATIC
     src/protocol.cpp
     src/state.cpp
     src/system.cpp
+    src/transition.cpp
 )
 target_include_directories(detcontrol PUBLIC include)
 target_compile_options(detcontrol PRIVATE -Wall -Wextra -Wpedantic -Werror)
@@ -38,4 +39,3 @@ else()
     )
     add_test(NAME det-control-tests COMMAND det-control-tests)
 endif()
-

@@ -12,6 +12,13 @@ are rejected until transition ownership and device recovery tests pass. The
 existing `desktop-on`, `desktop-off`, and `guest-start` scripts remain the
 proven transition implementation during migration.
 
+The transition controller is nevertheless built and testable behind the
+explicit `--allow-transitions` daemon flag. It journals `guest-start`,
+`desktop-on`, and `desktop-off` as fixed-argv adapters, coalesces duplicate
+requests, rejects conflicts, enforces deadlines, rolls failed entries back to
+phone mode, and marks interrupted transitions for recovery on restart. Boot
+packaging does not enable that flag yet.
+
 Build and test on the host, then cross-build for Android arm64:
 
 ```sh
@@ -28,6 +35,13 @@ mkdir -p "$root/run" "$root/state"
 ./control/build/host/detctl --root "$root" doctor --json
 ```
 
+Once a test daemon is intentionally transition-enabled:
+
+```sh
+detctl mode desktop --wait --deadline 120
+detctl mode phone --wait --deadline 60
+detctl recover --wait
+```
+
 Protocol and state details are documented in
 [`docs/platform-overhaul.md`](../docs/platform-overhaul.md).
-

@@ -7,6 +7,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <poll.h>
+#include <sys/prctl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -15,7 +16,8 @@ namespace determination::control {
 AdapterResult run_adapter(const std::string &path,
                           const std::vector<std::string> &arguments,
                           std::chrono::milliseconds timeout,
-                          std::size_t output_limit)
+                          std::size_t output_limit,
+                          const std::atomic<bool> *cancelled)
 {
     AdapterResult result;
     int output_pipe[2];
@@ -34,6 +36,8 @@ AdapterResult run_adapter(const std::string &path,
 
     const pid_t child = fork();
     if (child == 0) {
+        prctl(PR_SET_PDEATHSIG, SIGTERM);
+        if (getppid() == 1) _exit(126);
         setsid();
         dup2(output_pipe[1], STDOUT_FILENO);
         dup2(output_pipe[1], STDERR_FILENO);
@@ -76,8 +80,9 @@ AdapterResult run_adapter(const std::string &path,
             result.error = std::strerror(errno);
             break;
         }
-        if (monotonic_milliseconds() >= deadline) {
-            result.timed_out = true;
+        const bool was_cancelled = cancelled && cancelled->load();
+        if (was_cancelled || monotonic_milliseconds() >= deadline) {
+            result.timed_out = !was_cancelled;
             kill(-child, SIGTERM);
             const std::uint64_t grace = monotonic_milliseconds() + 1000U;
             do {
@@ -108,7 +113,10 @@ AdapterResult run_adapter(const std::string &path,
     }
     close(output_pipe[0]);
 
-    if (result.timed_out) {
+    if (cancelled && cancelled->load()) {
+        result.exit_status = -1;
+        result.error = "adapter cancelled";
+    } else if (result.timed_out) {
         result.exit_status = -1;
         result.error = "adapter deadline exceeded";
     } else if (exited && WIFEXITED(wait_status)) {
@@ -120,4 +128,3 @@ AdapterResult run_adapter(const std::string &path,
 }
 
 } // namespace determination::control
-

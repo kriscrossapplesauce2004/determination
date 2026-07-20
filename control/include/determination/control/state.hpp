@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace determination::control {
 
@@ -25,6 +26,7 @@ struct StateRecord {
     Mode observed = Mode::Unknown;
     std::uint64_t transition_id = 0;
     std::string step = "idle";
+    std::vector<std::string> completed_steps;
     std::uint64_t started_monotonic_ms = 0;
     std::uint64_t deadline_monotonic_ms = 0;
     std::int32_t adapter_status = 0;
@@ -47,4 +49,3 @@ private:
 std::string state_json(const StateRecord &state);
 
 } // namespace determination::control
-

@@ -3,8 +3,10 @@
 
 #include <cerrno>
 #include <cstdlib>
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <unistd.h>
 
 using namespace determination::control;
@@ -15,6 +17,8 @@ struct Options {
     std::string root = "/data/determination";
     std::string socket;
     bool json = false;
+    bool wait = false;
+    std::uint32_t deadline_ms = 120'000;
     Operation operation = Operation::Status;
     std::string payload;
 };
@@ -23,7 +27,7 @@ void usage(const char *program)
 {
     std::cerr << "usage: " << program << " [--root PATH] [--socket PATH] "
               << "hello|ping|status|doctor|capabilities|mode [phone|desktop] "
-              << "[--json]\n";
+              << "|recover [--wait] [--deadline SECONDS] [--json]\n";
 }
 
 bool parse(int argc, char **argv, Options *options)
@@ -37,6 +41,13 @@ bool parse(int argc, char **argv, Options *options)
             else options->socket = value;
         } else if (argument == "--json") {
             options->json = true;
+        } else if (argument == "--wait") {
+            options->wait = true;
+        } else if (argument == "--deadline" && index + 1 < argc) {
+            char *end = nullptr;
+            const unsigned long seconds = std::strtoul(argv[++index], &end, 10);
+            if (!end || *end != '\0' || seconds < 5 || seconds > 300) return false;
+            options->deadline_ms = static_cast<std::uint32_t>(seconds * 1000UL);
         } else if (!command_seen && argument == "hello") {
             options->operation = Operation::Hello;
             command_seen = true;
@@ -61,6 +72,10 @@ bool parse(int argc, char **argv, Options *options)
             } else {
                 options->operation = Operation::ModeGet;
             }
+        } else if (!command_seen && argument == "recover") {
+            options->operation = Operation::ModeRecover;
+            options->payload = "phone";
+            command_seen = true;
         } else {
             usage(argv[0]);
             return false;
@@ -70,6 +85,34 @@ bool parse(int argc, char **argv, Options *options)
     if (options->root.empty() || options->root.front() != '/') return false;
     if (options->socket.empty()) options->socket = options->root + "/run/detd.sock";
     return true;
+}
+
+ReceiveResult transact(const Options &options, Operation operation,
+                       const std::string &payload, std::uint64_t request_id,
+                       std::string *error)
+{
+    const int socket = connect_socket(options.socket, error);
+    if (socket < 0) {
+        ReceiveResult unavailable;
+        unavailable.status = Status::Unavailable;
+        unavailable.error = *error;
+        return unavailable;
+    }
+    Packet request;
+    request.header.operation = static_cast<std::uint32_t>(operation);
+    request.header.request_id = request_id;
+    request.header.deadline_ms = options.deadline_ms;
+    request.payload = payload;
+    if (!send_packet(socket, request, error)) {
+        close(socket);
+        ReceiveResult unavailable;
+        unavailable.status = Status::Unavailable;
+        unavailable.error = *error;
+        return unavailable;
+    }
+    ReceiveResult response = receive_packet(socket);
+    close(socket);
+    return response;
 }
 
 int exit_code(Status status)
@@ -101,35 +144,55 @@ int main(int argc, char **argv)
     }
 
     std::string error;
-    const int socket = connect_socket(options.socket, &error);
-    if (socket < 0) {
-        std::cerr << "detctl: connect " << options.socket << ": " << error << '\n';
-        return exit_code(Status::Unavailable);
-    }
-    Packet request;
-    request.header.operation = static_cast<std::uint32_t>(options.operation);
-    request.header.request_id =
+    const std::uint64_t request_id =
         (static_cast<std::uint64_t>(getpid()) << 32U) ^ monotonic_milliseconds();
-    request.header.deadline_ms = 15'000;
-    request.payload = options.payload;
-    if (!send_packet(socket, request, &error)) {
-        std::cerr << "detctl: send: " << error << '\n';
-        close(socket);
-        return exit_code(Status::Unavailable);
-    }
-    const ReceiveResult response = receive_packet(socket);
-    close(socket);
+    ReceiveResult response = transact(options, options.operation, options.payload,
+                                      request_id, &error);
     if (!response.ok) {
         std::cerr << "detctl: receive: " << response.error << '\n';
         return exit_code(response.status);
     }
     const Status status = static_cast<Status>(response.packet.header.status);
-    if (!response.packet.payload.empty()) {
+    if (!response.packet.payload.empty() &&
+        !(options.wait && status == Status::Accepted)) {
         std::cout << response.packet.payload << '\n';
     }
     if (status != Status::Ok && status != Status::Accepted && !options.json) {
         std::cerr << "detctl: " << status_name(status) << '\n';
     }
-    return exit_code(status);
-}
+    if (status != Status::Accepted || !options.wait ||
+        (options.operation != Operation::ModeSet &&
+         options.operation != Operation::ModeRecover)) {
+        return exit_code(status);
+    }
 
+    const std::string target = options.operation == Operation::ModeRecover
+        ? "phone" : options.payload;
+    const std::string observed = "\"observed\":\"" + target + "\"";
+    const std::uint64_t deadline = monotonic_milliseconds() + options.deadline_ms;
+    while (monotonic_milliseconds() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        response = transact(options, Operation::ModeGet, {}, request_id, &error);
+        if (!response.ok) {
+            std::cerr << "detctl: wait status: " << response.error << '\n';
+            return exit_code(response.status);
+        }
+        const std::string &payload = response.packet.payload;
+        if (payload.find(observed) != std::string::npos &&
+            payload.find("\"step\":\"idle\"") != std::string::npos) {
+            std::cout << payload << '\n';
+            return 0;
+        }
+        if (payload.find("\"observed\":\"recovery\"") != std::string::npos) {
+            std::cout << payload << '\n';
+            return exit_code(Status::RecoveryRequired);
+        }
+        if (payload.find("\"step\":\"rollback-complete\"") != std::string::npos ||
+            payload.find("\"step\":\"failed-phone-safe\"") != std::string::npos) {
+            std::cout << payload << '\n';
+            return exit_code(Status::InternalError);
+        }
+    }
+    std::cerr << "detctl: transition wait deadline exceeded\n";
+    return exit_code(Status::DeadlineExceeded);
+}

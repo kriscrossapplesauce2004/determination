@@ -1,0 +1,5 @@
+#!/bin/sh
+root=${0%/bin/desktop-on-slow}
+mkdir -p "$root/run"
+touch "$root/run/desktop-mode"
+exec sleep 30
