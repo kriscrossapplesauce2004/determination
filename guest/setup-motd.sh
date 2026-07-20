@@ -24,6 +24,38 @@ set -g fish_greeting
 EOF
 chmod 0644 /etc/fish/conf.d/00-determination.fish
 
+# Fastfetch's default module order probes GPU immediately after CPU. In this
+# guest that probe enters the Android/libhybris vendor stack and SIGSEGVs,
+# truncating the Debian logo at exactly that point. Keep the normal useful
+# report but omit GPU probing; user config still wins over this system default.
+install -d -m 0755 /etc/xdg/fastfetch
+cat > /etc/xdg/fastfetch/config.jsonc <<'EOF'
+{
+    "modules": [
+        "title",
+        "separator",
+        "os",
+        "host",
+        "kernel",
+        "uptime",
+        "packages",
+        "shell",
+        "cursor",
+        "terminal",
+        "cpu",
+        "memory",
+        "swap",
+        "disk",
+        "localip",
+        "battery",
+        "locale",
+        "break",
+        "colors"
+    ]
+}
+EOF
+chmod 0644 /etc/xdg/fastfetch/config.jsonc
+
 # Keep the login visually MOTD -> prompt. Host-key and authentication policy
 # remain in the separate SSH setup drop-in.
 install -d -m 0755 /etc/ssh/sshd_config.d
