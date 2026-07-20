@@ -79,6 +79,7 @@
             <intent-filter>
                 <action android:name="com.determination.action.STATUS" />
                 <action android:name="com.determination.action.CAPABILITIES" />
+                <action android:name="com.determination.action.METRICS" />
             </intent-filter>
         </receiver>
 

@@ -4,5 +4,6 @@ package com.determination.companion;
 interface IDeterminationControl {
     String getStatusJson();
     String getCapabilitiesJson();
+    String getMetricsJson();
     int requestMode(String target);
 }

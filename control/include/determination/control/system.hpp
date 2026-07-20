@@ -10,6 +10,7 @@ std::uint64_t monotonic_milliseconds();
 std::string read_file(const std::string &path, std::size_t limit = 64U * 1024U);
 std::string trim(std::string value);
 std::string json_escape(const std::string &value);
+std::string key_value(const std::string &text, const std::string &key);
 std::string boot_id();
 std::string android_property(const std::string &name);
 char process_state(const std::string &name);

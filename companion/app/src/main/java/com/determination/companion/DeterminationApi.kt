@@ -4,6 +4,7 @@ package com.determination.companion
 object DeterminationApi {
     const val ACTION_STATUS = "com.determination.action.STATUS"
     const val ACTION_CAPABILITIES = "com.determination.action.CAPABILITIES"
+    const val ACTION_METRICS = "com.determination.action.METRICS"
     const val ACTION_REQUEST_MODE = "com.determination.action.REQUEST_MODE"
     const val ACTION_BIND_CONTROL = "com.determination.action.BIND_CONTROL"
 

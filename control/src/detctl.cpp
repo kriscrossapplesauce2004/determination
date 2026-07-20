@@ -26,7 +26,7 @@ struct Options {
 void usage(const char *program)
 {
     std::cerr << "usage: " << program << " [--root PATH] [--socket PATH] "
-              << "hello|ping|status|doctor|capabilities|mode [phone|desktop] "
+              << "hello|ping|status|doctor|capabilities|metrics|mode [phone|desktop] "
               << "|recover [--wait] [--deadline SECONDS] [--json]\n";
 }
 
@@ -62,6 +62,9 @@ bool parse(int argc, char **argv, Options *options)
             command_seen = true;
         } else if (!command_seen && argument == "capabilities") {
             options->operation = Operation::Capabilities;
+            command_seen = true;
+        } else if (!command_seen && argument == "metrics") {
+            options->operation = Operation::MetricsSnapshot;
             command_seen = true;
         } else if (!command_seen && argument == "mode") {
             command_seen = true;

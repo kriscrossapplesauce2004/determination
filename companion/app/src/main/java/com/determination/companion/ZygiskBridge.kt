@@ -21,6 +21,7 @@ object ZygiskBridge {
     const val OP_STATUS = 3
     const val OP_DOCTOR = 4
     const val OP_CAPABILITIES = 5
+    const val OP_METRICS = 6
     const val OP_MODE_GET = 0x100
     const val OP_MODE_SET = 0x101
     const val OP_MODE_RECOVER = 0x102

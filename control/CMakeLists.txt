@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(detcontrol STATIC
     src/adapter.cpp
+    src/observability.cpp
     src/policy.cpp
     src/protocol.cpp
     src/state.cpp

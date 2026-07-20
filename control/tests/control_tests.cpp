@@ -1,4 +1,5 @@
 #include "determination/control/adapter.hpp"
+#include "determination/control/observability.hpp"
 #include "determination/control/policy.hpp"
 #include "determination/control/protocol.hpp"
 #include "determination/control/state.hpp"
@@ -99,6 +100,9 @@ void state_round_trip()
     CHECK(loaded.last_error == original.last_error);
     CHECK(loaded.adapter_output == original.adapter_output);
     CHECK(state_json(loaded).find("\"generation\":42") != std::string::npos);
+    CHECK(key_value("A=one\nB='two words'\nA=last\n", "A") == "last");
+    CHECK(key_value("A=one\nB='two words'\n", "B") == "two words");
+    CHECK(key_value("A=one\n", "missing").empty());
 }
 
 void transition_success_and_rollback()
@@ -273,6 +277,54 @@ void utility_contracts()
     CHECK(trim(read_file(atomic_path)) == "second");
 }
 
+void observability_contracts()
+{
+    const std::string root = temporary_directory();
+    std::string error;
+    CHECK(ensure_directory(root + "/bin", 0755, &error));
+    CHECK(ensure_directory(root + "/run", 0755, &error));
+    write_executable(root + "/bin/desktop-off", "#!/bin/sh\nexit 0\n");
+    write_executable(root + "/bin/det-audio-probe", "#!/bin/sh\nexit 0\n");
+
+    StateRecord state;
+    state.generation = 17;
+    state.boot_id = "fixture";
+    state.desired = Mode::Phone;
+    state.observed = Mode::Phone;
+    state.step = "idle";
+    const ObservabilityOptions options{root, true};
+
+    const std::string status = status_payload(options, state);
+    CHECK(status.find("\"generation\":17") != std::string::npos);
+    CHECK(status.find("\"direct_audio\":{\"phase\":\"none\"") !=
+          std::string::npos);
+    CHECK(status.find("\"probe\":true") != std::string::npos);
+    CHECK(doctor_payload(options, state).find("\"healthy\":true") !=
+          std::string::npos);
+    CHECK(metrics_payload(options, state).find("\"audio_phase\":\"none\"") !=
+          std::string::npos);
+    CHECK(capabilities_payload(options, false).find(
+              "\"android_pcm_bridge\":false") != std::string::npos);
+
+    CHECK(atomic_write_file(
+        root + "/run/audio-owner.state",
+        "schema=1\nphase=restore-failed\nboot_id=fixture\n"
+        "profile=guacamoleb\nprofile_hash=1\nerror=fixture\n",
+        0640, &error));
+    CHECK(doctor_payload(options, state).find("\"healthy\":false") !=
+          std::string::npos);
+    CHECK(metrics_payload(options, state).find(
+              "\"audio_phase\":\"restore-failed\"") != std::string::npos);
+
+    CHECK(atomic_write_file(
+        root + "/run/audio-owner.state",
+        "schema=1\nphase=claimed\nboot_id=fixture\n"
+        "profile=guacamoleb\nprofile_hash=1\nerror=\n",
+        0640, &error));
+    CHECK(doctor_payload(options, state).find(
+              "\"direct_audio_mode_consistent\":false") != std::string::npos);
+}
+
 } // namespace
 
 int main()
@@ -284,6 +336,7 @@ int main()
     transition_success_and_rollback();
     transition_conflicts_and_reconciliation();
     utility_contracts();
+    observability_contracts();
     std::cout << "all control-plane tests passed\n";
     return 0;
 }

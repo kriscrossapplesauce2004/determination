@@ -6,7 +6,7 @@ There is no arbitrary command execution, Android property API, or PCM transport.
 
 ## Ordinary apps
 
-Read-only status and capabilities use explicit ordered broadcasts. Set the
+Read-only status, capabilities, and metrics use explicit ordered broadcasts. Set the
 component as well as the action so Android cannot deliver the query elsewhere:
 
 ```kotlin
@@ -54,6 +54,7 @@ Apps signed with Determination's release certificate may request
 
 - `getStatusJson()`;
 - `getCapabilitiesJson()`;
+- `getMetricsJson()`;
 - `requestMode("phone" | "desktop")`.
 
 The signature service permits silent mode requests because possession of the

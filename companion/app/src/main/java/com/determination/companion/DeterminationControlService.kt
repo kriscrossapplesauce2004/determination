@@ -13,6 +13,9 @@ class DeterminationControlService : Service() {
         override fun getCapabilitiesJson(): String =
             readJson(ZygiskBridge.OP_CAPABILITIES)
 
+        override fun getMetricsJson(): String =
+            readJson(ZygiskBridge.OP_METRICS)
+
         override fun requestMode(target: String?): Int {
             if (!DeterminationApi.validMode(target)) return ZygiskBridge.STATUS_INVALID
             return ZygiskBridge.mode(target!!)?.status ?: ZygiskBridge.STATUS_UNAVAILABLE

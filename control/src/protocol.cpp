@@ -133,6 +133,7 @@ std::string operation_name(Operation operation)
     case Operation::Status: return "status";
     case Operation::Doctor: return "doctor";
     case Operation::Capabilities: return "capabilities";
+    case Operation::MetricsSnapshot: return "metrics";
     case Operation::ModeGet: return "mode-get";
     case Operation::ModeSet: return "mode-set";
     case Operation::ModeRecover: return "mode-recover";

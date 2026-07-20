@@ -20,6 +20,7 @@ class DeterminationStatusReceiver : BroadcastReceiver() {
         val operation = when (intent.action) {
             DeterminationApi.ACTION_STATUS -> ZygiskBridge.OP_STATUS
             DeterminationApi.ACTION_CAPABILITIES -> ZygiskBridge.OP_CAPABILITIES
+            DeterminationApi.ACTION_METRICS -> ZygiskBridge.OP_METRICS
             else -> {
                 resultCode = DeterminationApi.RESULT_INVALID
                 return

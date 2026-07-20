@@ -81,6 +81,23 @@ std::string json_escape(const std::string &value)
     return output.str();
 }
 
+std::string key_value(const std::string &text, const std::string &key)
+{
+    std::istringstream lines(text);
+    std::string line;
+    const std::string prefix = key + '=';
+    std::string result;
+    while (std::getline(lines, line)) {
+        if (line.rfind(prefix, 0) == 0) result = trim(line.substr(prefix.size()));
+    }
+    if (result.size() >= 2U &&
+        ((result.front() == '"' && result.back() == '"') ||
+         (result.front() == '\'' && result.back() == '\''))) {
+        result = result.substr(1, result.size() - 2U);
+    }
+    return result;
+}
+
 std::string boot_id()
 {
     return trim(read_file("/proc/sys/kernel/random/boot_id", 128));

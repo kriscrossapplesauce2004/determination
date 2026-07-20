@@ -18,6 +18,7 @@ enum class Operation : std::uint32_t {
     Status = 3,
     Doctor = 4,
     Capabilities = 5,
+    MetricsSnapshot = 6,
     ModeGet = 0x100,
     ModeSet = 0x101,
     ModeRecover = 0x102,
