@@ -47,6 +47,11 @@ These are not negotiable during the overhaul:
     explicit in-app controls.
 12. Every dangerous operation has a deadline, a journal entry, and a rollback
     or recovery action.
+13. Determination services do not depend on Android framework/media services
+    for their core function. In particular, product audio uses direct hardware
+    access, not AudioFlinger, AAudio, or a companion-app PCM bridge. Android
+    services may be observed or explicitly arbitrated, but they are not the
+    desktop service substrate.
 
 ## 2. Definition of success
 
@@ -65,8 +70,8 @@ The overhaul is successful when all of these are true:
   reduced step by step as native replacements prove themselves;
 - external DP-alt convergence shows guest frames through an Android presenter,
   returns input, survives hotplug, and never stops SurfaceFlinger;
-- guest audio reaches Android with measured latency, working routing and volume
-  controls, bounded buffering, and independent lifetime;
+- guest audio reaches the hardware directly with measured latency, working
+  routing and volume controls, bounded buffering, and independent lifetime;
 - installation, upgrade, rollback, and restore are reproducible from a clean
   checkout;
 - the supported-device statement is generated from passed capability gates,
@@ -82,7 +87,7 @@ Initial quantitative targets:
 | Control RPC, read-only request | p99 under 20 ms |
 | Daemon idle RSS | under 12 MiB |
 | Daemon idle wakeups | under 1 per 10 s |
-| Audio bridge added latency | under 45 ms initially, under 25 ms stretch |
+| Direct audio round-trip latency | under 25 ms initially, under 15 ms stretch |
 | External presenter steady buffers | 3 per output, hard maximum 6 |
 | Presenter queued frames | maximum 2 |
 | Enter/exit qualification | 50 consecutive cycles, zero ambiguous states |
@@ -118,7 +123,7 @@ the global mode once the daemon is authoritative.
 | `detd` | state machine, RPC, policy, journal, recovery, service supervision | root host daemon |
 | `detctl` | stable CLI and machine-readable client | caller's identity; no implicit escalation |
 | `det-guest-agent` | guest health/events and a tiny capability-scoped host command bridge | uid 1000 in guest |
-| `det-audiod` | bounded PCM/control transport and metrics | separate Android/guest endpoints |
+| `det-audiod` | hardware ownership, codec/route policy, metrics and recovery | root host control plus unprivileged guest API |
 | `det-presenterd` | Android display presenter lifecycle and protocol policy | Android app/service boundary |
 | `det-recond` or `det probe` | capability collection with a stable schema | read-only root where required |
 | `det-watchdog` | optional minimal boot recovery if the main daemon cannot start | root, no feature policy |
@@ -491,30 +496,53 @@ Audio is an independent product boundary.
 ### 11.1 Contract
 
 - PipeWire remains the guest graph and app-facing API.
-- Android remains the hardware-routing authority.
-- A dedicated transport carries framed PCM plus timestamps and control state.
-- Format negotiation starts with 48 kHz stereo float32 or s16le and can add
-  channels/formats only after measurement.
-- Ring buffers are fixed-size; overflow drops/recovers instead of allocating.
-- Clock drift is measured and corrected gradually.
-- Silence detection may idle transport without destroying the PipeWire graph.
-- Route changes, calls, Bluetooth, USB audio, alarm focus, and Android policy
-  changes are observable states.
+- Product playback and capture use direct kernel/hardware interfaces exposed to
+  the guest: ALSA PCM/control/compress nodes, tinyalsa-compatible controls, and
+  device-specific codec/routing adapters where ordinary ALSA UCM is
+  insufficient.
+- AudioFlinger, AAudio, audioserver and the companion app are not in the PCM
+  path. The existing AAudio/app bridges are experiments and migration evidence,
+  not the product architecture.
+- Internal desktop mode has explicit audio-owner arbitration, just like display
+  ownership: quiesce Android audio, verify device release, hand the required
+  `/dev/snd` nodes and route controls to PipeWire, then reverse the journal on
+  exit before Android audio resumes.
+- External concurrent mode prefers independent direct outputs such as DP/HDMI,
+  USB audio or a directly managed Bluetooth backend. A phone-codec path which
+  cannot be safely shared is advertised as unavailable or requires an explicit
+  ownership handoff; it does not silently tunnel through Android.
+- A small privileged `det-audiod` owns only hardware arbitration and
+  device-specific route operations. PCM stays in PipeWire whenever the kernel
+  interface permits it.
+- ALSA UCM2 profiles and capability probes describe mixers, codecs, jacks,
+  speakers, microphones, HDMI/DP, USB and Bluetooth routes. Hard-coded mixer
+  incantations remain device-profile quirks until proven as a class.
+- Buffers are fixed-size and latency-bounded; overflow/xrun recovery never
+  grows memory without bound.
+- Hardware clocks, PipeWire quantum and drift are measured directly.
+- Silence detection may idle hardware without destroying the PipeWire graph.
+- Calls, alarms and Android ownership conflicts are explicit policy states.
 
 ### 11.2 Delivery waves
 
-1. reliable speaker playback with a tone and timestamped latency measurement;
-2. normal PipeWire applications through `pipewire-pulse`;
-3. Android volume-key integration and desktop OSD feedback;
-4. route changes between speaker, wired, Bluetooth, HDMI/DP, and USB;
-5. suspend/wake, disconnect, underrun and service-death recovery;
-6. microphone capture with explicit privacy UI and opt-in permission;
-7. policy for calls/alarms/notifications while internal mode freezes framework;
-8. per-app volume and media metadata where Android permits it cleanly.
+1. inventory `/dev/snd`, ALSA cards/PCMs/controls, mixer state, codec services,
+   Audio HAL ownership and kernel driver topology without changing routes;
+2. capture Android's working route state, stop/quiesce Android audio, prove a
+   direct tinyalsa/ALSA tone, and restore Android exactly;
+3. generate the first guacamoleb UCM2/profile and play normal PipeWire apps
+   through `pipewire-pulse` with no app bridge;
+4. move volume-key events through the guest control/input path and show desktop
+   OSD feedback without calling Android media services;
+5. add speaker, wired, DP/HDMI, USB and directly supported Bluetooth routes;
+6. qualify suspend/wake, route disconnect, xruns, daemon death, failed handoff
+   and reverse-order restore;
+7. add microphone capture with a hardware privacy indicator and explicit
+   enablement;
+8. define honest policy for calls/alarms when internal mode owns the codec, and
+   capability reporting for external concurrent routes.
 
 The presenter never depends on audio being enabled. Audio never owns the
-control plane. If Android foreground-execution policy requires visible state,
-that state describes audio only and is not the main UX.
+control plane. No Android foreground service is required for core audio.
 
 ## 12. Portability and compatibility
 
@@ -531,7 +559,8 @@ Recon grows into a schema-versioned capability compiler:
 - input nodes, udev properties, Android AIDs and grab behaviour;
 - backlight and power-supply candidates with confidence/evidence;
 - network and tethering topology;
-- audio policy, routes and service constraints;
+- ALSA topology, Audio HAL ownership, codec/mixer routes, UCM suitability and
+  direct-hardware arbitration constraints;
 - SELinux denials grouped by attempted capability;
 - quirk classes keyed by kernel, GPU blob, composer, display driver and ROM.
 
@@ -576,7 +605,7 @@ Required controls:
 - configuration parse/validation and generated fixtures;
 - fake process adapter timeouts, signals and output caps;
 - presenter quotas, lifecycle and fence ownership;
-- audio ring buffer, wrap, xrun and drift control;
+- ALSA/PipeWire quantum, ring-buffer, xrun, route-journal and drift control;
 - shell syntax and packaging manifest checks;
 - reproducible archives and clean-checkout builds.
 
@@ -589,7 +618,8 @@ Required controls:
 - reboot at every authoritative state;
 - DP unplug during connect, registration, present and callback;
 - presenter/app update while guest producer is connected;
-- audio service death, route change, xruns and clock drift;
+- audio-owner handoff failure, direct-device loss, route change, xruns and
+  hardware clock drift;
 - low disk, memory pressure, Wi-Fi loss, DNS failure and thermal throttling;
 - install, in-place upgrade, downgrade refusal, rollback and boot restore;
 - 8-hour mixed workload soak with evidence snapshots;
@@ -682,7 +712,8 @@ independent.
 
 - freeze the current hardware truth and collect clean phone-mode status;
 - remove unintended forced display-colour writes;
-- preserve the uncommitted audio/presenter experiments as separate work;
+- preserve the uncommitted presenter work; retain the app audio experiment only
+  as comparison evidence while replacing it with direct hardware access;
 - write this plan and identify ownership boundaries;
 - define module/app/guest/kernel manifest identities.
 
@@ -747,12 +778,15 @@ independent.
 
 ### Wave 7 — audio product path
 
-- finish independent transport and PipeWire adapter;
-- measure latency/drift/xruns;
-- wire volume keys and route changes;
-- qualify death/suspend/hotplug behaviour.
+- inventory and gate direct ALSA/tinyalsa access;
+- implement transactional Android-audio quiesce/direct-hardware/restore;
+- generate UCM2/device routing and connect PipeWire directly;
+- measure latency/drift/xruns and wire volume keys without AudioFlinger;
+- qualify death/suspend/hotplug and failed-restore behaviour;
+- remove the app/AAudio bridge from product packaging.
 
-**Gate:** normal apps play reliably and disabling audio affects nothing else.
+**Gate:** normal apps play directly through hardware, Android audio restores
+exactly on exit, and disabling audio affects nothing else.
 
 ### Wave 8 — compositor external output and input
 
@@ -806,15 +840,16 @@ The first batch starts now and is intentionally narrower than the whole plan:
 10. deploy read-only pieces first, then perform device cycles with full phone
     recovery after each risky change.
 
-The presenter and audio changes already in the worktree are preserved. They are
-picked up in their own waves once the state/API spine can observe and control
-their independent lifetimes.
+The presenter changes already in the worktree are preserved. The app audio
+changes remain only long enough to measure against and replace; they are not a
+product dependency. Both workstreams are picked up once the state/API spine can
+observe and control their independent lifetimes.
 
 ## 21. Things this plan refuses to fake
 
 - One device with many config keys is not universal support.
 - A compiling presenter is not external convergence.
-- Running PipeWire processes are not working audio.
+- Running PipeWire processes or an AAudio bridge are not working product audio.
 - A daemon which merely shells out without state ownership is not a control
   plane.
 - A permanent notification is not deep Android integration.
