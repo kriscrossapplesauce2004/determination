@@ -17,6 +17,7 @@ DETCTL="../control/build/android-arm64/detctl"
 DET_GUEST_AGENT="../control/build/guest-arm64/det-guest-agent"
 DET_AUDIO_HOST="../audio/build/android-arm64/det-audio-probe"
 DET_AUDIO_GUEST="../audio/build/guest-arm64/det-audio-probe"
+DET_AUDIO_OWNER="../audio/build/android-arm64/det-audio-owner"
 for binary in "$DETD" "$DETCTL"; do
     [ -f "$binary" ] || {
         echo "build the native control plane first (./control/build.sh android)" >&2
@@ -35,7 +36,7 @@ file "$DET_GUEST_AGENT" | grep -q 'ARM aarch64' || {
     echo "$DET_GUEST_AGENT is not a Linux aarch64 build" >&2
     exit 1
 }
-for binary in "$DET_AUDIO_HOST" "$DET_AUDIO_GUEST"; do
+for binary in "$DET_AUDIO_HOST" "$DET_AUDIO_GUEST" "$DET_AUDIO_OWNER"; do
     [ -f "$binary" ] || {
         echo "build the direct audio probes first (./audio/build.sh all)" >&2
         exit 1
@@ -56,15 +57,17 @@ trap 'rm -rf "$WORK"' EXIT
 
 cp customize.sh post-fs-data.sh service.sh sepolicy.rule "$WORK/"
 det_render_version_template module.prop.in "$WORK/module.prop"
-mkdir -p "$WORK/tools" "$WORK/guest-tools" "$WORK/zygisk" "$WORK/device-profiles"
+mkdir -p "$WORK/tools" "$WORK/guest-tools" "$WORK/zygisk" \
+    "$WORK/device-profiles" "$WORK/audio-profiles"
 cp ../tools/evgrab/evgrab \
-   "$DETD" "$DETCTL" "$DET_AUDIO_HOST" \
+   "$DETD" "$DETCTL" "$DET_AUDIO_HOST" "$DET_AUDIO_OWNER" \
    ../toggle/device-config ../toggle/generate-lxc-config ../toggle/generate-guest-config \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
    ../toggle/run-transition \
    ../toggle/native-plasma ../toggle/native-kms-gate ../toggle/native-restore \
    ../toggle/det-hostagent ../toggle/cycle-stress.sh "$WORK/tools/"
 cp ../device-profiles/*.conf "$WORK/device-profiles/"
+cp ../audio/profiles/*.conf "$WORK/audio-profiles/"
 cp "$DET_GUEST_AGENT" "$WORK/guest-tools/det-guest-agent"
 cp "$DET_AUDIO_GUEST" "$WORK/guest-tools/det-audio-probe"
 cp ../guest/lxc/config "$WORK/tools/lxc-config-base"

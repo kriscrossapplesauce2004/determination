@@ -7,7 +7,7 @@ ui_print "- $(grep_prop name "$MODPATH/module.prop") $(grep_prop version "$MODPA
 DET=/data/determination
 mkdir -p "$DET/bin" "$DET/etc" "$DET/log" "$DET/run" "$DET/lxc" "$DET/guest-tools"
 
-for f in evgrab detd detctl det-audio-probe device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
+for f in evgrab detd detctl det-audio-probe det-audio-owner device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
     [ -f "$MODPATH/tools/$f" ] || abort "! missing $f in zip"
     cp -f "$MODPATH/tools/$f" "$DET/bin/$f"
     chmod 0755 "$DET/bin/$f"
@@ -34,8 +34,21 @@ DEVICE=$(getprop ro.product.device)
 }
 [ -f "$DET/etc/device.conf" ] && ui_print "- Config: $DET/etc/device.conf"
 
+# Audio ownership profiles are stricter than general device discovery: never
+# guess service names or codec topology. Install only the exact hardware profile
+# selected by the exact-match device config, and preserve local qualification.
+AUDIO_PROFILE_ID=$(sed -n 's/^DET_PROFILE_ID=//p' "$DET/etc/device.conf" 2>/dev/null | head -n 1)
+if [ -n "$AUDIO_PROFILE_ID" ] && \
+   [ -f "$MODPATH/audio-profiles/$AUDIO_PROFILE_ID.conf" ] && \
+   [ ! -f "$DET/etc/audio-owner.conf" ]; then
+    cp -f "$MODPATH/audio-profiles/$AUDIO_PROFILE_ID.conf" "$DET/etc/audio-owner.conf"
+    chmod 0640 "$DET/etc/audio-owner.conf"
+    ui_print "- Direct audio ownership profile: $AUDIO_PROFILE_ID (manual gate only)"
+fi
+
 # Keep the payload out of the mounted module dir.
-rm -rf "$MODPATH/tools" "$MODPATH/guest-tools" "$MODPATH/device-profiles"
+rm -rf "$MODPATH/tools" "$MODPATH/guest-tools" "$MODPATH/device-profiles" \
+    "$MODPATH/audio-profiles"
 
 # Running the Determination kernel? Warn, don't block — module install before
 # kernel flash is a legitimate order of operations.

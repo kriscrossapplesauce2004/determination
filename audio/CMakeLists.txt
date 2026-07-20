@@ -13,10 +13,23 @@ target_link_options(det-audio-probe PRIVATE -Wl,--gc-sections)
 
 install(TARGETS det-audio-probe RUNTIME DESTINATION bin)
 
+if(ANDROID OR NOT CMAKE_CROSSCOMPILING)
+    add_executable(det-audio-owner src/det_audio_owner.cpp)
+    target_compile_options(det-audio-owner PRIVATE
+        -Wall -Wextra -Wpedantic -Werror
+        -ffunction-sections -fdata-sections)
+    target_link_options(det-audio-owner PRIVATE -Wl,--gc-sections)
+    install(TARGETS det-audio-owner RUNTIME DESTINATION bin)
+endif()
+
 include(CTest)
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
     add_test(NAME audio-probe-help COMMAND det-audio-probe --help)
     add_test(NAME audio-probe-fixture
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixture-test.sh
+                $<TARGET_FILE:det-audio-probe>)
+    add_test(NAME audio-owner-fixture
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/owner-fixture-test.sh
+                $<TARGET_FILE:det-audio-owner>
                 $<TARGET_FILE:det-audio-probe>)
 endif()
