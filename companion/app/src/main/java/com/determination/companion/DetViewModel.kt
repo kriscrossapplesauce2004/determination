@@ -1,7 +1,6 @@
 package com.determination.companion
 
 import android.app.Application
-import android.content.Intent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -83,7 +82,6 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
     // Settings (persisted; see Prefs)
     var pollSeconds by mutableStateOf(Prefs.pollSeconds); private set
     var stopGuestOnExit by mutableStateOf(Prefs.stopGuestOnExit); private set
-    var audioBridgeAtBoot by mutableStateOf(Prefs.audioBridgeAtBoot); private set
 
     fun updatePollSeconds(v: Int) {
         Prefs.pollSeconds = v
@@ -96,14 +94,6 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
         // Mirror to the device so desktop-off honors it on ANY exit path
         // (session-manager exits never go through this app).
         viewModelScope.launch(Dispatchers.IO) { Root.setStopGuestOnExitFlag(v) }
-    }
-
-    fun updateAudioBridgeAtBoot(v: Boolean) {
-        Prefs.audioBridgeAtBoot = v
-        audioBridgeAtBoot = v
-        val ctx = getApplication<Application>()
-        val svc = Intent(ctx, AudioBridgeService::class.java)
-        if (v) ctx.startForegroundService(svc) else ctx.stopService(svc)
     }
 
     fun stopGuestNow() = act("guest-stop") { Root.stopGuest() }

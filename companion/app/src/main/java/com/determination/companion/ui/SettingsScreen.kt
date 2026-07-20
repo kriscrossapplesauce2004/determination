@@ -85,16 +85,6 @@ fun SettingsScreen(
                     enabled = rootOk,
                     onChange = { vm.updateStopGuestOnExit(it) },
                 )
-                SettingRow(
-                    title = "Guest audio bridge at boot",
-                    blurb = "Keeps a PCM listener + notification alive from boot. Turn off " +
-                        "if you don't use guest audio — the bridge (and its wakelock-ish " +
-                        "socket loop) then only runs after you open this app's toggle again.",
-                    checked = vm.audioBridgeAtBoot,
-                    enabled = true,
-                    onChange = { vm.updateAudioBridgeAtBoot(it) },
-                )
-
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Status poll while app is open", style = MaterialTheme.typography.titleSmall)
                     Text(
@@ -128,8 +118,8 @@ fun SettingsScreen(
 
         Text(
             "The guest itself is the big battery item: stopped, Determination costs " +
-                "roughly nothing beyond the flashed kernel. Everything here only " +
-                "matters while the container or bridge is running.",
+            "roughly nothing beyond the flashed kernel. Direct audio is owned " +
+                "by the guest and hardware control plane, never this app.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),

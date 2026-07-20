@@ -49,7 +49,8 @@
     <string name="tile_guest_ready">Guest ready</string>
     <string name="tile_guest_stopped">Guest stopped</string>
 
-    <string name="audio_bridge_notif">Determination guest audio</string>
+    <string name="external_display_channel">Determination external display</string>
+    <string name="external_display_notif">External display convergence ready</string>
     <string name="shortcut_enter_short">Start Linux</string>
     <string name="shortcut_enter_long">Enter Linux desktop mode</string>
     <string name="shortcut_open_short">Controls</string>

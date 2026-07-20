@@ -4,20 +4,11 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/**
- * Starts the AudioBridgeService at boot so guest playback works without any
- * per-boot user tap. The service is a foreground FGS with a low-importance
- * notification, which is the AOSP-blessed way to hold a network port + audio
- * without app-process death.
- */
+/** Starts the optional external-display presenter; core services live in detd. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED &&
             intent.action != Intent.ACTION_LOCKED_BOOT_COMPLETED) return
-        Prefs.init(context)
-        if (!Prefs.audioBridgeAtBoot) return
-        val svc = Intent(context, AudioBridgeService::class.java)
-            .putExtra(AudioBridgeService.EXTRA_FROM_BOOT, true)
-        context.startForegroundService(svc)
+        context.startForegroundService(Intent(context, ExternalDisplayService::class.java))
     }
 }

@@ -59,6 +59,9 @@ lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,create=dir
 # the bind is stable (unlike /run, which systemd shadows with a tmpfs).
 lxc.mount.entry = /data/determination/run/control mnt/det-control none bind,create=dir 0 0
 
+# Generated config also binds the companion app's device-protected files dir
+# at /run/determination-presenter when the app is installed.
+
 lxc.cgroup.devices.allow = a *:* rwm
 
 # --- Network: veth into Android's connectivity, NAT'd by toggle/guest-start ---

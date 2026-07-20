@@ -19,6 +19,19 @@ val determinationCodename = determinationVersion.getProperty("codename")
 android {
     namespace = "com.determination.companion"
     compileSdk = 35
+    ndkVersion = "27.2.12479018"
+
+    // AGP follows XDG_CONFIG_HOME on this workstation, which would silently
+    // create ~/.config/.android/debug.keystore and make in-place installs fail.
+    // Keep the project's established debug identity stable.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
 
     defaultConfig {
         applicationId = "com.determination.companion"
@@ -27,6 +40,14 @@ android {
         versionCode = determinationVersionCode
         versionName = determinationVersionName
         buildConfigField("String", "RELEASE_CODENAME", "\"$determinationCodename\"")
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++20", "-Wall", "-Wextra", "-Werror")
+            }
+        }
     }
 
     buildTypes {
@@ -47,6 +68,12 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 }
 

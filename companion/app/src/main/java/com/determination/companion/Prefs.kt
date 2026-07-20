@@ -29,7 +29,4 @@ object Prefs {
         get() = sp.getBoolean("stop_guest_on_exit", false)
         set(v) { sp.edit().putBoolean("stop_guest_on_exit", v).apply() }
 
-    var audioBridgeAtBoot: Boolean
-        get() = sp.getBoolean("audio_bridge_at_boot", true)
-        set(v) { sp.edit().putBoolean("audio_bridge_at_boot", v).apply() }
 }
