@@ -18,6 +18,8 @@ Two modes:
 
 Full rationale, topology decision, and risk register: see
 [`docs/design-spec.md`](docs/design-spec.md).
+The post-proof platform overhaul and hardware-gated execution order are in
+[`docs/platform-overhaul.md`](docs/platform-overhaul.md).
 
 Current project release train: **Determination 0.5 "Aqua"** (in development).
 The Deltarune-character naming scheme, release scope, and actual ship gates are
@@ -34,6 +36,7 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
 | `magisk-module/` | the on-device Determination Magisk module: container launch, boot hooks, sepolicy rules |
 | `guest/` | Debian arm64 rootfs builder + LXC config (binder/kgsl/dmabuf `/dev`, `/vendor`, property area bind-mounts, libhybris) |
 | `toggle/` | §4 internal-panel handoff: SF stop + respawn suppression + compositor swap + input grab; plus `det-hostagent` (guest→host control channel) |
+| `control/` | native `detd` state/API owner, `detctl` client, durable-state/protocol core, and host tests |
 | `companion/` | native Android app: enter desktop mode + live status + Quick Settings tile (phone-side control) |
 | `tools/evgrab/` | small C daemon that holds `EVIOCGRAB` on evdev nodes during desktop mode |
 | `usb-install/` | cable-free install: Magisk action zips that flash/restore the kernel from a USB drive on the phone itself |

@@ -1,0 +1,303 @@
+#include "determination/control/protocol.hpp"
+#include "determination/control/state.hpp"
+#include "determination/control/system.hpp"
+
+#include <atomic>
+#include <cerrno>
+#include <csignal>
+#include <cstring>
+#include <fcntl.h>
+#include <iostream>
+#include <sstream>
+#include <sys/file.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+using namespace determination::control;
+
+namespace {
+
+std::atomic<bool> running{true};
+
+void handle_signal(int)
+{
+    running.store(false);
+}
+
+struct Options {
+    std::string root = "/data/determination";
+    std::string socket;
+    bool observe_only = true;
+};
+
+void usage(const char *program)
+{
+    std::cerr << "usage: " << program
+              << " [--root PATH] [--socket PATH] [--foreground] [--observe-only]\n";
+}
+
+bool parse_options(int argc, char **argv, Options *options)
+{
+    for (int index = 1; index < argc; ++index) {
+        const std::string argument = argv[index];
+        if ((argument == "--root" || argument == "--socket") && index + 1 < argc) {
+            const std::string value = argv[++index];
+            if (argument == "--root") options->root = value;
+            else options->socket = value;
+        } else if (argument == "--foreground" || argument == "--observe-only") {
+            options->observe_only = true;
+        } else if (argument == "--help") {
+            usage(argv[0]);
+            return false;
+        } else {
+            usage(argv[0]);
+            return false;
+        }
+    }
+    if (options->root.empty() || options->root.front() != '/') return false;
+    if (options->socket.empty()) options->socket = options->root + "/run/detd.sock";
+    return true;
+}
+
+Mode observed_mode(const std::string &root)
+{
+    return path_exists(root + "/run/desktop-mode") ? Mode::Desktop : Mode::Phone;
+}
+
+std::string memory_value(const std::string &key)
+{
+    std::istringstream lines(read_file("/proc/meminfo", 16U * 1024U));
+    std::string line;
+    while (std::getline(lines, line)) {
+        if (line.rfind(key + ':', 0) == 0) return trim(line.substr(key.size() + 1U));
+    }
+    return {};
+}
+
+std::string process_state_json(const std::string &name)
+{
+    const char state = process_state(name);
+    return state == '-' ? "null" : std::string("\"") + state + '"';
+}
+
+std::string status_payload(const Options &options, const StateRecord &state)
+{
+    const std::string sf = android_property("init.svc.surfaceflinger");
+    const std::string profile = read_file(options.root + "/etc/device.conf");
+    std::ostringstream output;
+    output << "{\"protocol\":\"1.0\""
+           << ",\"observe_only\":" << (options.observe_only ? "true" : "false")
+           << ",\"state\":" << state_json(state)
+           << ",\"live_observed\":\"" << mode_name(observed_mode(options.root)) << '"'
+           << ",\"surfaceflinger\":\"" << json_escape(sf.empty() ? "unknown" : sf) << '"'
+           << ",\"processes\":{\"system_server\":" << process_state_json("system_server")
+           << ",\"phoc\":" << process_state_json("phoc")
+           << ",\"phosh\":" << process_state_json("phosh") << '}'
+           << ",\"memory\":{\"available\":\"" << json_escape(memory_value("MemAvailable"))
+           << "\",\"swap_free\":\"" << json_escape(memory_value("SwapFree")) << "\"}"
+           << ",\"profile_digest\":\"" << std::hex << fnv1a64(profile) << std::dec << "\"}"
+           ;
+    return output.str();
+}
+
+std::string doctor_payload(const Options &options, const StateRecord &state)
+{
+    const bool marker = path_exists(options.root + "/run/desktop-mode");
+    const bool mismatch = marker != (state.observed == Mode::Desktop);
+    const bool guest_tools = path_exists(options.root + "/lxc/bin/lxc-info");
+    const bool emergency = path_exists(options.root + "/bin/desktop-off");
+    std::ostringstream output;
+    output << "{\"healthy\":" << (!mismatch && emergency ? "true" : "false")
+           << ",\"state\":" << state_json(state)
+           << ",\"checks\":{\"state_marker_consistent\":" << (!mismatch ? "true" : "false")
+           << ",\"emergency_phone_restore\":" << (emergency ? "true" : "false")
+           << ",\"guest_tools\":" << (guest_tools ? "true" : "false")
+           << ",\"binderfs\":" << (path_exists("/dev/binderfs") ? "true" : "false")
+           << ",\"pid_namespace\":" << (path_exists("/proc/self/ns/pid") ? "true" : "false")
+           << "},\"memory_pressure\":\""
+           << json_escape(trim(read_file("/proc/pressure/memory", 4096))) << "\"}"
+           ;
+    return output.str();
+}
+
+Packet response_for(const Packet &request, const Options &options,
+                    const StateRecord &state, uid_t peer_uid)
+{
+    Packet response;
+    response.header.operation = request.header.operation;
+    response.header.flags = kFlagResponse;
+    response.header.request_id = request.header.request_id;
+    response.header.generation = state.generation;
+    response.header.status = static_cast<std::int32_t>(Status::Ok);
+    const auto operation = static_cast<Operation>(request.header.operation);
+    switch (operation) {
+    case Operation::Hello:
+        response.payload = "{\"service\":\"detd\",\"protocol_major\":1,"
+                           "\"protocol_minor\":0,\"observe_only\":true}";
+        break;
+    case Operation::Ping:
+        response.payload = "{\"ok\":true}";
+        break;
+    case Operation::Status:
+    case Operation::ModeGet:
+        response.payload = status_payload(options, state);
+        break;
+    case Operation::Doctor:
+        response.payload = doctor_payload(options, state);
+        break;
+    case Operation::Capabilities:
+        response.payload = "{\"operations\":[\"hello\",\"ping\",\"status\","
+                           "\"doctor\",\"capabilities\",\"mode-get\"],"
+                           "\"transitions\":false,\"structured_state\":true,"
+                           "\"authenticated_peer_credentials\":true}";
+        break;
+    case Operation::ModeSet:
+    case Operation::ModeRecover:
+        response.header.status = static_cast<std::int32_t>(
+            peer_uid == 0 ? Status::Rejected : Status::PermissionDenied);
+        response.payload = peer_uid == 0
+            ? "{\"error\":\"detd is observe-only; use the proven transition path\"}"
+            : "{\"error\":\"mutating operation requires root peer\"}";
+        break;
+    default:
+        response.header.status = static_cast<std::int32_t>(Status::InvalidRequest);
+        response.payload = "{\"error\":\"unknown operation\"}";
+        break;
+    }
+    return response;
+}
+
+int create_server(const std::string &path, std::string *error)
+{
+    sockaddr_un address{};
+    address.sun_family = AF_UNIX;
+    if (path.size() >= sizeof(address.sun_path)) {
+        *error = "socket path too long";
+        return -1;
+    }
+    std::memcpy(address.sun_path, path.c_str(), path.size() + 1U);
+    unlink(path.c_str());
+    const int server = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
+    if (server < 0) {
+        *error = std::strerror(errno);
+        return -1;
+    }
+    const mode_t previous = umask(0077);
+    const int bound = bind(server, reinterpret_cast<sockaddr *>(&address), sizeof(address));
+    umask(previous);
+    if (bound != 0 || chmod(path.c_str(), 0660) != 0 || listen(server, 8) != 0) {
+        *error = std::strerror(errno);
+        close(server);
+        unlink(path.c_str());
+        return -1;
+    }
+#ifdef __ANDROID__
+    if (getuid() == 0) chown(path.c_str(), 0, 1000);
+#endif
+    return server;
+}
+
+} // namespace
+
+int main(int argc, char **argv)
+{
+    Options options;
+    if (!parse_options(argc, argv, &options)) return 2;
+
+    std::string error;
+    if (!ensure_directory(options.root + "/run", 0750, &error) ||
+        !ensure_directory(options.root + "/state", 0750, &error)) {
+        std::cerr << "detd: create state directories: " << error << '\n';
+        return 1;
+    }
+
+    const std::string lock_path = options.root + "/run/detd.lock";
+    const int lock = open(lock_path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0640);
+    if (lock < 0 || flock(lock, LOCK_EX | LOCK_NB) != 0) {
+        std::cerr << "detd: another instance owns " << lock_path << '\n';
+        if (lock >= 0) close(lock);
+        return 1;
+    }
+
+    StateStore store(options.root + "/state/control.state");
+    StateRecord state;
+    std::string load_error;
+    if (!store.load(&state, &load_error)) {
+        state.boot_id = boot_id();
+        state.observed = observed_mode(options.root);
+        state.desired = state.observed == Mode::Desktop ? Mode::Desktop : Mode::Phone;
+        state.generation = 1;
+        state.step = "observe";
+    } else if (state.boot_id != boot_id()) {
+        state.boot_id = boot_id();
+        state.generation++;
+        state.desired = Mode::Phone;
+        state.observed = observed_mode(options.root);
+        state.step = "boot-reconcile";
+        state.last_error = "previous boot state reconciled to phone baseline";
+    } else if (state.observed == Mode::Entering || state.observed == Mode::Exiting) {
+        state.generation++;
+        state.observed = Mode::Recovery;
+        state.step = "daemon-restart-reconcile";
+        state.last_error = "daemon restarted during an incomplete transition";
+    } else {
+        state.observed = observed_mode(options.root);
+    }
+    if (!store.save(state, &error)) {
+        std::cerr << "detd: save state: " << error << '\n';
+        close(lock);
+        return 1;
+    }
+
+    const int server = create_server(options.socket, &error);
+    if (server < 0) {
+        std::cerr << "detd: create socket: " << error << '\n';
+        close(lock);
+        return 1;
+    }
+
+    struct sigaction action{};
+    action.sa_handler = handle_signal;
+    sigemptyset(&action.sa_mask);
+    sigaction(SIGTERM, &action, nullptr);
+    sigaction(SIGINT, &action, nullptr);
+    signal(SIGPIPE, SIG_IGN);
+
+    std::cout << "detd: observe-only protocol 1.0 on " << options.socket << '\n';
+    while (running.load()) {
+        const int client = accept4(server, nullptr, nullptr, SOCK_CLOEXEC);
+        if (client < 0) {
+            if (errno == EINTR) continue;
+            std::cerr << "detd: accept: " << std::strerror(errno) << '\n';
+            break;
+        }
+        ucred peer{};
+        socklen_t peer_size = sizeof(peer);
+        if (getsockopt(client, SOL_SOCKET, SO_PEERCRED, &peer, &peer_size) != 0) {
+            close(client);
+            continue;
+        }
+        const ReceiveResult received = receive_packet(client);
+        Packet response;
+        if (!received.ok) {
+            response.header.flags = kFlagResponse;
+            response.header.status = static_cast<std::int32_t>(received.status);
+            response.payload = "{\"error\":\"" + json_escape(received.error) + "\"}";
+        } else {
+            response = response_for(received.packet, options, state, peer.uid);
+        }
+        std::string send_error;
+        if (!send_packet(client, response, &send_error)) {
+            std::cerr << "detd: response: " << send_error << '\n';
+        }
+        close(client);
+    }
+
+    close(server);
+    unlink(options.socket.c_str());
+    close(lock);
+    return 0;
+}
+
