@@ -25,9 +25,11 @@ std::string memory_value(const std::string &key)
     return {};
 }
 
-std::string process_state_json(const std::string &name)
+std::string process_state_json(const std::map<std::string, char> &states,
+                               const std::string &name)
 {
-    const char state = process_state(name);
+    const auto found = states.find(name);
+    const char state = found == states.end() ? '?' : found->second;
     return state == '-' ? "null" : std::string("\"") + state + '"';
 }
 
@@ -64,11 +66,13 @@ std::string uptime_text()
            std::to_string((seconds % 3600U) / 60U) + "m";
 }
 
-std::string guest_state(const std::string &root)
+std::string guest_state(const std::string &root,
+                        const std::map<std::string, char> &states)
 {
     const std::string command = root + "/run/lxc/guest/command";
     if (path_exists(command)) return "running";
-    if (process_state("lxc-start") != '-') return "running";
+    const auto lxc = states.find("lxc-start");
+    if (lxc != states.end() && lxc->second != '-') return "running";
     return "stopped";
 }
 
@@ -110,15 +114,18 @@ std::string status_payload(const ObservabilityOptions &options,
     const std::string direct_audio_phase = audio_phase(options);
     const std::string audio_profile = key_value(
         read_file(options.root + "/etc/audio-owner.conf", 64U * 1024U), "profile");
+    const auto processes = process_states(
+        {"system_server", "phoc", "phosh", "lxc-start"});
     std::ostringstream output;
     output << "{\"protocol\":\"1.0\""
            << ",\"observe_only\":" << (options.observe_only ? "true" : "false")
            << ",\"state\":" << state_json(state)
            << ",\"live_observed\":\"" << mode_name(live) << '"'
            << ",\"surfaceflinger\":\"" << json_escape(sf.empty() ? "unknown" : sf) << '"'
-           << ",\"processes\":{\"system_server\":" << process_state_json("system_server")
-           << ",\"phoc\":" << process_state_json("phoc")
-           << ",\"phosh\":" << process_state_json("phosh") << '}'
+           << ",\"processes\":{\"system_server\":"
+           << process_state_json(processes, "system_server")
+           << ",\"phoc\":" << process_state_json(processes, "phoc")
+           << ",\"phosh\":" << process_state_json(processes, "phosh") << '}'
            << ",\"memory\":{\"available\":\"" << json_escape(memory_value("MemAvailable"))
            << "\",\"swap_free\":\"" << json_escape(memory_value("SwapFree")) << "\"}"
            << ",\"guest_report\":"
@@ -139,7 +146,7 @@ std::string status_payload(const ObservabilityOptions &options,
            << json_escape(trim(read_file("/proc/sys/kernel/osrelease", 256)))
            << "\",\"sf\":\"" << json_escape(sf.empty() ? "unknown" : sf)
            << "\",\"mode\":\"" << mode_name(live)
-           << "\",\"guest\":\"" << guest_state(options.root)
+           << "\",\"guest\":\"" << guest_state(options.root, processes)
            << "\",\"agent\":\""
            << (path_exists(options.root + "/run/hostagent.pid") ? "up" : "down")
            << "\",\"installed\":\""
@@ -192,6 +199,7 @@ std::string doctor_payload(const ObservabilityOptions &options,
 std::string metrics_payload(const ObservabilityOptions &options,
                             const StateRecord &state)
 {
+    const auto processes = process_states({"system_server", "phoc", "phosh"});
     std::ostringstream output;
     output << "{\"schema\":1,\"monotonic_ms\":" << monotonic_milliseconds()
            << ",\"generation\":" << state.generation
@@ -204,9 +212,10 @@ std::string metrics_payload(const ObservabilityOptions &options,
            << "\",\"memory\":\""
            << json_escape(trim(read_file("/proc/pressure/memory", 4096)))
            << "\",\"io\":\"" << json_escape(trim(read_file("/proc/pressure/io", 4096)))
-           << "\"},\"processes\":{\"system_server\":" << process_state_json("system_server")
-           << ",\"phoc\":" << process_state_json("phoc")
-           << ",\"phosh\":" << process_state_json("phosh")
+           << "\"},\"processes\":{\"system_server\":"
+           << process_state_json(processes, "system_server")
+           << ",\"phoc\":" << process_state_json(processes, "phoc")
+           << ",\"phosh\":" << process_state_json(processes, "phosh")
            << "},\"audio_phase\":\"" << json_escape(audio_phase(options))
            << "\",\"presenter_socket_ready\":"
            << (presenter_socket_ready() ? "true" : "false")

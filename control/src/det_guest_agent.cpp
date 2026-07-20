@@ -87,14 +87,18 @@ ReceiveResult request(const Options &options, Operation operation,
     return response;
 }
 
-std::string process_json(const std::string &name)
+std::string process_json(const std::map<std::string, char> &states,
+                         const std::string &name)
 {
-    const char state = process_state(name);
+    const auto found = states.find(name);
+    const char state = found == states.end() ? '?' : found->second;
     return state == '-' ? "null" : std::string("\"") + state + '"';
 }
 
 std::string report_payload()
 {
+    const auto processes = process_states(
+        {"phoc", "phosh", "pipewire", "wireplumber", "seatd"});
     std::ostringstream output;
     output << "{\"schema\":1,\"boot_id\":\"" << json_escape(boot_id()) << '"'
            << ",\"monotonic_ms\":" << monotonic_milliseconds()
@@ -103,11 +107,11 @@ std::string report_payload()
            << (path_exists("/run/user/1000/wayland-0") ? "true" : "false")
            << ",\"session_bus\":"
            << (path_exists("/run/user/1000/bus") ? "true" : "false")
-           << ",\"processes\":{\"phoc\":" << process_json("phoc")
-           << ",\"phosh\":" << process_json("phosh")
-           << ",\"pipewire\":" << process_json("pipewire")
-           << ",\"wireplumber\":" << process_json("wireplumber")
-           << ",\"seatd\":" << process_json("seatd") << '}'
+           << ",\"processes\":{\"phoc\":" << process_json(processes, "phoc")
+           << ",\"phosh\":" << process_json(processes, "phosh")
+           << ",\"pipewire\":" << process_json(processes, "pipewire")
+           << ",\"wireplumber\":" << process_json(processes, "wireplumber")
+           << ",\"seatd\":" << process_json(processes, "seatd") << '}'
            << ",\"memory_pressure\":\""
            << json_escape(trim(read_file("/proc/pressure/memory", 4096))) << "\"}"
            ;

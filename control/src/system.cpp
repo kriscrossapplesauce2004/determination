@@ -115,15 +115,25 @@ std::string android_property(const std::string &name)
 #endif
 }
 
-char process_state(const std::string &name)
+std::map<std::string, char> process_states(const std::vector<std::string> &names)
 {
+    std::map<std::string, char> answers;
+    for (const std::string &name : names) answers[name] = '-';
     DIR *directory = opendir("/proc");
-    if (!directory) return '?';
-    char answer = '-';
+    if (!directory) {
+        for (auto &[name, state] : answers) {
+            (void)name;
+            state = '?';
+        }
+        return answers;
+    }
+    std::size_t remaining = answers.size();
     while (const dirent *entry = readdir(directory)) {
         if (!std::isdigit(static_cast<unsigned char>(entry->d_name[0]))) continue;
         const std::string base = std::string("/proc/") + entry->d_name;
-        if (trim(read_file(base + "/comm", 256)) != name) continue;
+        const std::string name = trim(read_file(base + "/comm", 256));
+        const auto answer = answers.find(name);
+        if (answer == answers.end() || answer->second != '-') continue;
         const std::string status = read_file(base + "/status", 4096);
         const std::size_t position = status.find("State:");
         if (position != std::string::npos) {
@@ -131,12 +141,20 @@ char process_state(const std::string &name)
             const std::size_t state = colon == std::string::npos
                 ? std::string::npos
                 : status.find_first_not_of("\t ", colon + 1U);
-            if (state != std::string::npos) answer = status[state];
+            if (state != std::string::npos) answer->second = status[state];
         }
-        break;
+        if (answer->second == '-') answer->second = '?';
+        if (--remaining == 0U) break;
     }
     closedir(directory);
-    return answer;
+    return answers;
+}
+
+char process_state(const std::string &name)
+{
+    const auto states = process_states({name});
+    const auto found = states.find(name);
+    return found == states.end() ? '?' : found->second;
 }
 
 bool path_exists(const std::string &path)

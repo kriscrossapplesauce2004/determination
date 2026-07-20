@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <map>
+#include <vector>
 
 namespace determination::control {
 
@@ -14,6 +16,7 @@ std::string key_value(const std::string &text, const std::string &key);
 std::string boot_id();
 std::string android_property(const std::string &name);
 char process_state(const std::string &name);
+std::map<std::string, char> process_states(const std::vector<std::string> &names);
 bool path_exists(const std::string &path);
 bool ensure_directory(const std::string &path, unsigned int mode,
                       std::string *error);

@@ -257,6 +257,9 @@ void utility_contracts()
     CHECK(sizeof(PacketHeader) == 48);
     const char own_state = process_state(trim(read_file("/proc/self/comm", 256)));
     CHECK(own_state == 'R' || own_state == 'S' || own_state == 'D');
+    const auto states = process_states(
+        {trim(read_file("/proc/self/comm", 256)), "not-a-real-det-process"});
+    CHECK(states.at("not-a-real-det-process") == '-');
     CHECK(endpoint_peer_allowed(Endpoint::Admin, 0));
     CHECK(endpoint_peer_allowed(Endpoint::Admin, 1000));
     CHECK(!endpoint_peer_allowed(Endpoint::Admin, 2000));
