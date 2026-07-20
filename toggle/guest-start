@@ -170,6 +170,18 @@ lxc-attach -P "$DET" -n guest -- /bin/sh -c \
      for n in 0 1 2; do [ -e /dev/tty\$n ] || mknod -m 620 /dev/tty\$n c 4 \$n; done" \
     2>/dev/null
 
+# Android leaves ping_group_range at the disabled sentinel "1 0" in a new
+# network namespace. The guest's /proc/sys is deliberately read-only, so set
+# this through Android's writable procfs after entering ONLY the guest netns.
+# This permits unprivileged ICMP datagram sockets without making ping setuid or
+# granting CAP_NET_RAW to the whole desktop session.
+GUEST_INIT=$(lxc-info -P "$DET" -n guest -pH 2>/dev/null)
+if [ -n "$GUEST_INIT" ] && command -v nsenter >/dev/null 2>&1; then
+    nsenter -t "$GUEST_INIT" -n -- sh -c \
+        "echo '0 2147483647' > /proc/sys/net/ipv4/ping_group_range" ||
+        echo "WARN: could not enable unprivileged ping in guest netns"
+fi
+
 # Guest -> host control agent: lets phosh (desktop mode) trigger exit-to-phone /
 # reboot / poweroff, none of which the guest can do itself. Single-instance
 # (own pidfile guard); must outlive desktop toggles like net-keeper.
