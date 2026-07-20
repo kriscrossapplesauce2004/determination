@@ -10,6 +10,29 @@ CODENAME=${2:-}
 
 [ "$(id -u)" -eq 0 ] || { echo "FATAL: run as root" >&2; exit 1; }
 
+# SSH inherits the local terminal's TERM. Terra uses Kitty, and without its
+# terminfo entry even basic commands such as clear fail with "unknown terminal
+# type". Install the tiny definition package once; subsequent runs are no-ops.
+if ! infocmp xterm-kitty >/dev/null 2>&1; then
+    apt-get install -y -qq --no-install-recommends kitty-terminfo
+fi
+
+# The MOTD is the welcome. Do not staple Fish's tutorial greeting beneath it.
+install -d -m 0755 /etc/fish/conf.d
+cat > /etc/fish/conf.d/00-determination.fish <<'EOF'
+set -g fish_greeting
+EOF
+chmod 0644 /etc/fish/conf.d/00-determination.fish
+
+# Keep the login visually MOTD -> prompt. Host-key and authentication policy
+# remain in the separate SSH setup drop-in.
+install -d -m 0755 /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/55-determination-motd.conf <<'EOF'
+PrintLastLog no
+EOF
+/usr/sbin/sshd -t
+systemctl reload ssh 2>/dev/null || true
+
 # This is the canonical project hostname; older live rootfs images still carry
 # the pre-rename "decemberos" value.
 printf 'determination\n' > /etc/hostname
