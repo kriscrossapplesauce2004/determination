@@ -13,14 +13,19 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <array>
+#include <string>
+#include <vector>
 #include <thread>
 #include <unistd.h>
 
 #include "zygisk.hpp"
+#include "determination/control/protocol.hpp"
 
 static constexpr const char *FLAG = "/data/determination/run/desktop-mode";
 static constexpr const char *APP_PROCESS = "com.determination.companion";
 static constexpr const char *BRIDGE_NAME = "determination.companion.bridge";
+static constexpr const char *DETD_SOCKET = "/data/determination/run/detd.sock";
 static int (*orig_system_property_set)(const char *, const char *) = nullptr;
 
 static bool write_all(int fd, const void *data, size_t size) {
@@ -33,6 +38,107 @@ static bool write_all(int fd, const void *data, size_t size) {
         size -= static_cast<size_t>(n);
     }
     return true;
+}
+
+static bool read_all(int fd, void *data, size_t size) {
+    auto *p = static_cast<uint8_t *>(data);
+    while (size > 0) {
+        ssize_t n = read(fd, p, size);
+        if (n < 0 && errno == EINTR) continue;
+        if (n <= 0) return false;
+        p += n;
+        size -= static_cast<size_t>(n);
+    }
+    return true;
+}
+
+static void write_protocol_error(
+    int client, const determination::control::PacketHeader &request,
+    determination::control::Status status, const char *message) {
+    using namespace determination::control;
+    PacketHeader response{};
+    response.flags = kFlagResponse;
+    response.operation = request.operation;
+    response.status = static_cast<int32_t>(status);
+    response.request_id = request.request_id;
+    const std::string payload = std::string("{\"error\":\"") + message + "\"}";
+    response.payload_size = static_cast<uint32_t>(payload.size());
+    write_all(client, &response, sizeof(response));
+    write_all(client, payload.data(), payload.size());
+}
+
+static void forward_protocol_request(
+    int client, const determination::control::PacketHeader &request) {
+    using namespace determination::control;
+    if (request.major != kProtocolMajor || request.header_size != sizeof(PacketHeader) ||
+        request.payload_size > kMaximumPayload || (request.flags & kFlagResponse)) {
+        write_protocol_error(client, request, Status::InvalidRequest,
+                             "invalid control packet");
+        return;
+    }
+    std::vector<uint8_t> payload(request.payload_size);
+    if (!payload.empty() && !read_all(client, payload.data(), payload.size())) {
+        write_protocol_error(client, request, Status::InvalidRequest,
+                             "truncated control payload");
+        return;
+    }
+
+    int daemon = socket(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0);
+    if (daemon < 0) {
+        write_protocol_error(client, request, Status::Unavailable,
+                             "detd socket failed");
+        return;
+    }
+    sockaddr_un address{};
+    address.sun_family = AF_UNIX;
+    memcpy(address.sun_path, DETD_SOCKET, strlen(DETD_SOCKET) + 1);
+    if (connect(daemon, reinterpret_cast<sockaddr *>(&address), sizeof(address)) != 0) {
+        close(daemon);
+        write_protocol_error(client, request, Status::Unavailable,
+                             "detd unavailable");
+        return;
+    }
+
+    iovec request_vectors[2] = {
+        {.iov_base = const_cast<PacketHeader *>(&request), .iov_len = sizeof(request)},
+        {.iov_base = payload.data(), .iov_len = payload.size()},
+    };
+    msghdr outgoing{};
+    outgoing.msg_iov = request_vectors;
+    outgoing.msg_iovlen = payload.empty() ? 1 : 2;
+    if (sendmsg(daemon, &outgoing, MSG_NOSIGNAL) !=
+        static_cast<ssize_t>(sizeof(request) + payload.size())) {
+        close(daemon);
+        write_protocol_error(client, request, Status::Unavailable,
+                             "detd request failed");
+        return;
+    }
+
+    std::array<uint8_t, sizeof(PacketHeader) + kMaximumPayload> response{};
+    iovec response_vector{.iov_base = response.data(), .iov_len = response.size()};
+    msghdr incoming{};
+    incoming.msg_iov = &response_vector;
+    incoming.msg_iovlen = 1;
+    const ssize_t received = recvmsg(daemon, &incoming, MSG_CMSG_CLOEXEC);
+    close(daemon);
+    if (received < static_cast<ssize_t>(sizeof(PacketHeader)) ||
+        (incoming.msg_flags & (MSG_TRUNC | MSG_CTRUNC))) {
+        write_protocol_error(client, request, Status::Unavailable,
+                             "detd response failed");
+        return;
+    }
+    PacketHeader response_header{};
+    memcpy(&response_header, response.data(), sizeof(response_header));
+    if (response_header.magic != kProtocolMagic ||
+        response_header.major != kProtocolMajor ||
+        response_header.header_size != sizeof(PacketHeader) ||
+        response_header.payload_size > kMaximumPayload ||
+        static_cast<size_t>(received) != sizeof(PacketHeader) + response_header.payload_size) {
+        write_protocol_error(client, request, Status::ProtocolMismatch,
+                             "invalid detd response");
+        return;
+    }
+    write_all(client, response.data(), static_cast<size_t>(received));
 }
 
 static void launch_fixed_action(const char *command, int client) {
@@ -65,12 +171,27 @@ static void launch_fixed_action(const char *command, int client) {
 // Runs in Magisk's root companion process. Only enumerated commands reach a
 // shell; no arbitrary command strings cross this privilege boundary.
 static void root_companion_handler(int client) {
+    uint32_t prefix = 0;
+    if (!read_all(client, &prefix, sizeof(prefix))) return;
+    if (prefix == determination::control::kProtocolMagic) {
+        determination::control::PacketHeader request{};
+        request.magic = prefix;
+        if (!read_all(client, reinterpret_cast<uint8_t *>(&request) + sizeof(prefix),
+                      sizeof(request) - sizeof(prefix))) {
+            return;
+        }
+        forward_protocol_request(client, request);
+        return;
+    }
+
     char command[32] = {};
+    memcpy(command, &prefix, sizeof(prefix));
     ssize_t n;
-    do n = read(client, command, sizeof(command) - 1);
+    do n = read(client, command + sizeof(prefix),
+                sizeof(command) - sizeof(prefix) - 1);
     while (n < 0 && errno == EINTR);
-    if (n <= 0) return;
-    command[n] = '\0';
+    if (n < 0) return;
+    command[sizeof(prefix) + static_cast<size_t>(n)] = '\0';
     char *newline = strpbrk(command, "\r\n");
     if (newline) *newline = '\0';
     launch_fixed_action(command, client);
@@ -164,20 +285,26 @@ class DeterminationModule : public zygisk::ModuleBase {
                 continue;
             }
 
-            char request[32] = {};
-            ssize_t n = read(app, request, sizeof(request) - 1);
-            if (n > 0) {
-                int root = api_->connectCompanion();
-                if (root >= 0) {
-                    write_all(root, request, static_cast<size_t>(n));
-                    shutdown(root, SHUT_WR);
-                    char response[128];
-                    while ((n = read(root, response, sizeof(response))) > 0)
-                        if (!write_all(app, response, static_cast<size_t>(n))) break;
-                    close(root);
-                } else {
-                    write_all(app, "error no-root-companion\n", 24);
+            int root = api_->connectCompanion();
+            if (root >= 0) {
+                std::array<uint8_t, 4096> request{};
+                size_t total = 0;
+                ssize_t n;
+                while ((n = read(app, request.data(), request.size())) > 0) {
+                    total += static_cast<size_t>(n);
+                    if (total > sizeof(determination::control::PacketHeader) +
+                                    determination::control::kMaximumPayload ||
+                        !write_all(root, request.data(), static_cast<size_t>(n))) {
+                        break;
+                    }
                 }
+                shutdown(root, SHUT_WR);
+                std::array<uint8_t, 4096> response{};
+                while ((n = read(root, response.data(), response.size())) > 0)
+                    if (!write_all(app, response.data(), static_cast<size_t>(n))) break;
+                close(root);
+            } else {
+                write_all(app, "error no-root-companion\n", 24);
             }
             close(app);
         }

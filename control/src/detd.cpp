@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cerrno>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
@@ -13,6 +14,7 @@
 #include <sys/file.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -86,10 +88,74 @@ std::string process_state_json(const std::string &name)
     return state == '-' ? "null" : std::string("\"") + state + '"';
 }
 
+std::string config_value(const std::string &config, const std::string &key)
+{
+    std::istringstream lines(config);
+    std::string line;
+    const std::string prefix = key + '=';
+    std::string result;
+    while (std::getline(lines, line)) {
+        if (line.rfind(prefix, 0) == 0) result = trim(line.substr(prefix.size()));
+    }
+    if (result.size() >= 2 &&
+        ((result.front() == '"' && result.back() == '"') ||
+         (result.front() == '\'' && result.back() == '\''))) {
+        result = result.substr(1, result.size() - 2U);
+    }
+    return result;
+}
+
+std::string human_bytes(std::uint64_t bytes)
+{
+    static constexpr const char *suffixes[] = {"B", "K", "M", "G", "T"};
+    std::size_t suffix = 0;
+    double value = static_cast<double>(bytes);
+    constexpr std::size_t suffix_count = sizeof(suffixes) / sizeof(suffixes[0]);
+    while (value >= 1024.0 && suffix + 1U < suffix_count) {
+        value /= 1024.0;
+        ++suffix;
+    }
+    std::ostringstream output;
+    output.setf(std::ios::fixed);
+    output.precision(suffix >= 3U ? 1 : 0);
+    output << value << suffixes[suffix];
+    return output.str();
+}
+
+std::string data_free()
+{
+    struct statvfs status{};
+    if (statvfs("/data", &status) != 0) return {};
+    return human_bytes(static_cast<std::uint64_t>(status.f_bavail) * status.f_frsize);
+}
+
+std::string uptime_text()
+{
+    const std::string uptime = read_file("/proc/uptime", 128);
+    if (uptime.empty()) return {};
+    const std::uint64_t seconds = std::strtoull(uptime.c_str(), nullptr, 10);
+    return std::to_string(seconds / 3600U) + "h " +
+           std::to_string((seconds % 3600U) / 60U) + "m";
+}
+
+std::string guest_state(const std::string &root)
+{
+    const std::string command = root + "/run/lxc/guest/command";
+    if (path_exists(command)) return "running";
+    if (process_state("lxc-start") != '-') return "running";
+    return "stopped";
+}
+
 std::string status_payload(const Options &options, const StateRecord &state)
 {
     const std::string sf = android_property("init.svc.surfaceflinger");
     const std::string profile = read_file(options.root + "/etc/device.conf");
+    std::string gauge = config_value(profile, "DET_BATTERY_GAUGE");
+    if (gauge.empty()) gauge = "battery";
+    const std::string battery_root = "/sys/class/power_supply/" + gauge;
+    const std::string voltage = trim(read_file(battery_root + "/voltage_now", 64));
+    std::uint64_t millivolts = std::strtoull(voltage.c_str(), nullptr, 10) / 1000U;
+    const Mode live = observed_mode(options.root);
     std::ostringstream output;
     output << "{\"protocol\":\"1.0\""
            << ",\"observe_only\":" << (options.observe_only ? "true" : "false")
@@ -101,7 +167,23 @@ std::string status_payload(const Options &options, const StateRecord &state)
            << ",\"phosh\":" << process_state_json("phosh") << '}'
            << ",\"memory\":{\"available\":\"" << json_escape(memory_value("MemAvailable"))
            << "\",\"swap_free\":\"" << json_escape(memory_value("SwapFree")) << "\"}"
-           << ",\"profile_digest\":\"" << std::hex << fnv1a64(profile) << std::dec << "\"}"
+           << ",\"profile_digest\":\"" << std::hex << fnv1a64(profile) << std::dec << '"'
+           << ",\"compat\":{\"uid\":\"0\",\"kernel\":\""
+           << json_escape(trim(read_file("/proc/sys/kernel/osrelease", 256)))
+           << "\",\"sf\":\"" << json_escape(sf.empty() ? "unknown" : sf)
+           << "\",\"mode\":\"" << mode_name(live)
+           << "\",\"guest\":\"" << guest_state(options.root)
+           << "\",\"agent\":\""
+           << (path_exists(options.root + "/run/hostagent.pid") ? "up" : "down")
+           << "\",\"installed\":\""
+           << (path_exists(options.root + "/bin/desktop-on") ? "yes" : "no")
+           << "\",\"ip\":\"\",\"batt\":\""
+           << json_escape(trim(read_file(battery_root + "/capacity", 64)))
+           << "\",\"battmv\":\"" << millivolts
+           << "\",\"battstat\":\""
+           << json_escape(trim(read_file("/sys/class/power_supply/battery/status", 64)))
+           << "\",\"uptime\":\"" << uptime_text()
+           << "\",\"datafree\":\"" << data_free() << "\"}}"
            ;
     return output.str();
 }
