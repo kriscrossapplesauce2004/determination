@@ -7,21 +7,22 @@ ui_print "- $(grep_prop name "$MODPATH/module.prop") $(grep_prop version "$MODPA
 DET=/data/determination
 mkdir -p "$DET/bin" "$DET/etc" "$DET/log" "$DET/run" "$DET/lxc" "$DET/guest-tools"
 
-for f in evgrab detd detctl device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
+for f in evgrab detd detctl det-audio-probe device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
     [ -f "$MODPATH/tools/$f" ] || abort "! missing $f in zip"
     cp -f "$MODPATH/tools/$f" "$DET/bin/$f"
     chmod 0755 "$DET/bin/$f"
 done
 cp -f "$MODPATH/tools/lxc-config-base" "$DET/lxc/config.base"
-if [ -f "$MODPATH/guest-tools/det-guest-agent" ]; then
-    cp -f "$MODPATH/guest-tools/det-guest-agent" "$DET/guest-tools/det-guest-agent"
-    chmod 0755 "$DET/guest-tools/det-guest-agent"
+for f in det-guest-agent det-audio-probe; do
+  if [ -f "$MODPATH/guest-tools/$f" ]; then
+    cp -f "$MODPATH/guest-tools/$f" "$DET/guest-tools/$f"
+    chmod 0755 "$DET/guest-tools/$f"
     if [ -d "$DET/guest/usr/local/bin" ]; then
-        cp -f "$MODPATH/guest-tools/det-guest-agent" \
-            "$DET/guest/usr/local/bin/det-guest-agent"
-        chmod 0755 "$DET/guest/usr/local/bin/det-guest-agent"
+        cp -f "$MODPATH/guest-tools/$f" "$DET/guest/usr/local/bin/$f"
+        chmod 0755 "$DET/guest/usr/local/bin/$f"
     fi
-fi
+  fi
+done
 
 # Install a known profile only on a matching device. Unknown devices use the
 # runtime discovery defaults and receive no silently-wrong vendor assumptions.
