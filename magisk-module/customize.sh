@@ -7,7 +7,7 @@ ui_print "- $(grep_prop name "$MODPATH/module.prop") $(grep_prop version "$MODPA
 DET=/data/determination
 mkdir -p "$DET/bin" "$DET/etc" "$DET/log" "$DET/run" "$DET/lxc"
 
-for f in evgrab device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
+for f in evgrab detd detctl device-config generate-lxc-config generate-guest-config guest-start desktop-on desktop-off native-plasma native-kms-gate native-restore det-hostagent cycle-stress.sh; do
     [ -f "$MODPATH/tools/$f" ] || abort "! missing $f in zip"
     cp -f "$MODPATH/tools/$f" "$DET/bin/$f"
     chmod 0755 "$DET/bin/$f"

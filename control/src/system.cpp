@@ -110,7 +110,10 @@ char process_state(const std::string &name)
         const std::string status = read_file(base + "/status", 4096);
         const std::size_t position = status.find("State:");
         if (position != std::string::npos) {
-            const std::size_t state = status.find_first_not_of("State:\t ", position);
+            const std::size_t colon = status.find(':', position);
+            const std::size_t state = colon == std::string::npos
+                ? std::string::npos
+                : status.find_first_not_of("\t ", colon + 1U);
             if (state != std::string::npos) answer = status[state];
         }
         break;
@@ -161,4 +164,3 @@ std::uint64_t fnv1a64(const std::string &value)
 }
 
 } // namespace determination::control
-

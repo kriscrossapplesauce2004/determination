@@ -32,6 +32,34 @@ echo 1 > /proc/sys/net/ipv4/ip_forward
 # Fails harmlessly (logged) on older Determination kernels.
 echo 1 > /proc/sys/net/ipv6/conf/all/forwarding || echo "WARN: no v6 forwarding (pre-#3 kernel?)"
 
+# Native control plane, migration wave 1. It is deliberately observe-only:
+# status/doctor/capabilities are live, while the proven transition scripts
+# remain authoritative until journal/recovery hardware tests pass. A daemon
+# failure cannot change display ownership or prevent the emergency desktop-off
+# path from working.
+if [ -x "$DET/bin/detd" ]; then
+    [ "$(stat -c %s "$DET/log/detd.log" 2>/dev/null || echo 0)" -gt 262144 ] &&
+        tail -c 131072 "$DET/log/detd.log" > "$DET/log/detd.log.tmp" &&
+        mv "$DET/log/detd.log.tmp" "$DET/log/detd.log"
+    if [ -S "$DET/run/detd.sock" ] && "$DET/bin/detctl" ping >/dev/null 2>&1; then
+        echo "detd already running"
+    else
+        rm -f "$DET/run/detd.sock" "$DET/run/detd.pid"
+        setsid "$DET/bin/detd" --root "$DET" --observe-only \
+            >>"$DET/log/detd.log" 2>&1 &
+        echo $! > "$DET/run/detd.pid"
+        i=0
+        while [ ! -S "$DET/run/detd.sock" ] && [ $i -lt 20 ]; do
+            i=$((i+1)); sleep 0.1
+        done
+        if "$DET/bin/detctl" ping >/dev/null 2>&1; then
+            echo "detd observe-only control plane ready"
+        else
+            echo "WARN: detd failed its boot ping (legacy controls unaffected)"
+        fi
+    fi
+fi
+
 # Start the (headless, no display acquisition) guest container so desktop-on
 # only has to do the display/input handoff, not a cold boot of Debian.
 if [ -x "$DET/bin/guest-start" ]; then

@@ -12,6 +12,19 @@ det_load_version "$REPO/version.properties"
 [ -f ../tools/evgrab/evgrab ] || { echo "build evgrab for aarch64 first (tools/evgrab, make CC=aarch64-linux-gnu-gcc)" >&2; exit 1; }
 file ../tools/evgrab/evgrab | grep -q aarch64 || { echo "evgrab is not an aarch64 build" >&2; exit 1; }
 
+DETD="../control/build/android-arm64/detd"
+DETCTL="../control/build/android-arm64/detctl"
+for binary in "$DETD" "$DETCTL"; do
+    [ -f "$binary" ] || {
+        echo "build the native control plane first (./control/build.sh android)" >&2
+        exit 1
+    }
+    file "$binary" | grep -q 'ARM aarch64' || {
+        echo "$binary is not an Android aarch64 build" >&2
+        exit 1
+    }
+done
+
 ZYGISK_64="../zygisk/libs/arm64-v8a/libdetermination.so"
 ZYGISK_32="../zygisk/libs/armeabi-v7a/libdetermination.so"
 [ -f "$ZYGISK_64" ] || { echo "build the zygisk module first (cd zygisk && ndk-build)" >&2; exit 1; }
@@ -24,6 +37,7 @@ cp customize.sh post-fs-data.sh service.sh sepolicy.rule "$WORK/"
 det_render_version_template module.prop.in "$WORK/module.prop"
 mkdir -p "$WORK/tools" "$WORK/zygisk" "$WORK/device-profiles"
 cp ../tools/evgrab/evgrab \
+   "$DETD" "$DETCTL" \
    ../toggle/device-config ../toggle/generate-lxc-config ../toggle/generate-guest-config \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
    ../toggle/run-transition \
