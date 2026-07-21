@@ -60,7 +60,8 @@ lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,create=dir
 lxc.mount.entry = /data/determination/run/control mnt/det-control none bind,create=dir 0 0
 
 # Generated config also binds the companion app's device-protected files dir
-# at /run/determination-presenter when the app is installed.
+# at /mnt/determination-presenter when the app is installed. /run is avoided
+# because systemd's guest tmpfs would hide an LXC mount placed beneath it.
 
 lxc.cgroup.devices.allow = a *:* rwm
 

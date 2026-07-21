@@ -88,8 +88,10 @@ done
 # can carry AHardwareBuffers and sync_file fds across the container boundary.
 presenter_source=/data/user_de/0/com.determination.companion/files
 if [ -d "$HOST_ROOT$presenter_source" ]; then
-    echo "lxc.mount.entry = $presenter_source run/determination-presenter none bind,create=dir,optional 0 0" >> "$TMP"
-    echo "$presenter_source -> /run/determination-presenter" >> "$MANIFEST.new"
+    # Do not mount below /run: guest systemd replaces /run with its own tmpfs
+    # after LXC sets up rootfs mounts, silently hiding the presenter socket.
+    echo "lxc.mount.entry = $presenter_source mnt/determination-presenter none bind,create=dir,optional 0 0" >> "$TMP"
+    echo "$presenter_source -> /mnt/determination-presenter" >> "$MANIFEST.new"
 fi
 
 mv -f "$TMP" "$OUT"

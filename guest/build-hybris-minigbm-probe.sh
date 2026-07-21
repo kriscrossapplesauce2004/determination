@@ -69,7 +69,7 @@ case "$MODE" in
             --benchmark "$bench_width" "$bench_height" "$bench_frames"
         ;;
     present)
-        socket=${3:-/run/determination-presenter/presenter.sock}
+        socket=${3:-/mnt/determination-presenter/presenter.sock}
         width=${4:-1920}
         height=${5:-1080}
         hold=${6:-20}

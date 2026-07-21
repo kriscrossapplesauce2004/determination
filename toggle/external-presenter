@@ -5,7 +5,7 @@ set -u
 DET=/data/determination
 LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
 HOST_SOCKET=/data/user_de/0/com.determination.companion/files/presenter.sock
-GUEST_SOCKET=/run/determination-presenter/presenter.sock
+GUEST_SOCKET=/mnt/determination-presenter/presenter.sock
 
 status() {
     [ -S "$HOST_SOCKET" ] && socket=ready || socket=waiting
@@ -52,7 +52,7 @@ case "${1:-status}" in
             export LD_LIBRARY_PATH=/usr/local/lib:/opt/minigbm/lib
             export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
             export ANDROID_ROOT=/system EGL_PLATFORM=null HYBRIS_EGLPLATFORM=null
-            exec /usr/local/bin/hybris-minigbm-probe /dev/dri/renderD128 --present /run/determination-presenter/presenter.sock 1920 1080 20
+            exec /usr/local/bin/hybris-minigbm-probe /dev/dri/renderD128 --present /mnt/determination-presenter/presenter.sock 1920 1080 20
         '
         rm -f "$DET/run/external-presenter.pid"
         trap - EXIT INT TERM
