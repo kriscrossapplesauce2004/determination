@@ -65,7 +65,8 @@ cp ../tools/evgrab/evgrab \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
    ../toggle/run-transition ../toggle/external-presenter \
    ../toggle/native-plasma ../toggle/native-kms-gate ../toggle/native-restore \
-   ../toggle/det-hostagent ../toggle/cycle-stress.sh "$WORK/tools/"
+   ../toggle/det-hostagent ../toggle/det-color-compat \
+   ../toggle/cycle-stress.sh "$WORK/tools/"
 cp ../device-profiles/*.conf "$WORK/device-profiles/"
 cp ../audio/profiles/*.conf "$WORK/audio-profiles/"
 cp "$DET_GUEST_AGENT" "$WORK/guest-tools/det-guest-agent"

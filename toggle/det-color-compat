@@ -1,0 +1,42 @@
+#!/system/bin/sh
+# Qualcomm SM8150's composer HAL accepts SurfaceFlinger's display color matrix
+# but does not apply it to hardware-composed layers. Keep Android's own
+# ColorDisplay controller authoritative; only force client composition while
+# Night Light is active so SurfaceFlinger's RenderEngine applies that matrix.
+set -u
+
+DET=/data/determination
+STATE="$DET/run/color-compat.state"
+INTERVAL=${DET_COLOR_COMPAT_INTERVAL:-1}
+last=
+
+force_client_composition() {
+    service call SurfaceFlinger 1008 i32 "$1" >/dev/null 2>&1
+}
+
+restore_hwc() {
+    force_client_composition 0
+    echo off > "$STATE"
+}
+
+trap 'restore_hwc; exit 0' HUP INT TERM EXIT
+mkdir -p "$DET/run"
+
+while true; do
+    active=$(settings --user current get secure night_display_activated 2>/dev/null)
+    case "$active" in
+        1|true) wanted=1; label=night-light ;;
+        *)      wanted=0; label=off ;;
+    esac
+    if [ "$wanted" != "$last" ]; then
+        if force_client_composition "$wanted"; then
+            echo "$label" > "$STATE"
+            echo "det-color-compat: $label (force-client=$wanted)"
+            last=$wanted
+        else
+            echo "det-color-compat: SurfaceFlinger unavailable; retrying" >&2
+        fi
+    fi
+    sleep "$INTERVAL"
+done
+

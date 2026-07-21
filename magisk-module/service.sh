@@ -60,6 +60,20 @@ if [ -x "$DET/bin/detd" ]; then
     fi
 fi
 
+# The SM8150 composer advertises display color-transform support but silently
+# ignores Night Light's matrix for hardware-composed layers. The compatibility
+# watcher leaves Android's own ColorDisplay settings untouched and asks
+# SurfaceFlinger for client composition only while Night Light is active.
+if [ -x "$DET/bin/det-color-compat" ]; then
+    if [ -f "$DET/run/color-compat.pid" ]; then
+        oldpid=$(cat "$DET/run/color-compat.pid" 2>/dev/null)
+        [ -n "$oldpid" ] && kill "$oldpid" 2>/dev/null
+    fi
+    setsid "$DET/bin/det-color-compat" \
+        >>"$DET/log/color-compat.log" 2>&1 &
+    echo $! > "$DET/run/color-compat.pid"
+fi
+
 # Start the (headless, no display acquisition) guest container so desktop-on
 # only has to do the display/input handoff, not a cold boot of Debian.
 if [ -x "$DET/bin/guest-start" ]; then
