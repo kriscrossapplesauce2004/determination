@@ -40,6 +40,10 @@ different and are recorded in the release manifest.
   guest PipeWire claim gating and zero-holder restore checks.
 - Unified native doctor/metrics snapshots spanning transition, guest, direct
   audio, presenter, pressure, memory and process health.
+- A Mesa-free full Plasma Desktop session on KWin's virtual QPainter backend,
+  plus a versioned double-buffer frame protocol and libhybris gralloc producer
+  for the external presenter. The KWin 6.3.6 export patch builds separately and
+  remains a hardware qualification gate, not a completed DP claim.
 
 ### Changed
 
@@ -54,6 +58,9 @@ different and are recorded in the release manifest.
 
 - Removed the desktop transition's forced Android Night Light colour-
   temperature snapshot/pulse, including the stale forced 4000 K device state.
+- Worked around the SM8150 composer HAL accepting but ignoring Android's Night
+  Light matrix: SurfaceFlinger uses client composition only while Night Light
+  is active, and returns to HWC immediately when it is disabled.
 - Same-display external mode changes now rebuild the presentation instead of
   being ignored because the display ID did not change.
 
@@ -63,7 +70,8 @@ different and are recorded in the release manifest.
   is supported.
 - Internal mode freezes `system_server`; Android is not fully live while the
   guest owns the panel.
-- Concurrent external DP-alt convergence is not implemented yet.
+- The Android DP presenter and static libhybris colour-bar producer are proven;
+  continuous full-Plasma frames are staged but not yet hardware-qualified.
 - Direct internal-codec routes and mixer restoration are not yet qualified on
   hardware; ownership remains explicit/manual and no sound claim is made.
 - The guest hardware/control trust boundary is prototype-grade.
