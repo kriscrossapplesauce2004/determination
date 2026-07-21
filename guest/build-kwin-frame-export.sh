@@ -29,6 +29,8 @@ fi
 cmake -S "$SOURCE" -B "$BUILD" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX=/usr \
+    -Dgbm_LIBRARY=/opt/minigbm/lib/libgbm.so \
+    -Dgbm_INCLUDE_DIR=/opt/minigbm/include \
     -DBUILD_TESTING=OFF \
     -DKWIN_BUILD_KCMS=OFF \
     -DKWIN_BUILD_X11=OFF \
