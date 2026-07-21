@@ -460,6 +460,15 @@ private fun Actions(
                         Text("Test pattern")
                     }
                 }
+                Button(
+                    onClick = { vm.runExternalPlasma() },
+                    enabled = rootOk && installed && !busy && external.socketReady,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(Icons.Rounded.DesktopWindows, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Start full KDE Desktop")
+                }
             }
         }
 

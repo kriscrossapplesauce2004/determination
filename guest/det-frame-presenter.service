@@ -1,0 +1,23 @@
+[Unit]
+Description=Determination KWin frame to Android DP presenter
+Requires=det-plasma-presenter.service
+After=det-plasma-presenter.service
+
+[Service]
+Type=simple
+User=melissa
+Group=melissa
+Environment=LD_LIBRARY_PATH=/usr/local/lib:/opt/minigbm/lib
+Environment=HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
+Environment=ANDROID_ROOT=/system
+Environment=EGL_PLATFORM=null
+Environment=HYBRIS_EGLPLATFORM=null
+ExecStart=/usr/local/bin/det-frame-presenter /tmp/det-kwin-frame /mnt/determination-presenter/presenter.sock
+Restart=on-failure
+RestartSec=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+

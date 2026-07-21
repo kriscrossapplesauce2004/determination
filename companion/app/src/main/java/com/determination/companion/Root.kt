@@ -346,4 +346,6 @@ object Root {
     }
 
     fun externalPresenterSmoke(): Result = run("$BIN/external-presenter smoke", 45)
+
+    fun externalPresenterPlasma(): Result = run("$BIN/external-presenter plasma", 30)
 }

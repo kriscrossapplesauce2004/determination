@@ -16,9 +16,11 @@ status() {
     fi
     producer=$(cat "$DET/run/external-presenter.pid" 2>/dev/null || true)
     [ -n "$producer" ] && kill -0 "$producer" 2>/dev/null || producer=
+    plasma=$($LXC /bin/systemctl is-active det-frame-presenter.service 2>/dev/null || true)
     echo "socket=$socket"
     echo "guest=$guest"
     echo "producer=${producer:-stopped}"
+    echo "plasma=${plasma:-inactive}"
 }
 
 case "${1:-status}" in
@@ -57,12 +59,32 @@ case "${1:-status}" in
         rm -f "$DET/run/external-presenter.pid"
         trap - EXIT INT TERM
         ;;
+    plasma)
+        "$DET/bin/guest-start" >/dev/null 2>&1 || exit 1
+        [ -S "$HOST_SOCKET" ] || {
+            echo "FATAL: start the DP presenter in the app and connect a display" >&2
+            exit 2
+        }
+        $LXC /usr/bin/test -S "$GUEST_SOCKET" || {
+            echo "FATAL: presenter mount is absent; restart the guest once" >&2
+            exit 3
+        }
+        $LXC /usr/bin/test -x /usr/local/bin/det-frame-presenter || {
+            echo "FATAL: det-frame-presenter is not installed" >&2
+            exit 4
+        }
+        $LXC /bin/systemctl start det-plasma-presenter.service \
+            det-frame-presenter.service
+        echo "Full Plasma Desktop streaming to DP"
+        ;;
     stop)
         pid=$(cat "$DET/run/external-presenter.pid" 2>/dev/null || true)
         [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
         rm -f "$DET/run/external-presenter.pid"
+        $LXC /bin/systemctl stop det-frame-presenter.service \
+            det-plasma-presenter.service 2>/dev/null || true
         echo "Producer stopped; stop the Android presenter from the app." >&2
         ;;
     status) status ;;
-    *) echo "usage: external-presenter start|status|smoke|stop" >&2; exit 2 ;;
+    *) echo "usage: external-presenter start|status|smoke|plasma|stop" >&2; exit 2 ;;
 esac

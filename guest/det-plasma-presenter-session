@@ -1,0 +1,32 @@
+#!/bin/sh
+# Full Plasma Desktop on a KWin virtual output. KWin and Qt Quick use their
+# CPU renderers; physical allocation/presentation is owned separately by the
+# libhybris + minigbm presenter producer. Mesa/Zink is never sourced here.
+set -eu
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export HOME=/home/melissa USER=melissa LOGNAME=melissa
+export LANG=C.UTF-8 TMPDIR=/tmp
+export XDG_RUNTIME_DIR=/tmp/det-plasma-presenter-1000
+export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
+export WAYLAND_DISPLAY=wayland-presenter
+export KWIN_COMPOSE=Q
+export QT_QUICK_BACKEND=software
+export LD_PRELOAD=/usr/local/lib/det-pidfd-shim.so
+export DETERMINATION_FRAMEBUFFER=/tmp/det-kwin-frame
+
+WIDTH=${DET_PLASMA_WIDTH:-1920}
+HEIGHT=${DET_PLASMA_HEIGHT:-1080}
+case "$WIDTH" in ''|*[!0-9]*) echo "invalid width: $WIDTH" >&2; exit 2;; esac
+case "$HEIGHT" in ''|*[!0-9]*) echo "invalid height: $HEIGHT" >&2; exit 2;; esac
+
+install -d -m 0700 "$XDG_RUNTIME_DIR"
+rm -f "$XDG_RUNTIME_DIR/wayland-presenter" \
+    "$XDG_RUNTIME_DIR/wayland-presenter.lock"
+
+exec dbus-run-session -- /bin/sh -c '
+    echo "$DBUS_SESSION_BUS_ADDRESS" > "$XDG_RUNTIME_DIR/det-plasma-presenter-bus"
+    exec kwin_wayland --virtual --width "$1" --height "$2" --scale 1 \
+        --socket wayland-presenter --no-lockscreen \
+        /usr/local/bin/det-plasma-desktop-client
+' _ "$WIDTH" "$HEIGHT"

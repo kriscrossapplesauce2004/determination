@@ -1,0 +1,154 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 5f2ab98ae..658bcc794 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -8,6 +8,8 @@ set(CMAKE_CXX_STANDARD 23)
+ set(CMAKE_CXX_STANDARD_REQUIRED ON)
+ 
+-set(PROJECT_DEP_VERSION "6.3.6")
++# Droidian's trixie archive ships KWin 6.3.6 with sibling Plasma development
++# packages split across 6.3.4 and 6.3.5. They retain the Plasma 6.3 ABI.
++set(PROJECT_DEP_VERSION "6.3.4")
+ set(QT_MIN_VERSION "6.7.0")
+ set(KF6_MIN_VERSION "6.10.0")
+ set(KDE_COMPILERSETTINGS_LEVEL "5.82")
+diff --git a/src/backends/virtual/virtual_qpainter_backend.h b/src/backends/virtual/virtual_qpainter_backend.h
+index b0a70920e..34e49ad10 100644
+--- a/src/backends/virtual/virtual_qpainter_backend.h
++++ b/src/backends/virtual/virtual_qpainter_backend.h
+@@ -15,6 +15,8 @@
+ #include <QList>
+ #include <QMap>
+ #include <QObject>
++#include <QSize>
++#include <cstddef>
+ #include <chrono>
+ #include <memory>
+ 
+@@ -35,6 +37,7 @@ public:
+     ~VirtualQPainterLayer() override;
+ 
+     std::optional<OutputLayerBeginFrameInfo> doBeginFrame() override;
++    bool exportFrame();
+     bool doEndFrame(const QRegion &renderedRegion, const QRegion &damagedRegion, OutputFrame *frame) override;
+     QImage *image();
+     DrmDevice *scanoutDevice() const override;
+@@ -45,6 +48,10 @@ private:
+     std::unique_ptr<QPainterSwapchain> m_swapchain;
+     std::shared_ptr<QPainterSwapchainSlot> m_current;
+     std::unique_ptr<CpuRenderTimeQuery> m_renderTime;
++    int m_frameFd = -1;
++    void *m_frameMapping = nullptr;
++    size_t m_frameMappingSize = 0;
++    QSize m_frameSize;
+ };
+ 
+ class VirtualQPainterBackend : public QPainterBackend
+diff --git a/src/backends/virtual/virtual_qpainter_backend.cpp b/src/backends/virtual/virtual_qpainter_backend.cpp
+index 933a36ab7..05ab87521 100644
+--- a/src/backends/virtual/virtual_qpainter_backend.cpp
++++ b/src/backends/virtual/virtual_qpainter_backend.cpp
+@@ -14,7 +14,16 @@
+ #include "virtual_backend.h"
+ #include "virtual_output.h"
+ 
++#include <determination/framebuffer-protocol.h>
+ #include <drm_fourcc.h>
++#include <fcntl.h>
++#include <sys/mman.h>
++#include <sys/stat.h>
++#include <time.h>
++#include <unistd.h>
++
++#include <cstdlib>
++#include <cstring>
+ 
+ namespace KWin
+ {
+@@ -27,6 +36,12 @@ VirtualQPainterLayer::VirtualQPainterLayer(Output *output, VirtualQPainterBackend
+ 
+ VirtualQPainterLayer::~VirtualQPainterLayer()
+ {
++    if (m_frameMapping) {
++        munmap(m_frameMapping, m_frameMappingSize);
++    }
++    if (m_frameFd >= 0) {
++        close(m_frameFd);
++    }
+ }
+ 
+ std::optional<OutputLayerBeginFrameInfo> VirtualQPainterLayer::doBeginFrame()
+@@ -47,11 +62,72 @@ std::optional<OutputLayerBeginFrameInfo> VirtualQPainterLayer::doBeginFrame()
+     };
+ }
+ 
++bool VirtualQPainterLayer::exportFrame()
++{
++    const char *path = std::getenv("DETERMINATION_FRAMEBUFFER");
++    QImage *frameImage = image();
++    if (!path || !*path || !frameImage) {
++        return true;
++    }
++
++    if (!m_frameMapping || m_frameSize != frameImage->size()) {
++        if (m_frameMapping) {
++            munmap(m_frameMapping, m_frameMappingSize);
++            m_frameMapping = nullptr;
++        }
++        if (m_frameFd >= 0) {
++            close(m_frameFd);
++            m_frameFd = -1;
++        }
++        const uint64_t bufferSize = uint64_t(frameImage->bytesPerLine()) * frameImage->height();
++        const uint64_t mappingSize = DET_FRAMEBUFFER_HEADER_SIZE + bufferSize * DET_FRAMEBUFFER_COUNT;
++        if (mappingSize > SIZE_MAX) {
++            return false;
++        }
++        m_frameFd = open(path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
++        if (m_frameFd < 0 || ftruncate(m_frameFd, off_t(mappingSize)) != 0) {
++            return false;
++        }
++        m_frameMappingSize = size_t(mappingSize);
++        m_frameMapping = mmap(nullptr, m_frameMappingSize, PROT_READ | PROT_WRITE,
++                              MAP_SHARED, m_frameFd, 0);
++        if (m_frameMapping == MAP_FAILED) {
++            m_frameMapping = nullptr;
++            return false;
++        }
++        std::memset(m_frameMapping, 0, DET_FRAMEBUFFER_HEADER_SIZE);
++        auto header = static_cast<det_framebuffer_header *>(m_frameMapping);
++        header->magic = DET_FRAMEBUFFER_MAGIC;
++        header->version = DET_FRAMEBUFFER_VERSION;
++        header->header_size = DET_FRAMEBUFFER_HEADER_SIZE;
++        header->format = DET_FRAMEBUFFER_XRGB8888;
++        header->width = uint32_t(frameImage->width());
++        header->height = uint32_t(frameImage->height());
++        header->stride = uint32_t(frameImage->bytesPerLine());
++        header->buffer_count = DET_FRAMEBUFFER_COUNT;
++        header->buffer_size = bufferSize;
++        m_frameSize = frameImage->size();
++    }
++
++    auto header = static_cast<det_framebuffer_header *>(m_frameMapping);
++    const uint64_t sequence = __atomic_load_n(&header->sequence, __ATOMIC_RELAXED) + 1;
++    const uint32_t index = uint32_t(sequence % DET_FRAMEBUFFER_COUNT);
++    auto destination = static_cast<uint8_t *>(m_frameMapping) +
++        DET_FRAMEBUFFER_HEADER_SIZE + index * header->buffer_size;
++    std::memcpy(destination, frameImage->constBits(), size_t(header->buffer_size));
++    timespec timestamp = {};
++    clock_gettime(CLOCK_MONOTONIC, &timestamp);
++    header->monotonic_ns = uint64_t(timestamp.tv_sec) * 1000000000ULL + timestamp.tv_nsec;
++    __atomic_store_n(&header->active_index, index, __ATOMIC_RELAXED);
++    __atomic_store_n(&header->sequence, sequence, __ATOMIC_RELEASE);
++    return true;
++}
++
+ bool VirtualQPainterLayer::doEndFrame(const QRegion &renderedRegion, const QRegion &damagedRegion, OutputFrame *frame)
+ {
+     m_renderTime->end();
+     frame->addRenderTimeQuery(std::move(m_renderTime));
+-    return true;
++    return exportFrame();
+ }
+ 
+ QImage *VirtualQPainterLayer::image()

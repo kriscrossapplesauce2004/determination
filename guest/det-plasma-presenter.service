@@ -1,0 +1,18 @@
+[Unit]
+Description=Determination full Plasma Desktop presenter session
+After=dbus.service
+
+[Service]
+Type=simple
+User=melissa
+Group=melissa
+Environment=DET_PLASMA_WIDTH=1920
+Environment=DET_PLASMA_HEIGHT=1080
+ExecStart=/usr/local/bin/det-plasma-presenter-session
+Restart=on-failure
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

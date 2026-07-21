@@ -1,0 +1,31 @@
+#!/bin/sh
+# Full Plasma Desktop shell inside Determination's existing KWin process.
+# This intentionally does not call startplasma-wayland: that wrapper would
+# spawn a second KWin and take ownership away from the presenter backend.
+set -u
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export QT_QPA_PLATFORM=wayland
+export QT_QPA_PLATFORMTHEME=KDE
+export QT_QUICK_CONTROLS_STYLE=org.kde.desktop
+export QT_QUICK_BACKEND=software
+# This Qt build advertises only wayland-egl, whose libhybris client plugin
+# crosses into bionic and crashes Plasma during startup. Requesting SHM makes
+# the software scene graph stay on the normal wl_shm path instead.
+export QT_WAYLAND_CLIENT_BUFFER_INTEGRATION=shm
+export PLASMA_DEFAULT_SHELL=org.kde.plasma.desktop
+export XDG_CURRENT_DESKTOP=KDE
+export XDG_SESSION_DESKTOP=KDE
+export XDG_MENU_PREFIX=plasma-
+
+kbuildsycoca6 >"$XDG_RUNTIME_DIR/kbuildsycoca-desktop.log" 2>&1 || true
+
+# startplasma normally owns these session services. Keep this deliberately
+# small while KWin's presenter backend is qualified.
+/usr/lib/aarch64-linux-gnu/libexec/kactivitymanagerd \
+    >"$XDG_RUNTIME_DIR/kactivitymanagerd-desktop.log" 2>&1 &
+kglobalacceld >"$XDG_RUNTIME_DIR/kglobalacceld-desktop.log" 2>&1 &
+sleep 1
+
+exec plasmashell --no-respawn \
+    >"$XDG_RUNTIME_DIR/plasmashell-desktop.log" 2>&1

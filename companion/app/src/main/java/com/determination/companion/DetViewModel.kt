@@ -139,6 +139,10 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
         Root.externalPresenterSmoke()
     }
 
+    fun runExternalPlasma() = act("presenter-plasma", refreshAfter = false) {
+        Root.externalPresenterPlasma()
+    }
+
     val logs = listOf("compositor.log", "toggle.log", "hostagent.log", "service.log")
 
     fun refresh() {
