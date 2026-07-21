@@ -406,6 +406,63 @@ private fun Actions(
             }
         }
 
+        val external = vm.externalDisplay
+        SectionLabel("External display")
+        GlassCard {
+            Column(
+                Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.DesktopWindows, null, Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            when (external.phase) {
+                                "ready" -> "DP presenter ready"
+                                "waiting" -> "Waiting for a DP display"
+                                "starting" -> "Starting presenter…"
+                                "error" -> "Presenter error"
+                                else -> "DP presenter off"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        val geometry = if (external.displayConnected) {
+                            "${external.displayName} · ${external.width}×${external.height} · " +
+                                "${"%.1f".format(external.refreshRate)} Hz"
+                        } else "Phone display stays live; connect USB-C DisplayPort"
+                        Text(
+                            geometry,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                if (external.error.isNotBlank()) {
+                    Text(external.error, color = MaterialTheme.colorScheme.error)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(
+                        onClick = {
+                            if (external.enabled) vm.stopExternalPresenter()
+                            else vm.startExternalPresenter()
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(if (external.enabled) "Stop" else "Start presenter")
+                    }
+                    OutlinedButton(
+                        onClick = { vm.runExternalTest() },
+                        enabled = rootOk && installed && !busy && external.socketReady,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Test pattern")
+                    }
+                }
+            }
+        }
+
         SectionLabel("Guest & power")
         FilledTonalButton(
             onClick = { vm.act("guest") { Root.restartGuest() } },

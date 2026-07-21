@@ -46,6 +46,7 @@ compile_commands.json
 *.jar
 .gradle/
 build/
+.cxx/
 local.properties
 
 # Python

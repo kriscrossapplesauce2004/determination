@@ -1,0 +1,68 @@
+#!/system/bin/sh
+# Concurrent external-display control. SurfaceFlinger and the phone panel stay live.
+set -u
+
+DET=/data/determination
+LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
+HOST_SOCKET=/data/user_de/0/com.determination.companion/files/presenter.sock
+GUEST_SOCKET=/run/determination-presenter/presenter.sock
+
+status() {
+    [ -S "$HOST_SOCKET" ] && socket=ready || socket=waiting
+    if $DET/lxc/bin/lxc-info -P "$DET" -n guest 2>/dev/null | grep -q RUNNING; then
+        guest=running
+    else
+        guest=stopped
+    fi
+    producer=$(cat "$DET/run/external-presenter.pid" 2>/dev/null || true)
+    [ -n "$producer" ] && kill -0 "$producer" 2>/dev/null || producer=
+    echo "socket=$socket"
+    echo "guest=$guest"
+    echo "producer=${producer:-stopped}"
+}
+
+case "${1:-status}" in
+    start)
+        echo "Start the presenter from the Determination app." >&2
+        echo "Android correctly blocks shell-starting its non-exported service." >&2
+        exit 2
+        ;;
+    smoke)
+        "$DET/bin/guest-start" >/dev/null 2>&1 || exit 1
+        i=0
+        while [ ! -S "$HOST_SOCKET" ] && [ "$i" -lt 50 ]; do
+            i=$((i + 1)); sleep 0.2
+        done
+        [ -S "$HOST_SOCKET" ] || {
+            echo "FATAL: no DP presentation socket; connect a DP display" >&2
+            exit 2
+        }
+        $LXC /usr/bin/test -S "$GUEST_SOCKET" || {
+            echo "FATAL: presenter mount is absent; restart the guest once" >&2
+            exit 3
+        }
+        $LXC /usr/bin/test -x /usr/local/bin/hybris-minigbm-probe || {
+            echo "FATAL: guest presenter producer is not built" >&2
+            exit 4
+        }
+        echo $$ > "$DET/run/external-presenter.pid"
+        trap 'rm -f "$DET/run/external-presenter.pid"' EXIT INT TERM
+        $LXC /bin/sh -c '
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            export LD_LIBRARY_PATH=/usr/local/lib:/opt/minigbm/lib
+            export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
+            export ANDROID_ROOT=/system EGL_PLATFORM=null HYBRIS_EGLPLATFORM=null
+            exec /usr/local/bin/hybris-minigbm-probe /dev/dri/renderD128 --present /run/determination-presenter/presenter.sock 1920 1080 20
+        '
+        rm -f "$DET/run/external-presenter.pid"
+        trap - EXIT INT TERM
+        ;;
+    stop)
+        pid=$(cat "$DET/run/external-presenter.pid" 2>/dev/null || true)
+        [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
+        rm -f "$DET/run/external-presenter.pid"
+        echo "Producer stopped; stop the Android presenter from the app." >&2
+        ;;
+    status) status ;;
+    *) echo "usage: external-presenter start|status|smoke|stop" >&2; exit 2 ;;
+esac

@@ -32,7 +32,10 @@ object NativePresenter {
  * this class merely gives its gralloc buffers a normal app-owned SurfaceControl
  * on the presentation display, so Android can keep the phone display alive.
  */
-class ExternalDisplayPresenter(private val context: Context) :
+class ExternalDisplayPresenter(
+    private val context: Context,
+    private val onState: (ExternalDisplaySnapshot) -> Unit,
+) :
     DisplayManager.DisplayListener {
 
     companion object {
@@ -59,6 +62,7 @@ class ExternalDisplayPresenter(private val context: Context) :
         if (started) return
         started = true
         displays.registerDisplayListener(this, null)
+        onState(ExternalDisplaySnapshot(phase = "waiting"))
         refresh()
     }
 
@@ -103,14 +107,17 @@ class ExternalDisplayPresenter(private val context: Context) :
                     context,
                     candidate,
                     File(socketDir, SOCKET_NAME).absolutePath,
+                    onState,
                 ).also { it.show() }
                 displaySignature = signature
             } catch (error: Throwable) {
                 presentation = null
                 Log.w(TAG, "display disappeared while attaching: ${error.message}")
+                onState(ExternalDisplaySnapshot(phase = "error", error = error.message ?: "attach failed"))
             }
         } else {
             Log.i(TAG, "no external presentation display")
+            onState(ExternalDisplaySnapshot(phase = "waiting"))
         }
     }
 }
@@ -118,7 +125,8 @@ class ExternalDisplayPresenter(private val context: Context) :
 private class GuestPresentation(
     context: Context,
     display: Display,
-    private val socketPath: String
+    private val socketPath: String,
+    private val onState: (ExternalDisplaySnapshot) -> Unit,
 ) : Presentation(context, display), SurfaceHolder.Callback {
 
     private lateinit var surfaceView: SurfaceView
@@ -145,9 +153,21 @@ private class GuestPresentation(
             "DetExternalDisplay",
             "surface ${width}x$height @ $refreshRate: started=$nativeStarted",
         )
+        onState(
+            ExternalDisplaySnapshot(
+                phase = if (nativeStarted) "ready" else "error",
+                displayName = display.name,
+                width = width,
+                height = height,
+                refreshRate = refreshRate,
+                socketReady = nativeStarted,
+                error = if (nativeStarted) "" else "native presenter failed to start",
+            ),
+        )
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         NativePresenter.nativeStop()
+        onState(ExternalDisplaySnapshot(phase = "waiting"))
     }
 }

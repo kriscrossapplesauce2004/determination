@@ -11,7 +11,7 @@
          presenter. Determination audio is direct ALSA/PipeWire hardware access;
          this app intentionally has no media-playback or network permission. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -112,7 +112,11 @@
             android:name=".ExternalDisplayService"
             android:directBootAware="true"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Owns a SurfaceControl endpoint for guest desktop frames on a user-enabled external display" />
+        </service>
 
         <receiver
             android:name=".BootReceiver"

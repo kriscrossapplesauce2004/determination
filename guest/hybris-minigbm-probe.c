@@ -37,6 +37,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "presenter-client.h"
+
 #ifndef EGL_NATIVE_BUFFER_HYBRIS
 #define EGL_NATIVE_BUFFER_HYBRIS 0x3140
 #endif
@@ -1039,6 +1041,108 @@ out:
     return result;
 }
 
+static int run_presenter(struct det_egl *egl, const char *socket_path,
+                         int width, int height, int hold_seconds,
+                         EGLint usage)
+{
+    EGLClientBuffer buffer = NULL;
+    struct det_render_target target = {0};
+    struct det_presenter_client client;
+    struct det_presenter_packet completion;
+    int *ints = NULL;
+    int *fds = NULL;
+    int num_ints = 0;
+    int num_fds = 0;
+    int stride = 0;
+    int present_fence = -1;
+    int release_fence = -1;
+    int result = -1;
+
+    if (!socket_path || width <= 0 || height <= 0 || hold_seconds < 1 ||
+        width > 8192 || height > 8192) {
+        fprintf(stderr, "HYBRIS-MINIGBM: FAIL invalid presenter arguments\n");
+        return -1;
+    }
+    if (!egl->create_buffer(width, height, usage,
+                            HYBRIS_PIXEL_FORMAT_RGBA_8888, &stride, &buffer) ||
+        !buffer) {
+        fail_egl("presenter gralloc allocation");
+        return -1;
+    }
+    egl->get_buffer_info(buffer, &num_ints, &num_fds);
+    if (num_fds <= 0 || num_fds > 16 || num_ints < 0 || num_ints > 128)
+        goto out;
+    ints = calloc((size_t)num_ints, sizeof(*ints));
+    fds = calloc((size_t)num_fds, sizeof(*fds));
+    if ((!ints && num_ints) || !fds)
+        goto out;
+    egl->serialize_buffer(buffer, ints, fds);
+
+    if (create_render_target(egl, buffer, &target) != 0)
+        goto out;
+    glViewport(0, 0, width, height);
+    glEnable(GL_SCISSOR_TEST);
+    const GLfloat bars[][3] = {
+        {0.92f, 0.04f, 0.08f}, {0.98f, 0.72f, 0.06f},
+        {0.06f, 0.72f, 0.36f}, {0.08f, 0.34f, 0.94f},
+        {0.56f, 0.12f, 0.82f},
+    };
+    for (int i = 0; i < 5; ++i) {
+        const int left = width * i / 5;
+        const int right = width * (i + 1) / 5;
+        glScissor(left, 0, right - left, height);
+        glClearColor(bars[i][0], bars[i][1], bars[i][2], 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+    }
+    glDisable(GL_SCISSOR_TEST);
+    glFinish();
+    if (glGetError() != GL_NO_ERROR)
+        goto out;
+
+    if (det_presenter_connect(&client, socket_path) != 0) {
+        fprintf(stderr, "HYBRIS-MINIGBM: FAIL presenter connect %s: %s\n",
+                socket_path, strerror(errno));
+        goto out;
+    }
+    if (det_presenter_register_buffer(&client, 1, (uint32_t)width,
+                                      (uint32_t)height,
+                                      HYBRIS_PIXEL_FORMAT_RGBA_8888,
+                                      (uint32_t)stride, (uint64_t)usage,
+                                      num_ints, ints, num_fds, fds) != 0 ||
+        det_presenter_present(&client, 1, 1, 0, -1) != 0) {
+        fprintf(stderr, "HYBRIS-MINIGBM: FAIL presenter submit: %s\n",
+                strerror(errno));
+        det_presenter_disconnect(&client);
+        goto out;
+    }
+    struct pollfd ready = {.fd = client.fd, .events = POLLIN};
+    if (poll(&ready, 1, 5000) <= 0 ||
+        det_presenter_receive_completion(&client, &completion,
+                                         &present_fence,
+                                         &release_fence) != 0 ||
+        completion.status != 0 || completion.serial != 1) {
+        fprintf(stderr, "HYBRIS-MINIGBM: FAIL presenter completion\n");
+        det_presenter_disconnect(&client);
+        goto out;
+    }
+    if (present_fence >= 0) close(present_fence);
+    if (release_fence >= 0) close(release_fence);
+    printf("presenter: PASS %dx%d colour bars latched; holding %ds\n",
+           width, height, hold_seconds);
+    fflush(stdout);
+    sleep((unsigned int)hold_seconds);
+    det_presenter_disconnect(&client);
+    result = 0;
+
+out:
+    destroy_render_target(egl, &target);
+    free(fds);
+    free(ints);
+    if (buffer)
+        egl->release_buffer(buffer);
+    return result;
+}
+
 static int import_minigbm(const char *node, int fd, uint32_t stride)
 {
     struct gbm_import_fd_data import_data = {
@@ -1101,9 +1205,14 @@ int main(int argc, char **argv)
 {
     const char *node = argc > 1 ? argv[1] : "/dev/dri/renderD128";
     const int benchmark = argc > 2 && strcmp(argv[2], "--benchmark") == 0;
+    const int presenter = argc > 2 && strcmp(argv[2], "--present") == 0;
     const int benchmark_width = benchmark && argc > 3 ? atoi(argv[3]) : 1080;
     const int benchmark_height = benchmark && argc > 4 ? atoi(argv[4]) : 2340;
     const int benchmark_frames = benchmark && argc > 5 ? atoi(argv[5]) : 240;
+    const char *presenter_socket = presenter && argc > 3 ? argv[3] : NULL;
+    const int presenter_width = presenter && argc > 4 ? atoi(argv[4]) : 1920;
+    const int presenter_height = presenter && argc > 5 ? atoi(argv[5]) : 1080;
+    const int presenter_hold = presenter && argc > 6 ? atoi(argv[6]) : 20;
     struct det_egl egl;
     EGLClientBuffer buffer = NULL;
     EGLClientBuffer remote_buffer = NULL;
@@ -1124,6 +1233,12 @@ int main(int argc, char **argv)
         node = "/dev/dri/card0";
     if (init_egl(&egl) != 0)
         return 1;
+    if (presenter) {
+        result = run_presenter(&egl, presenter_socket, presenter_width,
+                               presenter_height, presenter_hold, usage);
+        finish_egl(&egl);
+        return result == 0 ? 0 : 1;
+    }
     if (!egl.create_buffer(256, 256, usage, HYBRIS_PIXEL_FORMAT_RGBA_8888,
                            &stride, &buffer) || !buffer) {
         fail_egl("Android gralloc allocation");

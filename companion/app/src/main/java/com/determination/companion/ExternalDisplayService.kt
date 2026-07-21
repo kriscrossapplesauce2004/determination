@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
+import android.content.Context
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
@@ -20,6 +21,19 @@ class ExternalDisplayService : Service() {
         private const val TAG = "DetExternalService"
         private const val NOTIFICATION_CHANNEL = "det-external-display"
         private const val NOTIFICATION_ID = 0x0DE8
+        const val ACTION_START = "com.determination.action.START_EXTERNAL_DISPLAY"
+        const val ACTION_STOP = "com.determination.action.STOP_EXTERNAL_DISPLAY"
+
+        fun startIntent(context: Context) =
+            Intent(context, ExternalDisplayService::class.java).setAction(ACTION_START)
+        fun stop(context: Context) {
+            val previous = ExternalDisplayState.read(context)
+            ExternalDisplayState.write(
+                context,
+                previous.copy(enabled = false, phase = "off", socketReady = false),
+            )
+            context.stopService(Intent(context, ExternalDisplayService::class.java))
+        }
     }
 
     private var presenter: ExternalDisplayPresenter? = null
@@ -34,7 +48,7 @@ class ExternalDisplayService : Service() {
                 startForeground(
                     NOTIFICATION_ID,
                     notification(),
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
                 )
             } else {
                 startForeground(NOTIFICATION_ID, notification())
@@ -45,14 +59,38 @@ class ExternalDisplayService : Service() {
             // it after a later display hotplug.
             Log.w(TAG, "foreground start denied: ${error.message}")
         }
-        presenter = ExternalDisplayPresenter(this).also { it.start() }
+        val previous = ExternalDisplayState.read(this)
+        ExternalDisplayState.write(this, previous.copy(enabled = true, phase = "starting", error = ""))
+        presenter = ExternalDisplayPresenter(this) {
+            ExternalDisplayState.write(this, it.copy(enabled = true))
+        }
+            .also { it.start() }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_STOP) {
+            ExternalDisplayState.write(
+                this,
+                ExternalDisplayState.read(this).copy(
+                    enabled = false,
+                    phase = "off",
+                    socketReady = false,
+                ),
+            )
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        return START_STICKY
+    }
 
     override fun onDestroy() {
         presenter?.stop()
         presenter = null
+        val previous = ExternalDisplayState.read(this)
+        ExternalDisplayState.write(
+            this,
+            previous.copy(phase = "off", socketReady = false),
+        )
         super.onDestroy()
     }
 

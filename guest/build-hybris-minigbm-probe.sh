@@ -7,10 +7,16 @@ export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 SRC=${1:-/root/hybris-minigbm-probe.c}
 MODE=${2:-probe}
 OUT=/usr/local/bin/hybris-minigbm-probe
+PRESENTER_CLIENT=${DET_PRESENTER_CLIENT_SRC:-/root/presenter-client.c}
+PRESENTER_HEADERS=${DET_PRESENTER_HEADERS:-/root/determination-graphics}
 
 [ -r "$SRC" ] || {
     echo "FATAL: probe source missing: $SRC" >&2
     echo "Push guest/hybris-minigbm-probe.c into the guest first." >&2
+    exit 2
+}
+[ -r "$PRESENTER_CLIENT" ] && [ -r "$PRESENTER_HEADERS/presenter-client.h" ] || {
+    echo "FATAL: copy graphics/presenter-client.c and headers to the guest" >&2
     exit 2
 }
 [ -f /usr/local/lib/libEGL.so.1 ] || {
@@ -23,9 +29,9 @@ OUT=/usr/local/bin/hybris-minigbm-probe
 }
 
 cc -std=c11 -O2 -Wall -Wextra -Werror \
-    -I/usr/local/include -I/opt/minigbm/include \
+    -I/usr/local/include -I/opt/minigbm/include -I"$PRESENTER_HEADERS" \
     $(pkg-config --cflags libdrm) \
-    "$SRC" -o "$OUT" \
+    "$SRC" "$PRESENTER_CLIENT" -o "$OUT" \
     -L/usr/local/lib -L/opt/minigbm/lib \
     -Wl,-rpath,/usr/local/lib -Wl,-rpath,/opt/minigbm/lib \
     -lEGL -lGLESv2 -lgbm -lhybris-common
@@ -62,8 +68,16 @@ case "$MODE" in
         exec "$OUT" "${DET_DRM_RENDER_NODE:-/dev/dri/renderD128}" \
             --benchmark "$bench_width" "$bench_height" "$bench_frames"
         ;;
+    present)
+        socket=${3:-/run/determination-presenter/presenter.sock}
+        width=${4:-1920}
+        height=${5:-1080}
+        hold=${6:-20}
+        exec "$OUT" "${DET_DRM_RENDER_NODE:-/dev/dri/renderD128}" \
+            --present "$socket" "$width" "$height" "$hold"
+        ;;
     *)
-        echo "FATAL: mode must be probe or benchmark" >&2
+        echo "FATAL: mode must be probe, benchmark or present" >&2
         exit 2
         ;;
 esac

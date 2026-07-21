@@ -5,7 +5,6 @@ import java.io.BufferedWriter
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
-import org.json.JSONObject
 
 /**
  * Thin wrapper around Magisk `su`. Commands run through ONE persistent root
@@ -98,28 +97,14 @@ object Root {
     fun isInstalled(): Boolean = run("[ -x $BIN/desktop-on ] && echo yes", 8).out.contains("yes")
 
     /** One su round-trip that returns parseable key=value status lines. */
-    fun status(): Map<String, String> {
-        controlStatus()?.let { return it }
-        return legacyStatus()
-    }
-
-    /** Structured daemon status through the same-UID Zygisk gate, with no su shell. */
-    private fun controlStatus(): Map<String, String>? {
-        val response = ZygiskBridge.request(ZygiskBridge.OP_STATUS) ?: return null
-        if (!response.ok) return null
-        return try {
-            val root = JSONObject(response.payload)
-            val compat = root.getJSONObject("compat")
-            val result = HashMap<String, String>()
-            compat.keys().forEach { key -> result[key] = compat.optString(key, "") }
-            result["api"] = "detd"
-            result["generation"] = response.generation.toString()
-            result["phase"] = root.getJSONObject("state").optString("observed", "unknown")
-            result
-        } catch (_: Exception) {
-            null
-        }
-    }
+    /*
+     * Do not use the app-process Zygisk bridge here. A newly installed APK can
+     * run before the matching module library is loaded by a reboot, and mixing
+     * protocol/library generations has caused an uncatchable native SIGBUS.
+     * The persistent root shell is slower only on its first call and works
+     * across module upgrades without coupling the launcher to injected code.
+     */
+    fun status(): Map<String, String> = legacyStatus()
 
     private fun legacyStatus(): Map<String, String> {
         val script = """
@@ -159,11 +144,6 @@ object Root {
      * SurfaceFlinger stops and the Android UI disappears a moment later.
      */
     fun enterDesktop(): Result {
-        val response = ZygiskBridge.mode("desktop")
-        if (response?.ok == true) return Result(true, response.payload, "")
-        if (response != null && !response.allowsLegacyFallback()) {
-            return Result(false, "", response.payload.ifBlank { "detd rejected desktop mode" })
-        }
         return run(
             "$BIN/guest-start >/dev/null 2>&1; " +
                 "setsid sh -c 'nohup $BIN/desktop-on >/dev/null 2>&1' >/dev/null 2>&1 &",
@@ -173,17 +153,8 @@ object Root {
 
     /** Return to phone mode (restarts SurfaceFlinger). */
     fun exitDesktop(): Result {
-        val response = ZygiskBridge.mode("phone")
-        if (response?.ok == true) return Result(true, response.payload, "")
-        if (response != null && !response.allowsLegacyFallback()) {
-            return Result(false, "", response.payload.ifBlank { "detd rejected phone mode" })
-        }
         return run("$BIN/desktop-off", 30)
     }
-
-    private fun ZygiskBridge.Response.allowsLegacyFallback(): Boolean =
-        status == ZygiskBridge.STATUS_UNAVAILABLE ||
-            (status == ZygiskBridge.STATUS_REJECTED && payload.contains("observe-only"))
 
     /** Copy an Android share-sheet staging file into Linux, guest running or not. */
     fun importToGuest(sourcePath: String, displayName: String): Result {
@@ -373,4 +344,6 @@ object Root {
         val safe = id.filter { it.isLetterOrDigit() || it == '-' }
         return run("mkdir -p $DET/etc && echo '$safe' > $DET/etc/compositor", 8)
     }
+
+    fun externalPresenterSmoke(): Result = run("$BIN/external-presenter smoke", 45)
 }

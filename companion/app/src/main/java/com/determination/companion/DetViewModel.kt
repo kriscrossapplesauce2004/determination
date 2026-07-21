@@ -117,6 +117,28 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
     var compositor by mutableStateOf("phosh"); private set
     var installingPkg by mutableStateOf<String?>(null); private set
 
+    var externalDisplay by mutableStateOf(ExternalDisplayState.read(app)); private set
+
+    fun refreshExternalDisplay() {
+        externalDisplay = ExternalDisplayState.read(getApplication())
+    }
+
+    fun startExternalPresenter() {
+        val app = getApplication<Application>()
+        app.startForegroundService(ExternalDisplayService.startIntent(app))
+        externalDisplay = externalDisplay.copy(phase = "starting", error = "")
+    }
+
+    fun stopExternalPresenter() {
+        val app = getApplication<Application>()
+        ExternalDisplayService.stop(app)
+        externalDisplay = ExternalDisplaySnapshot(phase = "off")
+    }
+
+    fun runExternalTest() = act("presenter-test", refreshAfter = false) {
+        Root.externalPresenterSmoke()
+    }
+
     val logs = listOf("compositor.log", "toggle.log", "hostagent.log", "service.log")
 
     fun refresh() {
@@ -127,6 +149,7 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
             val s = Root.status()
             rootState = if (s["uid"] == "0") RootState.GRANTED else RootState.DENIED
             status = if (rootState == RootState.GRANTED) s else emptyMap()
+            externalDisplay = ExternalDisplayState.read(getApplication())
             busy = null
         }
     }
@@ -134,7 +157,10 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
     /** Background poll: refresh status without the busy spinner (no UI flicker). */
     fun refreshQuiet() {
         if (rootState != RootState.GRANTED || busy != null) return
-        viewModelScope.launch(Dispatchers.IO) { status = Root.status() }
+        viewModelScope.launch(Dispatchers.IO) {
+            status = Root.status()
+            externalDisplay = ExternalDisplayState.read(getApplication())
+        }
     }
 
     fun refreshInstaller() {

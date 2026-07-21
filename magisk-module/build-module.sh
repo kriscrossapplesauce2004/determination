@@ -63,7 +63,7 @@ cp ../tools/evgrab/evgrab \
    "$DETD" "$DETCTL" "$DET_AUDIO_HOST" "$DET_AUDIO_OWNER" \
    ../toggle/device-config ../toggle/generate-lxc-config ../toggle/generate-guest-config \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
-   ../toggle/run-transition \
+   ../toggle/run-transition ../toggle/external-presenter \
    ../toggle/native-plasma ../toggle/native-kms-gate ../toggle/native-restore \
    ../toggle/det-hostagent ../toggle/cycle-stress.sh "$WORK/tools/"
 cp ../device-profiles/*.conf "$WORK/device-profiles/"
