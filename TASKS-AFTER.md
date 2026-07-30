@@ -28,16 +28,16 @@ publication step.
 
 | Measurement | Before | After |
 |---|---:|---:|
-| Tracked files | 264 | 302 |
+| Tracked files | 264 | 301 |
 | Working checkout plus Git data | 339 MiB | 130 MiB |
 | Packed Git data | 119.10 MiB | about 119 MiB, unchanged by design |
 | Removed working-tree material | 0 | 214 MiB allocated, preserved temporarily outside the checkout |
-| Changed paths | 0 | 186 across the task contract and implementation commits |
-| Diff size | 0 | 3,375 insertions and 94,697 deletions |
+| Changed paths | 0 | 185 across the task contract and implementation commits |
+| Diff size | 0 | 3,354 insertions and 94,697 deletions |
 | Active em dash matches | 446 baseline punctuation matches | 0 em dash matches outside artifacts and history |
 | Host-safe validation entrypoint | none | `./tools/check-host.sh` |
 | Host-safe validation duration | separate checks only | 13 seconds in the final integration run |
-| Markdown files checked | no unified check | 40 |
+| Markdown files checked | no unified check | 41 |
 | Website PNG reduction | not measured | 13,509 bytes in the published tree, with a repeatable optimizer for the remaining images |
 
 The large-file cleanup does not rewrite public Git history. Existing clones keep
@@ -123,7 +123,7 @@ to reduce historical clone size.
 | P03 | Hardware gate | Accepted, running, committed, rolled-back, degraded, and recovery-required states are represented in the companion; UI behavior needs device validation. |
 | P04 | Complete | Unsupported compositor choices were removed from active selection and cannot write active configuration. |
 | P05 | Hardware gate | Presenter foreground-service startup exposes degraded state instead of reporting false readiness; Android runtime behavior needs validation. |
-| P06 | Complete | CI covers the unified host check, release policy, native tests, Python, docs, artifacts, and site checks. |
+| P06 | Partial | Hosted CI was implemented, but GitHub refused to start jobs because the account is billing-locked. The workflow was removed rather than requiring billing; `./tools/check-host.sh` runs the same checks locally. |
 | P07 | Complete | `CONTRIBUTING.md` and `SECURITY.md` define contribution, style, validation, reporting, and artifact expectations. |
 | P08 | Complete | `.editorconfig`, `.gitattributes`, and repository checks define normalization and binary/generated handling. |
 | P09 | Complete | Release-critical libhybris, wlroots, phoc, and HWC inputs use immutable revisions checked against manifests. |
@@ -134,7 +134,7 @@ to reduce historical clone size.
 | P14 | Complete | The supported-device reference separates proven guacamoleb facts from portability work. |
 | P15 | Complete | Device and boot-profile keys, defaults, invariants, Linux-first states, and recovery are documented. |
 | P16 | Complete | Troubleshooting and qualification map failures to safe diagnostics, evidence, recovery, and device-only gates. |
-| P17 | Complete | The standard-library link checker validates relative paths and local anchors locally and in CI. |
+| P17 | Complete | The standard-library link checker validates relative paths and local anchors through the unified host check. |
 | P18 | Complete | Dated progress and reviews moved under `docs/history/` and are labeled non-authoritative. |
 | P19 | Complete | Active navigation contains no stale `north-star.md` reference. |
 | P20 | Complete | Active documentation and product copy were tightened, duplicated claims removed, and em dashes eliminated. |
@@ -149,7 +149,7 @@ to reduce historical clone size.
 | P29 | Complete | Obsolete boot images and historical module ZIPs were removed from active source paths. |
 | P30 | Complete | Exact duplicate evidence was removed or replaced by one canonical historical copy. |
 | P31 | Complete | Oversized raw logs left the checkout and remain represented by provenance and hashes. |
-| P32 | Complete | Ignore rules and CI policy reject unmanifested generated or oversized artifact output. |
+| P32 | Complete | Ignore rules and the unified host policy check reject unmanifested generated or oversized artifact output. |
 | P33 | Complete | Website PNGs were losslessly reduced by 13,509 bytes, a repeatable optimizer was added, and image loading attributes were tightened. |
 | P34 | Complete | Site pages use consistent navigation, landmarks, keyboard-visible links, alt text, and truthful status copy. |
 
@@ -164,7 +164,7 @@ to reduce historical clone size.
 | X05 | Complete | This report records comparable size, duration, file-count, diff, punctuation, and image metrics. |
 | X06 | Complete | Changed shell files are parsed according to their declared shell, with POSIX `sh` and Bash handled separately. |
 | X07 | Complete | Root authority, display ownership, profile input, PID identity, generation, rollback, and emergency fallback were reviewed and tested or marked device-gated. |
-| X08 | Complete | Active files contain zero em dashes outside preserved artifacts and historical evidence, and CI enforces the active-text policy. |
+| X08 | Complete | Active files contain zero em dashes outside preserved artifacts and historical evidence, and the unified host check enforces the active-text policy. |
 | X09 | Complete | This file maps every native, lifecycle, product, integration, and publication task ID. |
 | X10 | Complete | Cleanup removes files from the current tree without rewriting public history. |
 | X11 | Complete | The integrated scope passed final review and is committed intentionally as one implementation change after the frozen task-contract commit. |
@@ -181,10 +181,15 @@ Command:
 Result: passed in 13 seconds.
 
 The entrypoint passed shell and Python syntax, recon fixtures, lifecycle
-fixtures, Markdown links for 40 files, artifact-index consistency, static-site
+fixtures, Markdown links for 41 files, artifact-index consistency, static-site
 checks, release validation, presenter protocol tests, control-plane tests, and
 host compilation of `evgrab`. CMake was unavailable, so the script used its
 direct C and C++ compiler fallback.
+
+GitHub Actions is intentionally absent. GitHub refused to start the hosted job
+because the project account is locked for billing, and the maintainer does not
+intend to enable billing. Local validation remains complete and reproducible
+without a hosted runner.
 
 Expected release warnings remain for clean-build boot, Mesa, minigbm, LXC, HWC
 archive, companion dependency, guest base, local patch, and signing hashes. The

@@ -16,7 +16,8 @@ different and are recorded in the release manifest.
 - A repository-native documentation wiki with task-first guides, architecture,
   reference, operations, qualification, and clearly separated history.
 - Artifact provenance and retention manifests, reproducible package builders,
-  contributor guidance, security reporting guidance, and CI enforcement.
+  contributor guidance, security reporting guidance, and local policy
+  enforcement.
 - One project-wide version/codename source consumed by every installable
   artifact, replacing the unrelated bring-up-era component versions.
 - Internal phone-to-desktop handoff with SurfaceFlinger release, exclusive

@@ -16,11 +16,13 @@ has agreed an interface change.
 Run the available host checks from the repository root:
 
 ```sh
-release/check.sh check
-python3 -m py_compile recon/classify.py
-python3 docs/check-links.py
-sh -n recon/recon.sh release/check.sh release/version.sh
+./tools/check-host.sh
 ```
+
+The repository intentionally does not depend on a hosted CI runner. GitHub has
+locked Actions for the project account because of its billing state, and the
+maintainer does not intend to add billing. Contributors and reviewers therefore
+record the local host-check result in the pull request.
 
 Run component tests when modifying their area. Do not claim device verification
 without a dated hardware record that identifies the commit, build manifest, and

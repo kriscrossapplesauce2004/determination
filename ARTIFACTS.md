@@ -23,6 +23,7 @@ local build produced them.
 1. Remove secrets and unrelated personal data.
 2. Prefer a concise derived report over a raw log.
 3. Add the manifest entry before staging the file.
-4. Run `python3 docs/check-links.py` and the repository policy check in CI.
+4. Run `./tools/check-host.sh`, which includes link and repository-policy
+   checks.
 
 The policy affects new commits only. It does not rewrite existing Git history.

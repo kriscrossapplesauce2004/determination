@@ -57,6 +57,8 @@ Run every host-safe check from the repository root:
 
 This does not connect to a phone, invoke ADB, flash a partition, or run a live
 display handoff. Those operations remain separate hardware qualification steps.
+This command is the authoritative validation path; the repository intentionally
+does not require a paid or billing-enabled hosted CI account.
 
 ## Linux-first profile
 
