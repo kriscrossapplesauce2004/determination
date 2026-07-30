@@ -1,0 +1,25 @@
+# Determination release input manifest
+# Values are immutable identifiers or SHA-256 digests. UNRESOLVED is permitted
+# only during development and is a ship failure.
+schema=1
+project.commit=a55c19a9a91085929b53f9df859a00688842bb30
+device.product=guacamoleb
+device.rom=crDroid-12.11-Android-16
+input.boot.pristine.sha256=UNRESOLVED
+input.kernel.config.sha256=12443cef556f1422775ea0eb0babb4ed26b9fc90260b3088744ac7d6d8a1e257
+toolchain.android.ndk=27.2.12479018
+toolchain.gradle=8.7
+source.libhybris.url=https://github.com/libhybris/libhybris.git
+source.libhybris.revision=7079712a42ea2754adf747e70c6cc75764c8596e
+source.wlroots.url=https://github.com/droidian/wlroots.git
+source.wlroots.revision=e7f6be5105b009a025b033ab696c34b287011156
+source.phoc.url=https://github.com/droidian/phoc.git
+source.phoc.revision=89e1aa6a5a4ca0d6416104e9e4f322e7dd08cfec
+source.mesa.revision=UNRESOLVED
+source.minigbm.revision=UNRESOLVED
+source.lxc.revision=UNRESOLVED
+input.hwc.google_archive.sha256=UNRESOLVED
+input.companion.dependencies.sha256=UNRESOLVED
+input.guest.base.sha256=UNRESOLVED
+input.local.patches.sha256=UNRESOLVED
+signing.companion.certificate.sha256=UNRESOLVED

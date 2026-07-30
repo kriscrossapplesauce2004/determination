@@ -86,7 +86,7 @@ dependencies {
 
     // Compose / Material 3 Expressive. Pinned to 1.4.0-alpha18: the Expressive
     // APIs (MaterialExpressiveTheme, LoadingIndicator, wavy indicators…) are
-    // public only in the alpha channel — 1.4.0 stable made them internal, and
+    // public only in the alpha channel : 1.4.0 stable made them internal, and
     // the 1.5.0 alphas need compileSdk 37 / AGP 9.1 (beyond Gradle 8.7).
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
@@ -97,7 +97,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
 
     // Real backdrop blur (RenderEffect on 12+, scrim fallback below).
-    // 1.6.x is the last line on Compose 1.8/compileSdk 35 — 1.7+ pulls
+    // 1.6.x is the last line on Compose 1.8/compileSdk 35 : 1.7+ pulls
     // androidx deps that demand SDK 36 / AGP 8.9.
     implementation("dev.chrisbanes.haze:haze:1.6.10")
     implementation("dev.chrisbanes.haze:haze-materials:1.6.10")

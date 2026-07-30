@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # CPU-fill smoke v2 (run as root on the device): stop SF, force a REAL
 # display OFF->ON power transition (SDM no-ops a plain ON since it already
-# believes the display is on — a command-mode panel left asleep ACKs frame
+# believes the display is on; a command-mode panel left asleep ACKs frame
 # DMA, fences signal, glass stays black), then run direct_hwc2_fill_test
 # ~25s with the backlight forced on. Restores SF regardless of outcome.
 # Eyeball question: does the panel cycle RED -> GREEN -> BLUE (~3s each)?

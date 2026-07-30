@@ -1,6 +1,6 @@
 #!/bin/sh
 # Determination: launched by det-plasma.service inside a PAM/logind session.
-# Mesa env = /opt/mesa (zink/Turnip GL) — never /usr/local (hybris world).
+# Mesa env = /opt/mesa (zink/Turnip GL) --- never /usr/local (hybris world).
 # Stage selection via /run/det-plasma.env (written by toggle/native-plasma):
 #   DET_PLASMA_CLIENT=foot         kwin smoke (default)
 #   DET_PLASMA_CLIENT=plasmashell  full Plasma Mobile shell
@@ -26,12 +26,12 @@ export QT_QPA_PLATFORM=wayland XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=KDE
 export EGL_LOG_LEVEL=debug
 export QT_LOGGING_RULES="kwin_*.debug=true"
 # Desktop-GL context created but checkSupported failed silently (run 2);
-# force a GLES context — zink's GLES 3.2 passes all of KWin's checks.
+# force a GLES context --- zink's GLES 3.2 passes all of KWin's checks.
 export KWIN_COMPOSE=O2ES
 
 CLIENT="${DET_PLASMA_CLIENT:-foot}"
 # Plasma Mobile needs the full startplasmamobile env (PLASMA_DEFAULT_SHELL
-# etc.) — det-plasma-client wraps that; plain plasmashell insta-crashes with
+# etc.) --- det-plasma-client wraps that; plain plasmashell insta-crashes with
 # an invalid desktop corona.
 [ "$CLIENT" = "plasmashell" ] && CLIENT=/usr/local/bin/det-plasma-client
 
@@ -40,8 +40,8 @@ rm -f "$XDG_RUNTIME_DIR"/wayland-0 "$XDG_RUNTIME_DIR"/wayland-0.lock
 # and tmpfs ate the evidence. Bus address exported for mid-run busctl
 # diagnostics (native-plasma step 6a).
 # plasma stage: client passed positionally (NOT --exit-with-session) so a
-# plasmashell crash — e.g. the Qt 6.8 wp_fractional_scale/get_tearing_control
-# protocol error (2026-07-14, opening Settings) — doesn't take the whole
+# plasmashell crash --- e.g. the Qt 6.8 wp_fractional_scale/get_tearing_control
+# protocol error (2026-07-14, opening Settings) --- doesn't take the whole
 # session down; plasmashell auto-respawns. foot keeps exit-with-session.
 if [ "$CLIENT" = /usr/local/bin/det-plasma-client ]; then
     exec dbus-run-session -- /bin/sh -c '

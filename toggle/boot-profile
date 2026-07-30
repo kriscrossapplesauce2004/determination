@@ -1,0 +1,94 @@
+#!/system/bin/sh
+# Typed, persistent boot profile. Application is delegated to detd when its
+# boot-profile RPC becomes available; this adapter only records safe intent.
+set -eu
+DET=${DET:-/data/determination}
+STATE="$DET/state"
+RUN="$DET/run"
+mkdir -p "$STATE" "$RUN"
+. "$DET/bin/lifecycle-lib"
+
+bp_write() { # desired previous generation attempts deadline result
+    tmp="$STATE/boot-profile.new.$$"
+    umask 077
+    {
+        echo schema=1
+        echo "desired=$1"
+        echo "previous_known_good=$2"
+        echo "generation=$3"
+        echo "attempt_count=$4"
+        echo "deadline_seconds=$5"
+        echo "result=$6"
+        echo "profile_digest=$(sha256sum "$DET/etc/device.conf" 2>/dev/null | awk '{print $1}' || echo none)"
+    } > "$tmp"
+    mv -f "$tmp" "$STATE/boot-profile"
+}
+
+profile=${1:-status}
+case "$profile" in
+    phone|linux-first)
+        lc_lock_acquire
+        trap 'lc_lock_release' EXIT HUP INT TERM
+        previous=$(sed -n 's/^desired=//p' "$STATE/boot-profile" 2>/dev/null | tail -n 1)
+        [ "$previous" = linux-first ] || previous=phone
+        generation=$(lc_generation_next)
+        deadline=${DET_LINUX_FIRST_DEADLINE:-45}
+        bp_write "$profile" "$previous" "$generation" 0 "$deadline" accepted
+        if [ -x "$DET/bin/detctl" ]; then
+            "$DET/bin/detctl" boot-profile "$profile" || {
+                echo "boot profile rejected by detd" >&2
+                exit 1
+            }
+        fi
+        lc_state_write PHONE "$generation" boot-profile accepted
+        echo "boot profile accepted: $profile generation=$generation"
+        ;;
+    status) cat "$STATE/boot-profile" 2>/dev/null || echo 'desired=phone' ;;
+    apply)
+        [ -x "$DET/bin/detctl" ] || { echo "detd unavailable" >&2; exit 69; }
+        desired=$(sed -n 's/^desired=//p' "$STATE/boot-profile" | tail -n 1)
+        previous=$(sed -n 's/^previous_known_good=//p' "$STATE/boot-profile" | tail -n 1)
+        generation=$(sed -n 's/^generation=//p' "$STATE/boot-profile" | tail -n 1)
+        deadline=$(sed -n 's/^deadline_seconds=//p' "$STATE/boot-profile" | tail -n 1)
+        apply_rc=0
+        "$DET/bin/detctl" boot-apply --wait --deadline "$deadline" || apply_rc=$?
+        if [ "$apply_rc" -eq 0 ]; then
+            bp_write "$desired" "$previous" "$generation" 0 "$deadline" committed
+            exit 0
+        fi
+        # The shipping daemon remains observe-only until its transition
+        # journal passes device qualification. Status 3 or 4 means it rejected
+        # or cannot apply the transition, so use the proven fixed lifecycle
+        # adapters. Other protocol failures remain hard failures.
+        [ "$apply_rc" -eq 3 ] || [ "$apply_rc" -eq 4 ] || exit "$apply_rc"
+        case "$desired" in
+            linux-first)
+                "$DET/bin/guest-start"
+                "$DET/bin/desktop-on"
+                ;;
+            phone) "$DET/bin/desktop-off" --emergency ;;
+            *) echo "invalid persisted boot profile: $desired" >&2; exit 2 ;;
+        esac
+        bp_write "$desired" "$previous" "$generation" 0 "$deadline" committed
+        exit 0
+        ;;
+    failed)
+        lc_lock_acquire
+        trap 'lc_lock_release' EXIT HUP INT TERM
+        previous=$(sed -n 's/^previous_known_good=//p' "$STATE/boot-profile" 2>/dev/null | tail -n 1)
+        generation=$(sed -n 's/^generation=//p' "$STATE/boot-profile" 2>/dev/null | tail -n 1)
+        attempts=$(sed -n 's/^attempt_count=//p' "$STATE/boot-profile" 2>/dev/null | tail -n 1)
+        deadline=$(sed -n 's/^deadline_seconds=//p' "$STATE/boot-profile" 2>/dev/null | tail -n 1)
+        case "$attempts" in ''|*[!0-9]*) attempts=0;; esac
+        attempts=$((attempts + 1))
+        # One failed automatic attempt returns to the known-good phone profile.
+        bp_write phone "${previous:-phone}" "${generation:-0}" "$attempts" "${deadline:-45}" recovery-required
+        [ ! -x "$DET/bin/detctl" ] || "$DET/bin/detctl" boot-profile phone >/dev/null 2>&1 || true
+        echo "boot profile recovered to phone after failed attempt=$attempts"
+        ;;
+    recover)
+        "$DET/bin/desktop-off" --emergency
+        exec "$0" phone
+        ;;
+    *) echo "usage: boot-profile phone|linux-first|status|apply|failed|recover" >&2; exit 2 ;;
+esac

@@ -41,7 +41,7 @@ The complete native handle must remain attached to every buffer. A dma-buf fd
 alone is not an Android buffer contract: additional fds may contain compression
 metadata, and private integers encode vendor mapper information.
 
-The reverse direction—minigbm allocation imported into Android—is an optional
+The reverse direction:minigbm allocation imported into Android:is an optional
 fast path. It is enabled only when allocation, vendor EGL import, mapper import,
 presentation and synchronization all pass on the device. Matching a FourCC and
 stride is not enough.

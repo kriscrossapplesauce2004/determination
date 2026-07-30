@@ -8,7 +8,7 @@ import java.util.concurrent.Executors
 
 /**
  * Quick Settings tile. In phone mode a tap enters desktop mode (the fastest
- * path — pull down the shade, tap once). In desktop mode the Android shade is
+ * path : pull down the shade, tap once). In desktop mode the Android shade is
  * gone (SurfaceFlinger is stopped), so the tile is really an enter-button;
  * the toggle-back path lives inside the guest (det-signal exit).
  */

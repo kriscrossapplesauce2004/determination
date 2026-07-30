@@ -94,7 +94,7 @@ void main() {
     float loop_window = smoothstep(0.14, 0.20, t) *
                         (1.0 - smoothstep(0.76, 0.82, t));
 
-    // Act I — Android falls away into a restrained, dimensional signal field.
+    // Act I --- Android falls away into a restrained, dimensional signal field.
     float field_in = smoothstep(0.00, 0.12, t);
     float field_out = 1.0 - smoothstep(0.90, 0.98, t);
     float vignette = 1.0 - smoothstep(0.16, 0.72, length(screen * vec2(0.74, 1.0)));
@@ -117,7 +117,7 @@ void main() {
     color += vec3(0.70, 0.004, 0.018) * axis * line_out;
     color += vec3(1.0, 0.22, 0.25) * tracer * line_out;
 
-    // Act II — every pixel arrives on its own cue, then the whole soul settles
+    // Act II --- every pixel arrives on its own cue, then the whole soul settles
     // as one physical object. The slight overshoot is a damped spring, not a
     // generic scale tween.
     float assemble = saturate((t - 0.08) / 0.20);
@@ -153,7 +153,7 @@ void main() {
     color += red * soul_glow * (0.22 + beat * 0.30);
     color = mix(color, red + vec3(beat * 0.42), soul);
 
-    // Act III — two rings acquire the mark in sequence. Angular ticks rotate
+    // Act III --- two rings acquire the mark in sequence. Angular ticks rotate
     // against the rings, creating depth without adding a competing focal point.
     float ring_window = cycle_envelope * loop_window;
     float ring_a_r = mix(0.035, 0.205, ease_out_quint((cycle - 0.03) / 0.58));
@@ -169,7 +169,7 @@ void main() {
     color += red * (ring_a * 0.46 + ring_b * 0.25) * ring_window;
     color += vec3(1.0, 0.10, 0.14) * ticks * 0.42;
 
-    // Act IV — energy resolves into the original line, then a physical shutter
+    // Act IV --- energy resolves into the original line, then a physical shutter
     // closes to true black so phoc never inherits a branded/stale buffer.
     float resolve = smoothstep(0.80, 0.93, t);
     float flare = exp(-abs(p.y) * 115.0) * exp(-abs(p.x) * 8.0) * resolve;

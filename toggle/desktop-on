@@ -5,23 +5,48 @@
 # Installed to /data/determination/bin/. Run as root.
 
 set -u
-DET=/data/determination
+DET=${DET:-/data/determination}
 LOG=$DET/log/toggle.log
 . "$DET/bin/device-config"
+. "$DET/bin/lifecycle-lib"
 # Rotate the append-forever log once it passes ~256K (keep the newest half).
 [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 262144 ] &&
     tail -c 131072 "$LOG" > "$LOG.tmp" && mv "$LOG.tmp" "$LOG"
 exec >>"$LOG" 2>&1
 echo "--- desktop-on $(date)"
 
-# 0. Preconditions: guest running, not already in desktop mode.
+# 0. Preconditions: claim the transition before any helper can inspect state.
 [ -f "$DET/run/desktop-mode" ] && { echo "already in desktop mode"; exit 0; }
 mkdir -p "$DET/run"
+lc_lock_acquire || exit 1
+generation=$(lc_generation_next)
+lc_state_write ENTERING "$generation" preflight running || { lc_lock_release; exit 1; }
+# The marker is deliberately first. The suppressor must never observe a missing
+# marker after it has been launched.
+touch "$DET/run/desktop-mode"
+rollback() {
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ -f "$DET/run/desktop-mode" ]; then
+        echo "desktop-on failed at state $(sed -n 's/^step=//p' "$DET/run/transition.state" 2>/dev/null); restoring phone"
+        rm -f "$DET/run/desktop-mode"
+        lc_pid_signal suppressor TERM "$generation"
+        lc_pid_signal ss-freezer TERM "$generation"
+        lc_pid_signal evgrab TERM "$generation"
+        start surfaceflinger 2>/dev/null || true
+        lc_state_write RECOVERY "$generation" rollback failed || true
+    fi
+    lc_lock_release
+}
+trap rollback EXIT HUP INT TERM
 
 # 1. Input first: grab evdev nodes so Android stops seeing events *before* its
 #    UI disappears (avoids a window where touches land on invisible UI).
 #    evgrab holds EVIOCGRAB on every touchscreen/key node until killed.
-"$DET/bin/evgrab" -a -p "$DET/run/evgrab.pid" || { echo "evgrab failed"; exit 1; }
+"$DET/bin/evgrab" -a -p "$DET/run/evgrab.legacy.pid" || { echo "evgrab failed"; exit 1; }
+evgrab_pid=$(sed -n 's/^pid=//p' "$DET/run/evgrab.legacy.pid" 2>/dev/null | head -n 1)
+[ -n "$evgrab_pid" ] || evgrab_pid=$(sed -n '1p' "$DET/run/evgrab.legacy.pid" 2>/dev/null)
+case "$evgrab_pid" in ''|*[!0-9]*) echo "evgrab identity unavailable"; exit 1;; esac
+lc_pid_write evgrab "$evgrab_pid" "$generation" || { echo "evgrab identity unavailable"; exit 1; }
 
 # 2. Stop SurfaceFlinger and its dependents-in-fact.
 stop bootanim
@@ -32,8 +57,8 @@ stop surfaceflinger
 #    init `stop` is honoured but doesn't survive those. Bring-up approach: a
 #    suppressor loop re-asserting the stop. The Zygisk hook (milestone 6)
 #    handles this in-process now; the loop is a fallback + backlight keeper.
-#    The same loop doubles as the backlight keeper (see 4b): every SF stop —
-#    including the suppressor's own re-stops — zeroes the panel backlight, so
+#    The same loop doubles as the backlight keeper (see 4b): every SF stop ---
+#    including the suppressor's own re-stops --- zeroes the panel backlight, so
 #    re-asserting both in one loop is not just cheaper, it's more correct.
 BL_LEVEL=$DET_BACKLIGHT_LEVEL
 BL=$DET_BACKLIGHT_PATH
@@ -47,14 +72,13 @@ BL=$DET_BACKLIGHT_PATH
         sleep 1
     done
 ) &
-echo $! > "$DET/run/suppressor.pid"
-touch "$DET/run/desktop-mode"
+lc_pid_write suppressor "$!" "$generation" || exit 1
 
 # 3b. system_server freezer: SIGSTOP any running system_server so its
 #     framework Watchdog can't fire. Without this, the display thread blocks
 #     60s in SurfaceControl.nativeApplyTransaction (BLAST sync to stopped SF),
 #     Watchdog kills system_server, init/zygote respawns it, ~78s crash loop
-#     — which thrashes netd and takes wlan0 down. Freezing keeps ss suspended
+#     --- which thrashes netd and takes wlan0 down. Freezing keeps ss suspended
 #     for the entire session; desktop-off SIGKILLs it (SIGCONT would just
 #     unblock the Watchdog with accumulated block time and it'd self-kill).
 #     Tick fast (200ms) so a fresh ss is caught before it can touch netd.
@@ -71,12 +95,12 @@ touch "$DET/run/desktop-mode"
         sleep 0.2
     done
 ) &
-echo $! > "$DET/run/ss-freezer.pid"
+lc_pid_write ss-freezer "$!" "$generation" || exit 1
 
 # 4. Wait for SF to actually release the composer client + GPU context.
 i=0
 while [ "$(getprop init.svc.surfaceflinger)" != "stopped" ]; do
-    i=$((i+1)); [ $i -gt 20 ] && { echo "SF didn't stop"; "$DET/bin/desktop-off"; exit 1; }
+    i=$((i+1)); [ $i -gt 20 ] && { echo "SF didn't stop"; exit 1; }
     sleep 0.5
 done
 # The composer HAL process itself keeps running (it's a vendor service; SF is
@@ -84,15 +108,15 @@ done
 sleep 1
 
 # 4b. Stopping SF zeroes the panel backlight (found 2026-07-04: guest renders
-# were reaching scanout but the light was off — the panel wasn't "dark", it
+# were reaching scanout but the light was off --- the panel wasn't "dark", it
 # was unlit). Force it back on; desktop-off restores Android's own control.
 # ACTIVE node is backlight/ (max 4095); panel0-backlight is inert (2026-07-05
 # fill-run: frames visible while panel0-backlight=0).
-# BL_LEVEL: 1400/4095 (~34%). Lowered from 2048 for OLED burn-in — the idle
+# BL_LEVEL: 1400/4095 (~34%). Lowered from 2048 for OLED burn-in --- the idle
 # blank is disabled (broken wake path) so the panel stays lit the whole
 # session; lower luminance + the dark UI theme cut the burn-in rate. Still
 # very readable indoors. Bump it if you're outdoors. (BL_LEVEL/BL are set at
-# step 3 — the suppressor loop doubles as the keeper.)
+# step 3 --- the suppressor loop doubles as the keeper.)
 [ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
 
 # 4c. Standalone owner transition. SF is gone and phoc has not started yet, so
@@ -104,29 +128,29 @@ sleep 1
 
 # 5. THE REAL COMPOSITOR (2026-07-06): phoc 0.47 (droidian group/102) on the
 #    droidian wlroots hwcomposer backend, built in-guest against upstream
-#    libhybris — guest/build-wlroots-phoc.sh. First light + 40s soak:
+#    libhybris --- guest/build-wlroots-phoc.sh. First light + 40s soak:
 #    artifacts/guest-phoc-foot-v2-20260706.txt.
 #
 #    Hard-won constraints encoded below:
 #      - phoc must NOT be started with -E: glib's child watch is broken on
-#        this pidfd-less 4.14 kernel (waitid(P_PIDFD) EINVAL) — phoc
+#        this pidfd-less 4.14 kernel (waitid(P_PIDFD) EINVAL) --- phoc
 #        mis-reads the session child as dead and shuts down. Compositor and
 #        clients are launched separately.
 #      - stdbuf -oL or compositor.log stays empty (block-buffered stdout).
 #      - stale wayland-0 socket+lock must be removed pre-launch or a
 #        relaunched phoc silently binds wayland-1 and clients miss it.
 #      - backlight keeper: an SF stop zeroes the backlight; the step-3
-#        suppressor loop re-asserts BL_LEVEL every 1s (see 4b — ~34% for
+#        suppressor loop re-asserts BL_LEVEL every 1s (see 4b --- ~34% for
 #        burn-in). ACTIVE node is backlight/ (max 4095); panel0-backlight
 #        is inert (2026-07-05). phoc's wlroots also sets composer-client
-#        brightness 1.0 after power-on (the SDM DSPP-dim fix, b182d86) —
+#        brightness 1.0 after power-on (the SDM DSPP-dim fix, b182d86) ---
 #        the keeper handles only the sysfs backlight.
 #      - supervisor relaunches phoc only on DEATH, with fast-fail backoff;
 #        desktop-off clears desktop-mode first, so intentional teardown is
 #        not treated as a crash.
 #    Input (§4, 2026-07-06): phoc now runs backends hwcomposer,libinput.
 #    The libinput backend needs (a) seatd (wlr_session via libseat), and
-#    (b) /run/udev/data entries so libinput accepts devices — udevd cannot
+#    (b) /run/udev/data entries so libinput accepts devices --- udevd cannot
 #    run in the container (ro /sys), so det-input-udevdb (guest/
 #    setup-input.sh) hand-writes them per boot. Our wlroots patch takes
 #    EVIOCGRAB on every node libinput opens (retrying while step 1's
@@ -142,12 +166,12 @@ CLOG="$DET/log/compositor.log"
         t0=$(date +%s)
         # Root-only prep: the udev DB and seatd need root (write /run/udev,
         # start a system unit), and melissa's XDG_RUNTIME_DIR must be created
-        # for her before phoc (which now runs UNPRIVILEGED — see below) starts.
+        # for her before phoc (which now runs UNPRIVILEGED --- see below) starts.
         # Idempotent; re-runs harmlessly each relaunch.
         "$DET/lxc/bin/lxc-attach" -P "$DET" -n guest -- /bin/sh -c '
             export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
             install -d -o melissa -g melissa -m 700 /run/user/1000
-            # phoc runs as melissa now, so its config must be world-readable —
+            # phoc runs as melissa now, so its config must be world-readable ---
             # it ships 0640 root:root and phoc SEGFAULTS on a failed parse.
             chmod a+r /etc/phoc.ini 2>/dev/null || true
             if [ -x /usr/local/sbin/det-input-udevdb ]; then
@@ -156,7 +180,7 @@ CLOG="$DET/log/compositor.log"
         # Compositor runs as melissa (uid 1000), NOT root: seatd hands it the
         # input/drm fds (socket is group video, melissa is in it) and the GPU/
         # dri/binder nodes are world-rw or 1000-owned (recon 2026-07-12).
-        # runuser -u keeps her supplementary groups (android_input → /dev/input);
+        # runuser -u keeps her supplementary groups (android_input for /dev/input);
         # HOME/USER must be set explicitly (runuser -u does not start a login
         # shell). WLR_BACKENDS is decided here from seatd's live state since the
         # root prep above owns the start.
@@ -180,35 +204,35 @@ CLOG="$DET/log/compositor.log"
         ' >> "$CLOG" 2>&1
         rc=$?
         dur=$(( $(date +%s) - t0 ))
-        [ -f "$DET/run/desktop-mode" ] || { echo "phoc exited rc=$rc after ${dur}s — desktop mode off, stopping $(date)" >> "$CLOG"; break; }
+        [ -f "$DET/run/desktop-mode" ] || { echo "phoc exited rc=$rc after ${dur}s --- desktop mode off, stopping $(date)" >> "$CLOG"; break; }
         if [ "$dur" -lt 5 ]; then
             fails=$((fails+1))
             back=$fails; [ "$back" -gt 10 ] && back=10
             echo "FAST-FAIL: phoc died in ${dur}s rc=$rc (consecutive=$fails); backing off ${back}s $(date)" >> "$CLOG"
             sleep "$back"
         else
-            echo "phoc exited rc=$rc after ${dur}s (ran long — not a fast-fail); relaunching $(date)" >> "$CLOG"
+            echo "phoc exited rc=$rc after ${dur}s (ran long --- not a fast-fail); relaunching $(date)" >> "$CLOG"
             fails=0
             sleep 1
         fi
     done
 ) &
-echo $! > "$DET/run/compositor.pid"
+lc_pid_write compositor "$!" "$generation" || exit 1
 
 # 5d. Input handoff (§4): step 1's evgrab blinded Android before SF went
 # down; phoc's patched libinput backend retries EVIOCGRAB every 100ms on
-# every node it opens. Once phoc's wayland socket exists, kill evgrab —
+# every node it opens. Once phoc's wayland socket exists, kill evgrab ---
 # the guest acquires within a tick. Residual risk (accepted 2026-07-06):
 # a <=100ms release->grab gap, plus any phoc-crash window, where Android's
 # invisible UI could receive a touch. Keep fingers off the glass during
 # the toggle.
 # No iteration cap: on the first phosh bring-up (2026-07-06) phoc took
 # >120s to come healthy (seatd VT fix applied live) and a capped loop gave
-# up — evgrab kept the grabs and the session had no input. Wait as long as
+# up --- evgrab kept the grabs and the session had no input. Wait as long as
 # desktop mode is on; the wlroots grab threads retry for 10min per device.
 # The socket is checked through /proc/<guest-init>/root (the guest's /run
 # is a container-ns tmpfs, but host root sees it via the init process's
-# root link — verified 2026-07-10) — no lxc-attach fork per tick, so the
+# root link --- verified 2026-07-10) --- no lxc-attach fork per tick, so the
 # poll can be tight (0.3s) and the no-input window after phoc binds its
 # socket is that much shorter. lxc-info re-resolves the pid only if the
 # container restarted mid-wait.
@@ -218,9 +242,9 @@ echo $! > "$DET/run/compositor.pid"
         [ -n "$GPID" ] && [ -d "/proc/$GPID/root" ] ||
             GPID=$("$DET/lxc/bin/lxc-info" -P "$DET" -n guest -p 2>/dev/null | awk '{print $2}')
         if [ -n "$GPID" ] && [ -S "/proc/$GPID/root/run/user/1000/wayland-0" ]; then
-            [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
-            rm -f "$DET/run/evgrab.pid"
-            echo "input handed to guest — evgrab released $(date)"
+            lc_pid_signal evgrab TERM "$generation"
+            rm -f "$DET/run/evgrab.legacy.pid"
+            echo "input handed to guest --- evgrab released $(date)"
             break
         fi
         sleep 0.3
@@ -246,15 +270,15 @@ echo $! > "$DET/run/compositor.pid"
             export XDG_CURRENT_DESKTOP=Phosh XDG_SESSION_TYPE=wayland
             # phosh grays out its Log Out button unless GDMSESSION=phosh
             # (phosh_shell_started_by_display_manager: shell.c). We launch
-            # phosh bare (no display manager), so fake it — then Log Out
+            # phosh bare (no display manager), so fake it --- then Log Out
             # calls SessionManager.Logout(1) -> our shim -> det-signal exit.
             export GDMSESSION=phosh
             # /usr/local first: phosh must load OUR libgmobile (embeds the
-            # OP7 notch panel for the qcom,sm8150 DT compatibles) — the
+            # OP7 notch panel for the qcom,sm8150 DT compatibles) --- the
             # Debian one has no entry and the top bar ignores the notch.
             export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
             # GPU app buffers (2026-07-08): clients do GLES through the
-            # hybris wayland EGL platform — gralloc buffers shared
+            # hybris wayland EGL platform --- gralloc buffers shared
             # zero-copy over the android_wlegl protocol; the phoc android
             # renderer imports them as EGLImages (GL_TEXTURE_EXTERNAL_OES).
             # LD_LIBRARY_PATH above already puts hybris libEGL/libGLESv2
@@ -265,7 +289,7 @@ echo $! > "$DET/run/compositor.pid"
             # libc) must resolve in CLIENT processes too, not just phoc.
             # GSK_RENDERER=ngl skips the GTK4 vulkan probe (no hybris
             # vulkan platform installed) and forces the GLES renderer.
-            # NO APOSTROPHES IN THIS BLOCK — it is a single-quoted sh -c
+            # NO APOSTROPHES IN THIS BLOCK --- it is a single-quoted sh -c
             # string (one broke the session launcher on first deploy).
             export EGL_PLATFORM=wayland HYBRIS_EGLPLATFORM=wayland
             export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
@@ -291,5 +315,8 @@ echo $! > "$DET/run/compositor.pid"
         sleep 2
     done
 ) &
-echo $! > "$DET/run/client.pid"
+lc_pid_write client "$!" "$generation" || exit 1
+lc_state_write DESKTOP "$generation" session committed
+trap - EXIT HUP INT TERM
+lc_lock_release
 echo "desktop mode up (phoc + phosh session; log/compositor.log)"

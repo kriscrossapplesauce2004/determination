@@ -23,15 +23,15 @@ die() { echo "[migrate] ABORT: $*" >&2; exit 1; }
 
 # --- Preconditions -----------------------------------------------------------
 if [ -d "$NEW" ] && [ ! -d "$OLD" ]; then
-    say "already migrated ($NEW exists, $OLD gone) — nothing to do"; exit 0
+    say "already migrated ($NEW exists, $OLD gone) --- nothing to do"; exit 0
 fi
-[ -d "$OLD" ] || die "$OLD not found — nothing to migrate"
-[ -e "$NEW" ] && die "$NEW already exists but $OLD does too — resolve by hand"
+[ -d "$OLD" ] || die "$OLD not found --- nothing to migrate"
+[ -e "$NEW" ] && die "$NEW already exists but $OLD does too --- resolve by hand"
 
 # Never migrate mid-handoff: desktop mode has live grabs, a stopped SF, and a
 # running compositor bound to the composer HAL. Return to phone mode first.
 if [ -f "$OLD/run/desktop-mode" ]; then
-    die "in desktop mode — run $OLD/bin/desktop-off first, then re-run migrate"
+    die "in desktop mode --- run $OLD/bin/desktop-off first, then re-run migrate"
 fi
 
 # --- Quiesce -----------------------------------------------------------------
@@ -46,7 +46,7 @@ if [ -x "$OLD/lxc/bin/lxc-info" ] && \
         "$OLD/lxc/bin/lxc-stop" -P "$OLD" -n guest -k 2>/dev/null
     i=0
     while "$OLD/lxc/bin/lxc-info" -P "$OLD" -n guest 2>/dev/null | grep -q RUNNING; do
-        i=$((i+1)); [ $i -gt 20 ] && die "guest would not stop — retry later"; sleep 0.5
+        i=$((i+1)); [ $i -gt 20 ] && die "guest would not stop --- retry later"; sleep 0.5
     done
 fi
 # Drop the self-bind on $OLD/guest (guest-start's dev,exec,suid remount) so the

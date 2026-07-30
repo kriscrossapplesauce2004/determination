@@ -8,8 +8,9 @@ namespace determination::control {
 
 constexpr std::uint32_t kProtocolMagic = 0x44544331U; // DTC1
 constexpr std::uint16_t kProtocolMajor = 1;
-constexpr std::uint16_t kProtocolMinor = 0;
+constexpr std::uint16_t kProtocolMinor = 1;
 constexpr std::size_t kMaximumPayload = 16U * 1024U;
+constexpr std::uint32_t kDefaultRpcDeadlineMs = 1'000;
 constexpr std::uint16_t kFlagResponse = 1U << 0;
 
 enum class Operation : std::uint32_t {
@@ -22,6 +23,9 @@ enum class Operation : std::uint32_t {
     ModeGet = 0x100,
     ModeSet = 0x101,
     ModeRecover = 0x102,
+    BootProfileGet = 0x110,
+    BootProfileSet = 0x111,
+    BootProfileApply = 0x112,
     GuestReport = 0x200,
 };
 
@@ -68,8 +72,10 @@ struct ReceiveResult {
     Packet packet;
 };
 
-bool send_packet(int fd, const Packet &packet, std::string *error);
-ReceiveResult receive_packet(int fd);
+bool send_packet(int fd, const Packet &packet, std::string *error,
+                 std::uint32_t timeout_ms = kDefaultRpcDeadlineMs);
+ReceiveResult receive_packet(int fd,
+                             std::uint32_t timeout_ms = kDefaultRpcDeadlineMs);
 int connect_socket(const std::string &path, std::string *error);
 std::string operation_name(Operation operation);
 std::string status_name(Status status);

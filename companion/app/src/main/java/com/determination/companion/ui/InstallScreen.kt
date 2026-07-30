@@ -126,7 +126,7 @@ private fun InventoryCard(inv: Map<String, String>) {
                 Icons.Rounded.Memory, "Kernel",
                 inv["kernel"] ?: "?",
                 ok = inv["det_kernel"] == "yes",
-                okText = "Determination kernel", badText = "stock kernel — flash needed",
+                okText = "Determination kernel", badText = "stock kernel : flash needed",
             )
             InventoryRow(
                 Icons.Rounded.Archive, "Magisk module",
@@ -206,7 +206,7 @@ private fun ArtifactsSection(
         Text(
             "Drop artifacts into Download or /data/local/tmp: module zips " +
                 "(determination-magisk-*.zip), boot images (*.img), or a companion APK. " +
-                "Note: /sdcard is unreachable while in desktop mode — stage from phone mode.",
+                "Note: /sdcard is unreachable while in desktop mode : stage from phone mode.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

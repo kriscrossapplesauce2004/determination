@@ -12,7 +12,7 @@ object ZygiskBridge {
     private const val SOCKET = "determination.companion.bridge"
     private const val MAGIC = 0x44544331
     private const val MAJOR: Short = 1
-    private const val MINOR: Short = 0
+    private const val MINOR: Short = 1
     private const val HEADER_SIZE = 48
     private const val MAX_PAYLOAD = 16 * 1024
 
@@ -25,6 +25,9 @@ object ZygiskBridge {
     const val OP_MODE_GET = 0x100
     const val OP_MODE_SET = 0x101
     const val OP_MODE_RECOVER = 0x102
+    const val OP_BOOT_PROFILE_GET = 0x110
+    const val OP_BOOT_PROFILE_SET = 0x111
+    const val OP_BOOT_APPLY = 0x112
 
     const val STATUS_OK = 0
     const val STATUS_ACCEPTED = 1

@@ -2,7 +2,7 @@
 # Fetch the downstream kernel source for guacamoleb.
 #
 # The phone runs crDroid 12.10 / Android 16 (artifacts/rom-identity.txt) with
-# kernel 4.14.357-openela — so we rebuild from crDroid's sm8150 fork to stay
+# kernel 4.14.357-openela --- so we rebuild from crDroid's sm8150 fork to stay
 # ABI/feature-identical to what the ROM ships, and only layer the container
 # fragment on top. Verify the branch matches the installed build; fall back to
 # LineageOS lineage-23 tree if crDroid's fork is stale.

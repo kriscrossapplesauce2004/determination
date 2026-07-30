@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * App settings (Settings tab). Plain SharedPreferences — every consumer calls
+ * App settings (Settings tab). Plain SharedPreferences : every consumer calls
  * [init] first (idempotent), including BootReceiver which runs before any UI.
  */
 object Prefs {

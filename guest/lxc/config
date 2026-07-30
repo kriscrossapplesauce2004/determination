@@ -1,6 +1,6 @@
 # Determination guest container base config (LXC).
 # The guest must see: Android /dev (binder, kgsl, ion/dmabuf, dri, input),
-# the property area, and /vendor + /system libs — spec §1 implication chain.
+# the property area, and /vendor + /system libs --- spec §1 implication chain.
 # toggle/generate-lxc-config appends only the device nodes present on the host.
 
 lxc.uts.name = determination
@@ -21,10 +21,10 @@ lxc.apparmor.profile = unconfined
 lxc.autodev = 1
 lxc.autodev.tmpfs.size = 25000000
 # Private devpts with a usable ptmx (0666 + /dev/ptmx symlink). Without it
-# the inherited devpts has ptmxmode=000 and terminals can't open PTYs —
+# the inherited devpts has ptmxmode=000 and terminals can't open PTYs ---
 # foot's "failed to open PTY" killed the first phoc session (2026-07-06).
 lxc.pty.max = 1024
-# proc/sys/cgroup must be requested explicitly — systemd needs all three.
+# proc/sys/cgroup must be requested explicitly --- systemd needs all three.
 # (Found on first boot 2026-07-03: without this /proc is absent and systemd
 # hangs before its first console line.)
 lxc.mount.auto = proc:mixed sys:mixed cgroup:mixed
@@ -35,12 +35,12 @@ lxc.mount.auto = proc:mixed sys:mixed cgroup:mixed
 # libhybris' compiled default search path is /vendor/lib64:/system/lib64:
 # /odm/lib64 with /system/build.prop hardcoded. Debian has none of these at
 # root, so there is no collision. (Found 2026-07-04: the /android/ prefix
-# broke the bionic linker — the apex symlinks dangled.)
+# broke the bionic linker --- the apex symlinks dangled.)
 lxc.mount.entry = /system system none bind,ro,create=dir,optional 0 0
 lxc.mount.entry = /vendor vendor none bind,ro,create=dir,optional 0 0
 lxc.mount.entry = /odm odm none bind,ro,create=dir,optional 0 0
 lxc.mount.entry = /apex apex none rbind,ro,create=dir,optional 0 0
-# Property area — libhybris mmaps this at the fixed path /dev/__properties__.
+# Property area --- libhybris mmaps this at the fixed path /dev/__properties__.
 # create=dir: autodev's tmpfs is fresh, the target must be made or the bind
 # silently no-ops (it's optional).
 lxc.mount.entry = /dev/__properties__ dev/__properties__ none bind,ro,create=dir,optional 0 0

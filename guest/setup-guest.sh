@@ -1,17 +1,17 @@
 #!/system/bin/sh
-# Determination guest customization — runs ON THE PHONE as root, against an
+# Determination guest customization --- runs ON THE PHONE as root, against an
 # already-extracted rootfs at /data/determination/guest (the debootstrap-on-
-# device path). Mirror of guest/customize-hook.sh — keep the two in sync.
+# device path). Mirror of guest/customize-hook.sh --- keep the two in sync.
 #
 # Prereqs pushed to /data/local/tmp: droidian.gpg (fetch from
 # https://raw.githubusercontent.com/droidian/droidian-archive-keyring/droidian/droidian/droidian.gpg
-# — the packaged keyring debs are all stale; only git has the Jan/2025
+# --- the packaged keyring debs are all stale; only git has the Jan/2025
 # staging signing key).
 set -e
 G=/data/determination/guest
 CH() { chroot "$G" /bin/sh -c "export PATH=/usr/sbin:/usr/bin:/sbin:/bin; $*"; }
 
-# Droidian staging repo (trixie suite) — key pushed alongside this script.
+# Droidian staging repo (trixie suite) --- key pushed alongside this script.
 mkdir -p "$G/etc/apt/sources.list.d" "$G/usr/share/keyrings"
 cp /data/local/tmp/droidian.gpg "$G/usr/share/keyrings/droidian.gpg"
 chmod 644 "$G/usr/share/keyrings/droidian.gpg"
@@ -41,7 +41,7 @@ ln -sf /system/system_ext "$G/system_ext" 2>/dev/null || true
 
 # Android device-node groups (recon 2026-07-12, artifacts/node-perms-probe.txt):
 # the session runs as the unprivileged user melissa, NOT root. Almost every
-# node it touches is already reachable — GPU/dri/binder/ashmem are world-rw and
+# node it touches is already reachable --- GPU/dri/binder/ashmem are world-rw and
 # kgsl/ion are owned by uid/gid 1000 (== melissa == Android AID_SYSTEM). The
 # ONLY gate is /dev/input/* (0660 root:1004, AID_INPUT): Debian's input group is
 # gid 995 and does NOT match, so we create a group at Android's numeric gid and
@@ -57,7 +57,7 @@ CH "id melissa >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash melissa"
 CH "usermod -aG video,input,render,audio,android_input,android_graphics,android_audio melissa"
 
 # Password-gated sudo (proper sudo, not NOPASSWD-ALL). No password is baked into
-# the image — set one on-device with \`det passwd\` before sudo will work. Guest
+# the image --- set one on-device with \`det passwd\` before sudo will work. Guest
 # provisioning does not need it: setup-*.sh run as root via lxc-attach, not sudo.
 mkdir -p "$G/etc/sudoers.d"
 echo 'melissa ALL=(ALL) ALL' > "$G/etc/sudoers.d/melissa"
@@ -93,7 +93,7 @@ options timeout:2 attempts:3
 EOF
 
 # Prefer IPv4: the guest is IPv4-NAT only (link-local v6, no default v6
-# route) but resolvers happily return AAAA records — without this, every
+# route) but resolvers happily return AAAA records --- without this, every
 # dual-stack client tries unreachable IPv6 first (2026-07-11).
 grep -q '^precedence ::ffff:0:0/96 100' "$G/etc/gai.conf" 2>/dev/null ||
     echo 'precedence ::ffff:0:0/96  100' >> "$G/etc/gai.conf"
@@ -102,7 +102,7 @@ grep -q '^precedence ::ffff:0:0/96 100' "$G/etc/gai.conf" 2>/dev/null ||
 CH "systemctl mask getty@tty1.service console-getty.service >/dev/null 2>&1 || true"
 
 # Version pin: staging's newest libhybris needs libc6 > 2.42, trixie has
-# 2.41 — the droidian0+z4 build is the newest that installs on trixie.
+# 2.41 --- the droidian0+z4 build is the newest that installs on trixie.
 # Pin the whole family or apt's solver mixes versions and fails.
 mkdir -p "$G/etc/apt/preferences.d"
 printf 'Package: *\nPin: version *z4+git20250520205628*\nPin-Priority: 1001\n' \

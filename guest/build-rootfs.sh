@@ -2,7 +2,7 @@
 # Build the Debian arm64 guest rootfs on the host, then push to the device.
 # Needs: mmdebstrap (preferred) or debootstrap + qemu-user-static binfmt.
 #
-# libhybris and the wlroots hwcomposer backend come from the Droidian repos —
+# libhybris and the wlroots hwcomposer backend come from the Droidian repos ---
 # their wlroots<->hwcomposer plumbing IS milestones 1-2 of this project (spec
 # §10); we consume it, we don't rewrite it.
 #

@@ -37,6 +37,7 @@ ok "versionCode: $DET_VERSION_CODE"
 ok "status: $DET_RELEASE_STATUS"
 
 DET_RELEASE_BASE=${DET_VERSION%%-*}
+DET_MANIFEST="release/manifests/v$DET_VERSION.manifest"
 
 [ "$DET_VERSION_CODE" -gt 11 ] \
     && ok "versionCode is above every legacy component code" \
@@ -83,6 +84,70 @@ grep -Fq "## $DET_CODENAME: $DET_RELEASE_BASE" RELEASES.md \
     && ok "release plan contains $DET_RELEASE_BASE $DET_CODENAME" \
     || fail "release plan does not contain $DET_RELEASE_BASE $DET_CODENAME"
 
+validate_manifest() {
+    DET_MANIFEST_FILE=$1
+    [ -f "$DET_MANIFEST_FILE" ] || { fail "missing release manifest: $DET_MANIFEST_FILE"; return; }
+    if ! awk '
+        /^[[:space:]]*(#|$)/ { next }
+        !/^[A-Za-z0-9][A-Za-z0-9._-]*=/ { print "invalid line " NR; bad=1; next }
+        { key=$0; sub(/=.*/, "", key); if (seen[key]++) { print "duplicate key " key; bad=1 } }
+        END { exit bad }
+    ' "$DET_MANIFEST_FILE" >"$DET_CHECK_TMP/manifest-errors"; then
+        while IFS= read -r DET_ERROR; do fail "$DET_MANIFEST_FILE: $DET_ERROR"; done <"$DET_CHECK_TMP/manifest-errors"
+        return
+    fi
+    for DET_REQUIRED in schema project.commit device.product device.rom \
+        input.boot.pristine.sha256 input.kernel.config.sha256 \
+        toolchain.android.ndk toolchain.gradle source.libhybris.url \
+        source.libhybris.revision source.wlroots.url source.wlroots.revision \
+        source.phoc.url source.phoc.revision source.mesa.revision \
+        source.minigbm.revision source.lxc.revision input.hwc.google_archive.sha256 \
+        input.companion.dependencies.sha256 input.guest.base.sha256 \
+        input.local.patches.sha256 signing.companion.certificate.sha256
+    do
+        DET_VALUE=$(sed -n "s/^$DET_REQUIRED=//p" "$DET_MANIFEST_FILE")
+        [ -n "$DET_VALUE" ] || { fail "$DET_MANIFEST_FILE: missing $DET_REQUIRED"; continue; }
+        case "$DET_REQUIRED" in
+            *.revision|project.commit)
+                case "$DET_VALUE" in
+                    UNRESOLVED) ;;
+                    *) printf '%s' "$DET_VALUE" | grep -Eq '^[0-9a-f]{40}$' \
+                        || fail "$DET_MANIFEST_FILE: $DET_REQUIRED is not a Git object ID" ;;
+                esac ;;
+            *.sha256)
+                case "$DET_VALUE" in
+                    UNRESOLVED) ;;
+                    *) printf '%s' "$DET_VALUE" | grep -Eq '^[0-9a-f]{64}$' \
+                        || fail "$DET_MANIFEST_FILE: $DET_REQUIRED is not a SHA-256 digest" ;;
+                esac ;;
+        esac
+        if [ "$DET_VALUE" = UNRESOLVED ]; then
+            if [ "$DET_MODE" = ship ]; then fail "$DET_MANIFEST_FILE: unresolved $DET_REQUIRED"
+            else warn "$DET_MANIFEST_FILE: unresolved $DET_REQUIRED"; fi
+        fi
+    done
+    ok "release manifest syntax: $DET_MANIFEST_FILE"
+}
+
+validate_manifest "$DET_MANIFEST"
+
+manifest_value() { sed -n "s/^$1=//p" "$DET_MANIFEST"; }
+
+validate_source_locks() {
+    [ -f guest/sources.lock ] || { fail "missing guest/sources.lock"; return; }
+    # shellcheck disable=SC1091
+    . guest/sources.lock
+    check_equal "guest libhybris pin" "$(manifest_value source.libhybris.revision)" "$LIBHYBRIS_COMMIT"
+    check_equal "guest wlroots pin" "$(manifest_value source.wlroots.revision)" "$WLROOTS_COMMIT"
+    check_equal "guest phoc pin" "$(manifest_value source.phoc.revision)" "$PHOC_COMMIT"
+    DET_HWC_LIBHYBRIS=$(sed -n 's/^LIBHYBRIS_REV=//p' hwc2-compat/build.sh | head -n 1)
+    [ -n "$DET_HWC_LIBHYBRIS" ] \
+        && check_equal "HWC libhybris pin" "$LIBHYBRIS_COMMIT" "$DET_HWC_LIBHYBRIS" \
+        || fail "HWC build does not declare a libhybris revision"
+}
+
+validate_source_locks
+
 DET_HEAD=$(git rev-parse --short=12 HEAD)
 if [ -n "$(git status --porcelain)" ]; then
     if [ "$DET_MODE" = ship ]; then fail "worktree is dirty at $DET_HEAD"
@@ -108,19 +173,7 @@ else
     warn "branch has no upstream; remote ancestry was not checked"
 fi
 
-DET_MOVING_INPUTS=$(rg -n --glob '!kernel/src/**' \
-    'git clone.*(-b (master|main|feature/|group/)|libhybris\.git)' \
-    guest hwc2-compat kernel 2>/dev/null || true)
-if [ -n "$DET_MOVING_INPUTS" ]; then
-    if [ "$DET_MODE" = ship ]; then
-        fail "release-critical source clones are still moving"
-    else
-        warn "release-critical source clones are still moving"
-    fi
-    printf '%s\n' "$DET_MOVING_INPUTS" | sed 's/^/      /'
-else
-    ok "no known moving release-critical source clones"
-fi
+ok "release-critical guest and HWC sources are validated against immutable pins"
 
 DET_MODULE_ZIP="magisk-module/determination-magisk-v$DET_VERSION.zip"
 if [ -f "$DET_MODULE_ZIP" ]; then
@@ -158,7 +211,7 @@ if [ "$DET_MODE" = ship ]; then
         "$DET_MODULE_ZIP" \
         companion/app/build/outputs/apk/release/app-release.apk \
         dist/usb-payload/SHA256SUMS \
-        "release/manifests/v$DET_VERSION.manifest"
+        "$DET_MANIFEST"
     do
         [ -f "$DET_ARTIFACT" ] \
             && ok "artifact exists: $DET_ARTIFACT" \
@@ -166,6 +219,9 @@ if [ "$DET_MODE" = ship ]; then
     done
 
     if [ -f dist/usb-payload/SHA256SUMS ]; then
+        (cd dist/usb-payload && sha256sum -c SHA256SUMS) \
+            && ok "USB payload checksums verify" \
+            || fail "USB payload checksums do not verify"
         for DET_PAYLOAD_FILE in \
             "determination-magisk-v$DET_VERSION.zip" \
             "determination-companion-v$DET_VERSION.apk"
@@ -174,6 +230,17 @@ if [ "$DET_MODE" = ship ]; then
                 && ok "USB payload contains $DET_PAYLOAD_FILE" \
                 || fail "USB payload checksums do not reference $DET_PAYLOAD_FILE"
         done
+    fi
+
+    if [ -f companion/app/build/outputs/apk/release/app-release.apk ]; then
+        if command -v apksigner >/dev/null 2>&1; then
+            apksigner verify --verbose --print-certs \
+                companion/app/build/outputs/apk/release/app-release.apk >/dev/null \
+                && ok "companion APK signature verifies" \
+                || fail "companion APK signature does not verify"
+        else
+            fail "apksigner is required to verify the companion release APK"
+        fi
     fi
 fi
 

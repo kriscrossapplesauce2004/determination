@@ -1,13 +1,13 @@
-# Android Convergence Layer — Design Specification
+# Android Convergence Layer : Design Specification
 
 Modernised Maru-topology convergence: Android stays PID1 and fully live; a glibc
 Wayland desktop runs as an LXC guest on the **same downstream vendor kernel**;
 `libhybris` bridges the guest to the bionic GPU/display blobs. Supports both
 external-display convergence (concurrent) and internal-panel-on-demand desktop
 mode (time-sliced). Shipped as a custom `boot.img` (custom kernel + Magisk-patched
-ramdisk) plus Zygisk — not a ROM.
+ramdisk) plus Zygisk : not a ROM.
 
-**Target:** OnePlus 7 `guacamoleb` — SM8150 / Adreno 640 (a6xx).
+**Target:** OnePlus 7 `guacamoleb` : SM8150 / Adreno 640 (a6xx).
 
 ---
 
@@ -19,7 +19,7 @@ phone:
 
 - **Halium / Droidian / UT topology:** GNU/Linux is PID1 (systemd, glibc); Android
   runs *headless* in an LXC container purely to host the blobs. The Linux
-  compositor owns `hwcomposer` from boot — **no display arbitration, ever.**
+  compositor owns `hwcomposer` from boot : **no display arbitration, ever.**
   Android's UI never exists.
 - **Maru topology (ours):** Android init is PID1; the phone is fully live; the
   glibc desktop runs in an LXC container *on top*. `hwcomposer` is owned by
@@ -28,7 +28,7 @@ phone:
 
 We take the Maru topology because "keep SystemUI and a real phone" is a hard
 requirement, not a nice-to-have. The cost is that **display/input arbitration is
-now our problem** — Halium/Droidian never solve it because they never have to.
+now our problem** : Halium/Droidian never solve it because they never have to.
 Our genuinely novel delta over both prior-art families is **internal-panel
 on-demand handoff on a live Android**; neither Maru (external-only) nor Droidian
 (headless Android) ships it.
@@ -49,7 +49,7 @@ build-a-userland-forever.
 
 | Layer | Mechanism | Role |
 |---|---|---|
-| Custom kernel (boot.img) | kconfig + patches | user namespaces, cgroup v2 delegation, `CONFIG_ANDROID_BINDERFS`/binder, `memfd`/ashmem, whatever the LXC guest + libhybris need. This is the *only* place kernel gaps get fixed — Magisk can't. |
+| Custom kernel (boot.img) | kconfig + patches | user namespaces, cgroup v2 delegation, `CONFIG_ANDROID_BINDERFS`/binder, `memfd`/ashmem, whatever the LXC guest + libhybris need. This is the *only* place kernel gaps get fixed : Magisk can't. |
 | Magisk ramdisk patch | init hijack | persistent root, `post-fs-data` / `service.d` boot hooks, container launch |
 | `resetprop` | prop control | mask/override `ctl.*`, `init.svc.*`, gate SF/service restart triggers, flip hidden AOSP desktop/freeform flags without recompiling framework |
 | `magiskpolicy` | live sepolicy | targeted allow-rules during bring-up instead of rebuilding sepolicy; harden into a real policy module later |
@@ -58,7 +58,7 @@ build-a-userland-forever.
 **Zygisk boundary, precisely:** it reaches the zygote-forked managed world
 (`system_server`, apps). It does **not** reach init-started native daemons.
 SurfaceFlinger is native and never forked from zygote, so it's unhookable by
-Zygisk — irrelevant to us because we **stop** SF, never patch its code. Any need
+Zygisk : irrelevant to us because we **stop** SF, never patch its code. Any need
 for SF *code* changes would drop you into `LD_PRELOAD`/recompile territory; the
 design avoids ever needing that.
 
@@ -81,7 +81,7 @@ contract. See `docs/graphics-architecture.md`.
 The composer HAL is **single-client** (whether HIDL `graphics.composer@2.x` or
 AIDL `composer3`, depending on your Halium base's Android level). SF holds that
 client at runtime; the guest compositor cannot bind it until SF releases it. This
-is *why* the toggle in §4 exists — it's not a nicety, it's the arbitration
+is *why* the toggle in §4 exists : it's not a nicety, it's the arbitration
 protocol for a single-client HAL. Gralloc/mapper version (gralloc0/1 + mapper 2.x
 vs gralloc4 + mapper 4.0) must match what the libhybris backend expects; verify
 against the actual `guacamoleb` vendor image, not assumptions.
@@ -90,8 +90,8 @@ against the actual `guacamoleb` vendor image, not assumptions.
 
 | Backend integration | Unlocks |
 |---|---|
-| wlroots ↔ hwcomposer | Hyprland, sway, Phosh — the whole wlroots clan, one integration |
-| KWin ↔ Android-backed GBM/EGL winsys | KDE Plasma / Plasma Mobile — in development; libhybris vendor rendering plus minigbm API |
+| wlroots ↔ hwcomposer | Hyprland, sway, Phosh : the whole wlroots clan, one integration |
+| KWin ↔ Android-backed GBM/EGL winsys | KDE Plasma / Plasma Mobile : in development; libhybris vendor rendering plus minigbm API |
 
 wlroots first (best compositor-per-effort ratio). KWin is a distinct second
 integration, not a variant of the first.
@@ -122,12 +122,12 @@ The handoff is a mode toggle, not concurrency.
 **Desktop → phone:** guest releases the composer client cleanly; `start
 surfaceflinger`; verify the panel re-inits without a dead/black transition.
 
-Stress the cycle for wedge and GPU-context/fd leaks under repeated flips — a
+Stress the cycle for wedge and GPU-context/fd leaks under repeated flips : a
 single clean toggle proves nothing; repeated cycling is where the HAL state
 machine and fd ownership bugs surface.
 
 **Input (correction to the naïve model):** on modern Android there is **no
-standalone `inputflinger` process** — input is `EventHub`/`InputReader` inside
+standalone `inputflinger` process** : input is `EventHub`/`InputReader` inside
 `system_server`, opening `/dev/input/event*` non-exclusively. So you can't "stop
 inputflinger." The real handoff is exclusive-grab arbitration: have the guest's
 libinput take `EVIOCGRAB` on the evdev nodes for desktop mode (blocking Android's
@@ -173,7 +173,7 @@ framework recompile:
   tweaks are `resetprop` dev-flag flips first, hooks only where a flag doesn't
   exist.
 - Summon trigger: a real SystemUI affordance (QS tile / gesture) wired to the
-  mode switch, implemented as a hook — not a bind-mounted replacement APK.
+  mode switch, implemented as a hook : not a bind-mounted replacement APK.
 - Compositor selection: user-swappable across the two §3 backend families.
 
 ---
@@ -200,7 +200,7 @@ framework recompile:
 
 The Android-side apparatus (boot.img + Zygisk) is fixed-cost and travels to any
 rootable, custom-boot.img-capable device essentially free. The **libhybris
-guest-acquisition layer is linear per SoC family** — a new SoC needs a hands-on
+guest-acquisition layer is linear per SoC family** : a new SoC needs a hands-on
 port pass (composer HAL version, gralloc/mapper, blob quirks), which is how
 Halium/Droidian scaled and is not a restart. "Easy to build for other phones" is
 accurate with the asterisk landing *only* on that layer, cleanly portable across
@@ -231,16 +231,16 @@ drops in against these blobs or needs a modification pass.
 
 ## 10. Prior art
 
-- **Droidian** — maintained Debian/Halium descendant; its wlroots↔hwcomposer
+- **Droidian** : maintained Debian/Halium descendant; its wlroots↔hwcomposer
   plumbing is milestones 1–2. Diverges from us at the topology (it's headless
   Android) and has nothing on the §4 toggle.
-- **Maru OS** — our topology exactly (Android PID1, Debian LXC guest), but
+- **Maru OS** : our topology exactly (Android PID1, Debian LXC guest), but
   external-only; no internal on-demand.
-- **Halium** — the libhybris/container abstraction; note it inverts PID1 relative
+- **Halium** : the libhybris/container abstraction; note it inverts PID1 relative
   to us.
-- **Ubuntu Touch / Sailfish** — production libhybris+Wayland; reference for the
+- **Ubuntu Touch / Sailfish** : production libhybris+Wayland; reference for the
   graphics handoff.
-- **Waydroid** — inverse polarity (Android-in-container on a Linux host); useful
+- **Waydroid** : inverse polarity (Android-in-container on a Linux host); useful
   plumbing reference.
 
 ---
@@ -249,11 +249,11 @@ drops in against these blobs or needs a modification pass.
 
 | Risk | Severity | Where handled |
 |---|---|---|
-| SF respawn re-grabs composer mid-handoff | high | §4 step 2 — trigger masking |
-| Double input / no clean evdev handoff | high | §4 — EVIOCGRAB, decided early |
-| Gralloc/mapper version mismatch vs libhybris backend | medium | §3 / §9 — verify against real vendor image |
-| Composer client not released cleanly by SF | medium | §4 — cycle-stress for leaks |
-| DP-alt enumeration quirks | medium | §5 — device-specific |
-| Kernel missing container/binder enables | low–med | §2 — custom kernel, not blockable by Magisk |
-| libhybris port work per new SoC | linear cost | §8 — expected, not a restart |
+| SF respawn re-grabs composer mid-handoff | high | §4 step 2 : trigger masking |
+| Double input / no clean evdev handoff | high | §4 : EVIOCGRAB, decided early |
+| Gralloc/mapper version mismatch vs libhybris backend | medium | §3 / §9 : verify against real vendor image |
+| Composer client not released cleanly by SF | medium | §4 : cycle-stress for leaks |
+| DP-alt enumeration quirks | medium | §5 : device-specific |
+| Kernel missing container/binder enables | low–med | §2 : custom kernel, not blockable by Magisk |
+| libhybris port work per new SoC | linear cost | §8 : expected, not a restart |
 | Portability layer built before working port | self-inflicted | milestone 7 is last |

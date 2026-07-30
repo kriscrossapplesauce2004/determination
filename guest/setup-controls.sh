@@ -1,5 +1,5 @@
 #!/bin/bash
-# setup-controls.sh — in-guest, idempotent. Installs the phosh-side triggers
+# setup-controls.sh --- in-guest, idempotent. Installs the phosh-side triggers
 # for the guest->host control channel (host side is toggle/det-hostagent over
 # /mnt/det-control, bind-mounted from /data/determination/run/control):
 #
@@ -42,7 +42,7 @@ if [ -x /usr/local/bin/det-guest-agent ]; then
     esac
 fi
 if [ ! -d "\$CTRL" ]; then
-    echo "det-signal: control channel \$CTRL not mounted — is the guest" >&2
+    echo "det-signal: control channel \$CTRL not mounted --- is the guest" >&2
     echo "            started under the current lxc config? (needs restart)" >&2
     exit 1
 fi
@@ -77,7 +77,7 @@ fi
 echo "== det-session-manager (org.gnome.SessionManager shim) =="
 # phosh + squeekboard both try to register with org.gnome.SessionManager and
 # fail ("The name org.gnome.SessionManager was not provided by any .service
-# files") because we run phosh BARE — no gnome-session (phosh-session would
+# files") because we run phosh BARE --- no gnome-session (phosh-session would
 # `phoc -E gnome-session`, and `phoc -E` is banned on this kernel: glib
 # child-watch dies on the half-backported pidfd and phoc quits). This shim
 # owns the name on phosh's session bus so those clients register cleanly, and
@@ -93,7 +93,7 @@ echo "== det-session-manager (org.gnome.SessionManager shim) =="
 # OFF) but has NO internal unblank path: the only code that can pass
 # active=false is the org.gnome.ScreenSaver.SetActive DBus method, which
 # gnome-settings-daemon's power plugin normally calls when the user becomes
-# active again. We run phosh bare — nobody called it, so the screen never
+# active again. We run phosh bare --- nobody called it, so the screen never
 # came back ("power kills the session"). The shim now mirrors gsd-power:
 #   ScreenSaver ActiveChanged(true)  -> IdleMonitor.AddUserActiveWatch()
 #   IdleMonitor WatchFired(our id)   -> ScreenSaver.SetActive(false)
@@ -201,7 +201,7 @@ IM_PATH = "/org/gnome/Mutter/IdleMonitor/Core"
 class WakeWatcher:
     """gsd-power's unblank role. phosh blanks by itself but the only unblank
     entry point it has is the org.gnome.ScreenSaver.SetActive(false) DBus
-    method — normally called by gsd-power's user-active watch. Without this,
+    method --- normally called by gsd-power's user-active watch. Without this,
     a blank (power button or idle) is permanent: phoc's output re-enable is
     never requested. Mirror gsd-power: when the screensaver goes active,
     register a user-active watch with phosh's IdleMonitor (ext-idle-notify
@@ -246,7 +246,7 @@ class WakeWatcher:
             self.call(IM_NAME, IM_PATH, IM_NAME, "AddUserActiveWatch",
                       None, got)
         elif not active and self.watch_id is not None:
-            # Unblanked by someone else (e.g. DBus SetActive) — drop our watch
+            # Unblanked by someone else (e.g. DBus SetActive) --- drop our watch
             # so stray input later doesn't fire a stale unblank.
             wid, self.watch_id = self.watch_id, None
             self.call(IM_NAME, IM_PATH, IM_NAME, "RemoveWatch",
@@ -356,7 +356,7 @@ echo "== det-console (Ctrl+Alt+F2 emergency terminal) =="
 # (the on-screen squeekboard can't produce Ctrl+Alt+F*).
 cat > /usr/local/bin/det-console <<'EOS'
 #!/bin/sh
-# Determination console — fullscreen terminal on Ctrl+Alt+F<n>.
+# Determination console --- fullscreen terminal on Ctrl+Alt+F<n>.
 # Called by phoc's patched VT-switch handler (keyboard.c PATCH 3).
 # Inherit the Wayland env from whoever invoked phoc (desktop-on 5e). phoc runs
 # as melissa (uid 1000), so its VT-switch handler spawns us as melissa too.
@@ -463,27 +463,27 @@ dbus-run-session -- /bin/sh -c '
             new=$(printf "%s" "$cur" | sed "s/^\[/['\''determination-exit.desktop'\'', /")
             gsettings set sm.puri.phosh favorites "$new" && echo "pinned -> $new" ;;
     esac
-' || echo "note: could not set phosh favorites (key absent?) — launcher still in app grid"
+' || echo "note: could not set phosh favorites (key absent?) --- launcher still in app grid"
 
 echo "== battery translator (det-battery) =="
 # The OP7 'battery' power_supply node reports a stuck/garbage capacity on this
-# kernel (frozen charge_counter, bogus 41°C temp) — that's what UPower/phosh
+# kernel (frozen charge_counter, bogus 41°C temp) --- that's what UPower/phosh
 # read, so the Linux battery shows ~1%. The REAL gauge is the 'bms' node
 # (type=BMS, which UPower ignores). This daemon shadows battery/capacity with
 # the live bms value via a bind-mount that lives ONLY in the guest mount
-# namespace — Android's own (correct) reading is never touched.
+# namespace --- Android's own (correct) reading is never touched.
 cat > /usr/local/sbin/det-battery <<'EOS'
 #!/bin/sh
 set -u
 DET_BATTERY_GAUGE=
 [ -r /etc/determination-device.conf ] && . /etc/determination-device.conf
 [ -n "$DET_BATTERY_GAUGE" ] && [ "$DET_BATTERY_GAUGE" != battery ] || {
-    echo "det-battery: no separate battery gauge configured — nothing to do"
+    echo "det-battery: no separate battery gauge configured --- nothing to do"
     exit 0
 }
 BMS="/sys/class/power_supply/$DET_BATTERY_GAUGE/capacity"
 CAP=/run/det-battery-capacity
-[ -r "$BMS" ] || { echo "det-battery: $DET_BATTERY_GAUGE node not present — nothing to do"; exit 0; }
+[ -r "$BMS" ] || { echo "det-battery: $DET_BATTERY_GAUGE node not present --- nothing to do"; exit 0; }
 
 seed=$(cat "$BMS" 2>/dev/null)
 case "$seed" in ''|*[!0-9]*) seed=50 ;; esac
@@ -494,7 +494,7 @@ echo "det-battery: shadowing battery/capacity <- $DET_BATTERY_GAUGE (seed ${seed
 # re-asserted every pass, not just once: the qpnp-smb5 charger re-enumerates
 # its power_supply node on USB plug/unplug, which silently drops the bind and
 # drops UPower/phosh back to the stuck raw capacity (found 2026-07-12, the
-# "battery shat itself" report). Re-resolve BATT each pass too — the sysfs
+# "battery shat itself" report). Re-resolve BATT each pass too --- the sysfs
 # symlink is recreated by the re-enumeration. The bind propagates into
 # UPower's private mount namespace because /sys is a shared mount.
 while :; do

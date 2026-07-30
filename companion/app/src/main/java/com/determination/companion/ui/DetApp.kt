@@ -138,7 +138,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
     val snackbar = remember { SnackbarHostState() }
     val compact = windowSize.widthSizeClass == WindowWidthSizeClass.Compact
     val expanded = windowSize.widthSizeClass == WindowWidthSizeClass.Expanded
-    // Landscape phone: barely any height — swap the large collapsing bar for a
+    // Landscape phone: barely any height : swap the large collapsing bar for a
     // pinned small one so content gets the room.
     val shortScreen = windowSize.heightSizeClass == WindowHeightSizeClass.Compact
 
@@ -172,7 +172,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     )
                 }
             }
-            // (7 quick taps on the soul — the number of human souls.)
+            // (7 quick taps on the soul : the number of human souls.)
             var soulTaps by remember { mutableStateOf(0) }
             var soulLast by remember { mutableStateOf(0L) }
             val barNav: @Composable () -> Unit = {
@@ -240,7 +240,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
                     AnimatedContent(
                         targetState = dest,
                         transitionSpec = {
-                            // Slide toward the tab you moved to — the screen
+                            // Slide toward the tab you moved to : the screen
                             // follows the pill direction instead of dropping in.
                             val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
                             (fadeIn() + slideInHorizontally { dir * it / 14 })
@@ -291,7 +291,7 @@ fun DetApp(vm: DetViewModel, windowSize: WindowSizeClass) {
 
 /**
  * Floating pill navigation (the Google-Photos look) on every size class: a
- * frosted-glass pill hovering over the content — real backdrop blur via haze —
+ * frosted-glass pill hovering over the content : real backdrop blur via haze :
  * with the selected destination highlighted as a chip, plus a round refresh
  * bubble beside it that doubles as the busy indicator. On wide screens the
  * pill expands: every destination shows its icon and items breathe more.

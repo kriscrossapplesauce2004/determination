@@ -20,10 +20,10 @@ PRISTINE="${PRISTINE:-$REPO/artifacts/boot_a-crdroid-12.11.img}"
 MODZIP="$REPO/magisk-module/determination-magisk-v$DET_VERSION.zip"
 COMPANION_APK="$REPO/companion/app/build/outputs/apk/release/app-release.apk"
 
-[ -f "$BOOTIMG" ] || { echo "missing $BOOTIMG — run boot/repack.sh" >&2; exit 1; }
+[ -f "$BOOTIMG" ] || { echo "missing $BOOTIMG --- run boot/repack.sh" >&2; exit 1; }
 [ -f "$PRISTINE" ] || { echo "missing pristine boot dump $PRISTINE" >&2; exit 1; }
-[ -f "$MODZIP" ] || { echo "missing $MODZIP — run magisk-module/build-module.sh" >&2; exit 1; }
-[ -f "$COMPANION_APK" ] || { echo "missing release APK — build companion:release first" >&2; exit 1; }
+[ -f "$MODZIP" ] || { echo "missing $MODZIP --- run magisk-module/build-module.sh" >&2; exit 1; }
+[ -f "$COMPANION_APK" ] || { echo "missing release APK --- build companion:release first" >&2; exit 1; }
 case "${PRISTINE##*/}" in
     boot_a-*) SLOT=_a ;;
     boot_b-*) SLOT=_b ;;
@@ -32,16 +32,21 @@ esac
 
 mkzip() { # mkzip <outzip> <dir-with-files> [extra: name=path ...]
     python3 - "$@" <<'EOF'
-import os, sys, zipfile
+import os, stat, sys, time, zipfile
 out, srcdir, *extra = sys.argv[1:]
-with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
-    for root, _, files in os.walk(srcdir):
-        for f in sorted(files):
-            p = os.path.join(root, f)
-            z.write(p, os.path.relpath(p, srcdir))
-    for e in extra:
-        name, path = e.split('=', 1)
-        z.write(path, name)
+epoch = max(315532800, int(os.environ.get('SOURCE_DATE_EPOCH', '315532800')))
+stamp = time.gmtime(epoch)[:6]
+files = [(os.path.relpath(os.path.join(root, f), srcdir), os.path.join(root, f))
+         for root, _, names in os.walk(srcdir) for f in names]
+files += [tuple(e.split('=', 1)) for e in extra]
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+    for name, path in sorted(files):
+        info = zipfile.ZipInfo(name, stamp)
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = (stat.S_IFREG | 0o644) << 16
+        with open(path, 'rb') as src:
+            z.writestr(info, src.read(), compress_type=zipfile.ZIP_DEFLATED,
+                       compresslevel=9)
 EOF
 }
 
@@ -51,7 +56,7 @@ WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 
 # --- install zip: scripts only, tiny -----------------------------------
 # Bake the FULL version banner of the kernel inside determination-boot.img
-# into the install zip — its identity check then pins this exact build
+# into the install zip --- its identity check then pins this exact build
 # (including build timestamp), so a stale magisk_patched image from an
 # older build is rejected on the phone instead of discovered at boot.
 export PATH="$REPO/toolchain/usr/bin:$PATH"

@@ -84,4 +84,4 @@ systemctl enable ssh >/dev/null
 systemctl restart ssh
 systemctl --quiet is-active ssh || { echo "FATAL: ssh.service did not start" >&2; exit 1; }
 
-echo "SSH-SETUP-OK — key login for melissa; password/root login disabled"
+echo "SSH-SETUP-OK --- key login for melissa; password/root login disabled"

@@ -1,0 +1,216 @@
+{
+  "entries": [
+    {
+      "path": "artifacts/config.gz",
+      "retention": "tracked-evidence",
+      "sha256": "d6e068d68167c2d27e2587e4c839c8413eb98ec07e987ab7ebf270d85da1f58e",
+      "size": 36110
+    },
+    {
+      "path": "artifacts/eglinfo-zink-gbm-20260713.txt",
+      "retention": "tracked-evidence",
+      "sha256": "232009eee7c4defa2ab42ce8bcea642ebc4e11a8bf899e99bc066c03e9b40df3",
+      "size": 4963
+    },
+    {
+      "path": "artifacts/fill-run-20260705/fill-samples.txt",
+      "retention": "tracked-evidence",
+      "sha256": "17d65a4d19e1e2f2743f40bad4452b0e8df28e7ee08ef8f286267fc7d54e3d75",
+      "size": 1188
+    },
+    {
+      "path": "artifacts/fill-run-20260705/fill.out",
+      "retention": "tracked-evidence",
+      "sha256": "a8c6f69c429e712ad63ee6753340e3c64dfeced5509ac02ff4ae61521f63d613",
+      "size": 1546
+    },
+    {
+      "path": "artifacts/guest-gpu-smoke-20260708.txt",
+      "retention": "tracked-evidence",
+      "sha256": "5a8c3d9b5f7e6d23b57aea9eed7058e9190201d66f4d1290777a92862ab7a4ee",
+      "size": 1138
+    },
+    {
+      "path": "artifacts/guest-gsk-fix-calc-20260710.png",
+      "retention": "tracked-evidence",
+      "sha256": "7ae27ea144e4faadbc64f37a00c5025dd82505a4f90ae2d34bae3e7319943749",
+      "size": 63048
+    },
+    {
+      "path": "artifacts/guest-gsk-fix-text-node-20260710.png",
+      "retention": "tracked-evidence",
+      "sha256": "e5e369fb3491a2bac4f24681e2eb7aed6317062b13e6e47075d1c69d1dd35ad5",
+      "size": 1204
+    },
+    {
+      "path": "artifacts/guest-gsk-fix-texture-node-20260710.png",
+      "retention": "tracked-evidence",
+      "sha256": "185f1c9b61baea7fc58aa90d20ff86cedff8670b0b80fd7085c98d67a863e166",
+      "size": 262
+    },
+    {
+      "path": "artifacts/guest-gsk-struct-varying-fix-20260710.txt",
+      "retention": "tracked-evidence",
+      "sha256": "9cc176269ba47f63e6b865e6c94886bdcf621bd34c7b8b245f96adc4903769cb",
+      "size": 4346
+    },
+    {
+      "path": "artifacts/guest-hwc2-ashmem-fix-20260706.txt",
+      "retention": "tracked-evidence",
+      "sha256": "731452beb6d33e0d67078a5ba8cf781eca97070e360d04fec01fca040827f5bb",
+      "size": 1236
+    },
+    {
+      "path": "artifacts/guest-hwc2-gate-20260704.txt",
+      "retention": "tracked-evidence",
+      "sha256": "caa59cb162db823994aa8d4793c60f0a02a0390177def559805c85e5393f1d31",
+      "size": 4302
+    },
+    {
+      "path": "artifacts/guest-input-bringup-20260706.txt",
+      "retention": "tracked-evidence",
+      "sha256": "c7147f9550db183a15464d002efa65ef542e2c8fe9edbc7fb9d5e6cf7442dcb8",
+      "size": 4181
+    },
+    {
+      "path": "artifacts/guest-net-hardening-20260711.txt",
+      "retention": "tracked-evidence",
+      "sha256": "5355c8d6433a15b57e1102e36611035105c000d44160d9aa1298ce2c15e85950",
+      "size": 2593
+    },
+    {
+      "path": "artifacts/guest-phoc-first-light-20260706.txt",
+      "retention": "tracked-evidence",
+      "sha256": "cfd1da66f04ed7aa669fa218d8c42b5f3d47aba887cb99f829fdaeb1dcfae829",
+      "size": 7684
+    },
+    {
+      "path": "artifacts/guest-phoc-foot-20260706.txt",
+      "retention": "tracked-evidence",
+      "sha256": "0301c5f42e66ce73bbaf50bb204ab424f81b56c2d9d6cb1b01cf995b473acc76",
+      "size": 7544
+    },
+    {
+      "path": "artifacts/guest-phoc-foot-v2-20260706.txt",
+      "retention": "tracked-evidence",
+      "sha256": "34cb28a626f39fe84ff69ab98155083b92defd81c12ee3fdd21941eeb4ec87c1",
+      "size": 6709
+    },
+    {
+      "path": "artifacts/guest-phoc-shot-20260706.png",
+      "retention": "tracked-evidence",
+      "sha256": "ad5e1b2ab4e6c98e363061d8b7279fa952db33fbfbf02e4d7f7dded075de5b8a",
+      "size": 12600
+    },
+    {
+      "path": "artifacts/guest-zygisk-sf-hook-20260711.txt",
+      "retention": "tracked-evidence",
+      "sha256": "ac0bebfecb651385680f734cad2a0194e832e8d53d10ad0690fa9e346b59ebc6",
+      "size": 735
+    },
+    {
+      "path": "artifacts/hybris-minigbm-20260719.txt",
+      "retention": "tracked-evidence",
+      "sha256": "da0427aa5d757278a8669be6074279ccbd995a9acbc6101fd86194dfc64b19c6",
+      "size": 696
+    },
+    {
+      "path": "artifacts/hybris-minigbm-benchmark-20260719.txt",
+      "retention": "tracked-evidence",
+      "sha256": "4f168c2b8c5eb8b535ca7d9aefb8171daf861b3dbcd14188c7b3500b844b090a",
+      "size": 1566
+    },
+    {
+      "path": "artifacts/hybris-minigbm-fence-ahb-20260719.txt",
+      "retention": "tracked-evidence",
+      "sha256": "2f0be040f37f42ce730e240058a99edccc193f667da05897d8537a36bb22d081",
+      "size": 901
+    },
+    {
+      "path": "artifacts/kernel-config-full.txt",
+      "retention": "tracked-evidence",
+      "sha256": "12443cef556f1422775ea0eb0babb4ed26b9fc90260b3088744ac7d6d8a1e257",
+      "size": 161443
+    },
+    {
+      "path": "artifacts/kernel4-flash-wake-dns-20260711.txt",
+      "retention": "tracked-evidence",
+      "sha256": "f4aae07977e118f8ea6f8c93160faa162c98b9f149b1c890cc6e7f3832d163dc",
+      "size": 4827
+    },
+    {
+      "path": "artifacts/kms-probe-20260713.txt",
+      "retention": "tracked-evidence",
+      "sha256": "c1cc4b8c5345c8ba8436acab0f5935636224279867fdb7bcd1aa0398284d965a",
+      "size": 256104
+    },
+    {
+      "path": "artifacts/native-kms-gate-20260713-run2.txt",
+      "retention": "tracked-evidence",
+      "sha256": "3e6e5803f7a94e669808e117b01936212a3865d5e467022a6e31d9dacf157150",
+      "size": 2501
+    },
+    {
+      "path": "artifacts/native-kms-gate-20260713-run5.txt",
+      "retention": "tracked-evidence",
+      "sha256": "0c387be37bc4ff1a49f5606917c8c3ef91ecea5b203528112f60369c7d6dcf7a",
+      "size": 2041
+    },
+    {
+      "path": "artifacts/native-kms-gate-20260713-run6.dmesg",
+      "retention": "tracked-evidence",
+      "sha256": "518060f92767563df95ae411efba3368b628e7e46314a31601ed209ece71d9c7",
+      "size": 11213
+    },
+    {
+      "path": "artifacts/native-kms-gate-20260713-run6.txt",
+      "retention": "tracked-evidence",
+      "sha256": "4fd2d486d1349add25d19e7f2b87575f9fecc74db7016f14e1d5fddbcb0ed483",
+      "size": 2977
+    },
+    {
+      "path": "artifacts/native-kms-gate-20260713.txt",
+      "retention": "tracked-evidence",
+      "sha256": "81867bab0a7c86c616e06683664d1e2ad677b3539dac897717821339a7722c4d",
+      "size": 1918
+    },
+    {
+      "path": "artifacts/native-plasma-kwin-20260714.txt",
+      "retention": "tracked-evidence",
+      "sha256": "9f55db5e34b9f918d2a59ec0a78de097d74e15842906c1c963e953b5cbc5dbb2",
+      "size": 5687
+    },
+    {
+      "path": "artifacts/native-smoke-20260713.txt",
+      "retention": "tracked-evidence",
+      "sha256": "1e441caed40500dc8ef96a1a6745c414bb293eab5e49197a11b02a36e5a4eaf8",
+      "size": 1071
+    },
+    {
+      "path": "artifacts/node-perms-probe.txt",
+      "retention": "tracked-evidence",
+      "sha256": "36cfd6d6272062b193cda06fff74f0e80f45371eeb0b7f39422e7e4ecfbad14f",
+      "size": 3661
+    },
+    {
+      "path": "artifacts/rom-identity.txt",
+      "retention": "tracked-evidence",
+      "sha256": "fa3020ca6406573fed305b5edf0458b409f1d46192237336028d74523f71ec1e",
+      "size": 284
+    },
+    {
+      "path": "artifacts/sdm-dump-sf-running-20260705.txt",
+      "retention": "tracked-evidence",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size": 0
+    },
+    {
+      "path": "artifacts/sf-dump-baseline-20260705.txt",
+      "retention": "tracked-evidence",
+      "sha256": "8ebe5df33b30183bc6e886f777a9c34662463c2d0591148d3d34407b07b3dd55",
+      "size": 31988
+    }
+  ],
+  "generated_by": "artifacts/build-index.py",
+  "schema": 1
+}

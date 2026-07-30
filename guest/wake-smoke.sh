@@ -1,9 +1,9 @@
 #!/bin/sh
-# Determination wake-path smoke test — run INSIDE the guest, in DESKTOP MODE,
+# Determination wake-path smoke test --- run INSIDE the guest, in DESKTOP MODE,
 # while phosh is up. Exercises the full blank/unblank round trip over DBus
 # (org.gnome.ScreenSaver.SetActive true -> false), i.e. exactly the path the
 # power button takes: phosh -> wlr-output-power -> phoc hwcomposer
-# set_power_mode OFF/ON. No button press needed — this isolates the
+# set_power_mode OFF/ON. No button press needed --- this isolates the
 # compositor re-enable from the input-side wake (det-session-manager's
 # active watch), so a failure here is a phoc/hwcomposer bug, not a watcher
 # bug. PANEL GOES BLACK for ~BLANK_SECS seconds mid-run: expected.
@@ -17,7 +17,7 @@ export XDG_RUNTIME_DIR=/run/user/0
 PHOSH_PID=$(pgrep -x phosh | head -1)
 [ -n "$PHOSH_PID" ] || { echo "FAIL: phosh not running (desktop mode on?)"; exit 1; }
 
-# The session bus is private to desktop-on's dbus-run-session — steal its
+# The session bus is private to desktop-on's dbus-run-session --- steal its
 # address from phosh's environ.
 ADDR=$(tr '\0' '\n' < "/proc/$PHOSH_PID/environ" |
        sed -n 's/^DBUS_SESSION_BUS_ADDRESS=//p')
@@ -52,14 +52,14 @@ def check(name, cond):
 
 check("screensaver initially inactive", get_active() is False)
 
-print("-> SetActive(true) — panel should BLANK now")
+print("-> SetActive(true) --- panel should BLANK now")
 ss("SetActive", GLib.Variant("(b)", (True,)))
 time.sleep(1.5)  # phosh marks active only once phoc confirms the power mode
 check("screensaver reports active after blank", get_active() is True)
 
 time.sleep(blank_secs)
 
-print("-> SetActive(false) — panel should COME BACK now")
+print("-> SetActive(false) --- panel should COME BACK now")
 ss("SetActive", GLib.Variant("(b)", (False,)))
 time.sleep(1.5)
 check("screensaver reports inactive after wake", get_active() is False)

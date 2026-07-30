@@ -23,7 +23,7 @@ struct hwc2_compat_display
 };
 
 // Interpose fmq/hidl's logError: the guest has no logd, so ALOG is a black
-// hole — FMQ setup failures (the exact class of bug behind the NO_RESOURCES
+// hole: FMQ setup failures (the exact class of bug behind the NO_RESOURCES
 // wall, 2026-07-05) would be invisible. This object links before
 // device-libs/*.so with --allow-multiple-definition, so our definition wins
 // inside the compat layer.

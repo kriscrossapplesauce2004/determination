@@ -3,10 +3,10 @@
 # together on this device WITHOUT touching the display?
 #   1. Turnip enumerates on kgsl        (build-mesa.sh output, /opt/mesa)
 #   2. minigbm allocates/maps/exports   (build-minigbm.sh output, /opt/minigbm)
-#   3. a minigbm dmabuf IMPORTS into Turnip — the zero-copy seam every later
+#   3. a minigbm dmabuf IMPORTS into Turnip --- the zero-copy seam every later
 #      phase (compositor swapchain, Phase 2 AHardwareBuffer bridge) rests on
 #   4. (informational) zink GL identity via surfaceless EGL
-# Run ON THE PHONE as root, any mode — nothing display-visible here.
+# Run ON THE PHONE as root, any mode --- nothing display-visible here.
 #   adb shell "su -c 'sh /data/local/tmp/native-smoke.sh'" \
 #       | tee artifacts/native-smoke-$(date +%Y%m%d).txt
 set -u
@@ -17,7 +17,7 @@ exec $LXC /bin/sh -c '
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     export TMPDIR=/tmp
     fail=0
-    [ -f /opt/mesa/env.sh ] || { echo "FATAL: /opt/mesa missing — run guest/build-mesa.sh first"; exit 2; }
+    [ -f /opt/mesa/env.sh ] || { echo "FATAL: /opt/mesa missing --- run guest/build-mesa.sh first"; exit 2; }
     . /opt/mesa/env.sh
     export LD_LIBRARY_PATH=/opt/minigbm/lib:$LD_LIBRARY_PATH
 
@@ -32,7 +32,7 @@ exec $LXC /bin/sh -c '
     if [ -x /opt/minigbm/bin/gbm-probe ] && /opt/minigbm/bin/gbm-probe; then
         echo "MINIGBM: OK"
     else
-        echo "MINIGBM: FAIL — run guest/build-minigbm.sh"; fail=1
+        echo "MINIGBM: FAIL --- run guest/build-minigbm.sh"; fail=1
     fi
 
     echo "== 3. minigbm dmabuf -> Turnip import =="

@@ -92,7 +92,7 @@ fun ControlScreen(
     val busy = vm.busy != null
 
     // Live status: quiet re-poll while this screen is visible. Period comes
-    // from Settings (0 = manual only) — each poll is a root round-trip.
+    // from Settings (0 = manual only) : each poll is a root round-trip.
     val pollSec = vm.pollSeconds
     LaunchedEffect(rootOk, pollSec) {
         while (rootOk && pollSec > 0) {
@@ -272,10 +272,22 @@ private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
                     )
                     Text(
                         if (s["installed"] == "yes") "Determination installed"
-                        else "Not installed — see the Install tab",
+                        else "Not installed : see the Install tab",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (s["control"] == "bridge") {
+                        Text(
+                            when {
+                                s["recovery"] == "true" -> "Recovery required"
+                                !s["transition"].isNullOrBlank() -> "Transition: ${s["transition"]}"
+                                else -> "Structured control connected"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (s["recovery"] == "true") MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -315,7 +327,7 @@ private fun StatusCard(vm: DetViewModel, desktop: Boolean) {
                         )
                     }
                     Text(
-                        // (only ever visible at exactly 1% — you cannot give up just yet)
+                        // (only ever visible at exactly 1% : you cannot give up just yet)
                         if (batt == 1 && !charging) "* But it refused.  ·  1%"
                         else "Battery  $batt%  ·  ${s["battmv"] ?: "?"} mV  ·  ${s["battstat"] ?: ""}",
                         style = MaterialTheme.typography.labelMedium,

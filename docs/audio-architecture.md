@@ -86,7 +86,7 @@ describes:
 
 UCM2 is preferred where it can fully express a route. A tiny native adapter is
 allowed for Qualcomm-specific topology or amplifier sequencing, but only mixer
-and route metadata cross that boundary—never PCM buffers.
+and route metadata cross that boundary:never PCM buffers.
 
 ## Concurrency policy
 

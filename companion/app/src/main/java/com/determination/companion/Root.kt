@@ -2,6 +2,7 @@ package com.determination.companion
 
 import java.io.BufferedReader
 import java.io.BufferedWriter
+import org.json.JSONObject
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -9,7 +10,7 @@ import java.util.concurrent.TimeoutException
 /**
  * Thin wrapper around Magisk `su`. Commands run through ONE persistent root
  * shell (a single su grant per app session) instead of a fresh `su -c` per
- * call — spawning su every 5s poll made Magisk toast "granted superuser
+ * call : spawning su every 5s poll made Magisk toast "granted superuser
  * rights" endlessly. Determination's on-device tree lives at [DET].
  */
 object Root {
@@ -104,7 +105,28 @@ object Root {
      * The persistent root shell is slower only on its first call and works
      * across module upgrades without coupling the launcher to injected code.
      */
-    fun status(): Map<String, String> = legacyStatus()
+    fun status(): Map<String, String> = structuredStatus() ?: legacyStatus()
+
+    private fun structuredStatus(): Map<String, String>? {
+        val response = ZygiskBridge.request(ZygiskBridge.OP_STATUS, deadlineMs = 5_000) ?: return null
+        if (!response.ok) return null
+        return try {
+            val root = JSONObject(response.payload)
+            val state = root.optJSONObject("state")
+            buildMap {
+                put("uid", "0")
+                put("control", "bridge")
+                put("installed", "yes")
+                put("mode", state?.optString("observed").orEmpty().ifBlank { root.optString("mode", "?") })
+                put("desired", state?.optString("desired").orEmpty())
+                put("transition", state?.optString("step").orEmpty())
+                put("generation", state?.optLong("generation", 0L).toString())
+                put("recovery", (state?.optString("observed") == "recovery").toString())
+                put("sf", root.optString("surfaceflinger", "?"))
+                put("guest", root.optString("guest", "?"))
+            }
+        } catch (_: Exception) { null }
+    }
 
     private fun legacyStatus(): Map<String, String> {
         val script = """
@@ -144,6 +166,7 @@ object Root {
      * SurfaceFlinger stops and the Android UI disappears a moment later.
      */
     fun enterDesktop(): Result {
+        bridgeMode("desktop")?.let { return it }
         return run(
             "$BIN/guest-start >/dev/null 2>&1; " +
                 "setsid sh -c 'nohup $BIN/desktop-on >/dev/null 2>&1' >/dev/null 2>&1 &",
@@ -153,7 +176,13 @@ object Root {
 
     /** Return to phone mode (restarts SurfaceFlinger). */
     fun exitDesktop(): Result {
+        bridgeMode("phone")?.let { return it }
         return run("$BIN/desktop-off", 30)
+    }
+
+    private fun bridgeMode(mode: String): Result? {
+        val response = ZygiskBridge.mode(mode) ?: return null
+        return Result(response.ok, response.payload, if (response.ok) "" else response.payload)
     }
 
     /** Copy an Android share-sheet staging file into Linux, guest running or not. */
@@ -184,7 +213,7 @@ object Root {
     fun recoverDesktop(): Result =
         run("$LXC/lxc-attach -P $DET -n guest -- /usr/bin/pkill -TERM phoc", 15)
 
-    /** Stop the guest container (battery saver — it idles at ~0 but holds RAM + wakeups). */
+    /** Stop the guest container (battery saver : it idles at ~0 but holds RAM + wakeups). */
     fun stopGuest(): Result = run("$LXC/lxc-stop -P $DET -n guest -t 10", 30)
 
     /**
@@ -218,7 +247,7 @@ object Root {
 
     /**
      * Installed-component inventory in one su round-trip. Keys:
-     * kernel, det_kernel (yes/no — binderfs marker), module_ver, module_code,
+     * kernel, det_kernel (yes/no : binderfs marker), module_ver, module_code,
      * guest (debian version or empty), slot, boot_part.
      */
     fun inventory(): Map<String, String> {
@@ -311,7 +340,7 @@ object Root {
         return safe.associateWith { if (states[it] == "installed") "installed" else "absent" }
     }
 
-    /** apt-get install inside the guest. Long timeout — packages can be big. */
+    /** apt-get install inside the guest. Long timeout : packages can be big. */
     fun aptInstall(pkg: String): Result {
         val p = pkg.filter { it.isLetterOrDigit() || it in ".+-" }
         return run(

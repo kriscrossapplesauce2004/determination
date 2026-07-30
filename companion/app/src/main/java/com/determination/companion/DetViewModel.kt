@@ -36,24 +36,6 @@ val COMPOSITORS = listOf(
             "phosh mobile shell, squeekboard OSK. This is what desktop mode runs.",
         CompositorStatus.ACTIVE,
     ),
-    CompositorChoice(
-        "labwc", "labwc",
-        "Openbox-style stacking Wayland compositor. Installs from Debian; session " +
-            "wiring into desktop-on is still pending, so selecting it stores the preference only.",
-        CompositorStatus.EXPERIMENTAL, aptPkg = "labwc",
-    ),
-    CompositorChoice(
-        "wayfire", "Wayfire",
-        "3D-effects compositor. Installs from Debian; same caveat — the session " +
-            "launcher only starts phoc today.",
-        CompositorStatus.EXPERIMENTAL, aptPkg = "wayfire",
-    ),
-    CompositorChoice(
-        "sway", "Sway",
-        "Dead end on this device: incompatible with the droidian wlroots hybrid " +
-            "0.17/0.18 API the display stack depends on.",
-        CompositorStatus.INCOMPATIBLE,
-    ),
 )
 
 val CATALOG = listOf(
@@ -256,7 +238,7 @@ class DetViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             Root.setCompositor(id)
             compositor = id
-            if (id != "phosh") message = "Preference stored — session wiring for $id is still pending"
+            if (id != "phosh") message = "Preference stored : session wiring for $id is still pending"
         }
     }
 

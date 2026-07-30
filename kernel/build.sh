@@ -2,7 +2,7 @@
 # Build the guacamoleb kernel with the Determination container fragment merged in.
 #
 # Base config: the RUNNING kernel's /proc/config.gz (artifacts/
-# kernel-config-full.txt from recon) — guaranteed parity with what crDroid
+# kernel-config-full.txt from recon) --- guaranteed parity with what crDroid
 # ships, rather than reconstructing their defconfig+fragment recipe. The only
 # delta is determination.config.
 #
@@ -10,7 +10,7 @@
 # binutils in ../toolchain/usr/bin (extracted Arch pkg, no root needed).
 #
 # Output: out/arch/arm64/boot/Image.gz-dtb for boot/repack.sh. dtbo is NOT
-# rebuilt — the ROM's flashed dtbo pairs fine with a same-source kernel.
+# rebuilt --- the ROM's flashed dtbo pairs fine with a same-source kernel.
 
 set -eu
 cd "$(dirname "$0")"
@@ -33,14 +33,14 @@ cp "$BASECONFIG" out/.config
 (cd src && KCONFIG_CONFIG="$PWD/../out/.config" scripts/kconfig/merge_config.sh -O "$PWD/../out" -m "$PWD/../out/.config" "$PWD/../determination.config")
 $KMAKE olddefconfig
 
-# Verify the merge actually took — a silently-dropped option here costs a
+# Verify the merge actually took --- a silently-dropped option here costs a
 # flash-and-boot cycle to discover.
 for opt in NAMESPACES USER_NS PID_NS IPC_NS NET_NS CGROUP_DEVICE CGROUP_PIDS POSIX_MQUEUE ANDROID_BINDERFS VETH OVERLAY_FS QCA_CLD_WLAN \
            VT VT_CONSOLE CHECKPOINT_RESTORE BINFMT_MISC NF_TABLES NFT_COMPAT IP6_NF_NAT MACVLAN VLAN_8021Q \
            PSTORE PSTORE_RAM PSTORE_PMSG; do
     grep -q "^CONFIG_$opt=y" out/.config || { echo "MERGE FAILED: CONFIG_$opt not set" >&2; exit 1; }
 done
-! grep -q "^CONFIG_FRAMEBUFFER_CONSOLE=y" out/.config || { echo "MERGE FAILED: fbcon enabled — would fight SF for the panel" >&2; exit 1; }
+! grep -q "^CONFIG_FRAMEBUFFER_CONSOLE=y" out/.config || { echo "MERGE FAILED: fbcon enabled --- would fight SF for the panel" >&2; exit 1; }
 echo "config OK: all Determination options present"
 
 time $KMAKE -j"$JOBS" Image.gz-dtb

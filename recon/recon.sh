@@ -6,26 +6,73 @@
 # against these blobs or needs a modification pass. Everything downstream
 # (libhybris backend choice, gralloc/mapper pairing) is gated on this output.
 #
-# Usage: recon/recon.sh [output-dir]
+# Usage: recon/recon.sh [--serial SERIAL] [output-dir]
 
 set -u
 
-OUT="${1:-recon/report-$(date +%Y%m%d-%H%M%S)}"
+SERIAL=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --serial)
+            [ "$#" -ge 2 ] || { echo "error: --serial needs a value" >&2; exit 2; }
+            SERIAL=$2
+            shift 2
+            ;;
+        --help|-h)
+            echo "usage: recon/recon.sh [--serial SERIAL] [output-dir]"
+            exit 0
+            ;;
+        -*)
+            echo "error: unknown option: $1" >&2
+            exit 2
+            ;;
+        *)
+            [ "$#" -eq 1 ] || { echo "error: only one output directory is allowed" >&2; exit 2; }
+            OUT=$1
+            shift
+            ;;
+    esac
+done
+OUT=${OUT:-recon/report-$(date +%Y%m%d-%H%M%S)}
 mkdir -p "$OUT"
+STATUS_FILE="$OUT/probe-status.tsv"
+printf 'probe\tstatus\n' >"$STATUS_FILE"
 
-if ! adb get-state >/dev/null 2>&1; then
-    echo "error: no adb device" >&2
+command -v adb >/dev/null 2>&1 || {
+    echo "error: adb is required; install official Android platform-tools" >&2
+    exit 1
+}
+
+adb_cmd() {
+    if [ -n "$SERIAL" ]; then adb -s "$SERIAL" "$@"; else adb "$@"; fi
+}
+
+if [ -z "$SERIAL" ]; then
+    CONNECTED=$(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+    COUNT=$(printf '%s\n' "$CONNECTED" | sed '/^$/d' | wc -l | tr -d ' ')
+    if [ "$COUNT" -ne 1 ]; then
+        echo "error: select exactly one authorized device with --serial SERIAL" >&2
+        exit 1
+    fi
+    SERIAL=$CONNECTED
+fi
+
+if ! adb_cmd get-state >/dev/null 2>&1; then
+    echo "error: selected adb device is not ready: $SERIAL" >&2
     exit 1
 fi
 
+adb_cmd version >"$OUT/host-adb-version.txt" 2>&1
+printf 'serial=%s\n' "$SERIAL" >"$OUT/host-target.txt"
+
 # Use Magisk `su -c`; never restart adbd as root (that drops wireless ADB and
 # is unnecessary on a rooted production build). Quote the entire command as
-# one argument to su — adb otherwise reconstructs it as separate shell words
+# one argument to su - adb otherwise reconstructs it as separate shell words
 # and compound commands fail at the first `do`/`;`.
-if [ "$(adb shell su -c id -u </dev/null 2>/dev/null | tr -d '\r')" = "0" ]; then
+if [ "$(adb_cmd shell su -c id -u </dev/null 2>/dev/null | tr -d '\r')" = "0" ]; then
     ash() {
         escaped=$(printf '%s' "$*" | sed "s/'/'\\\\''/g")
-        adb shell "su -c '$escaped'"
+        adb_cmd shell "su -c '$escaped'"
     }
 else
     echo "error: no root on device (grant Shell in Magisk Superuser)" >&2
@@ -35,7 +82,12 @@ fi
 run() { # run <name> <command...>
     name=$1; shift
     echo "== $name"
-    ash "$@" >"$OUT/$name.txt" 2>&1
+    if ash "$@" >"$OUT/$name.txt" 2>&1; then
+        printf '%s\tok\n' "$name" >>"$STATUS_FILE"
+    else
+        printf '%s\tfailed\n' "$name" >>"$STATUS_FILE"
+        echo "warn: probe failed: $name (see $OUT/$name.txt)" >&2
+    fi
 }
 
 run fingerprint       'getprop ro.build.fingerprint; getprop ro.build.version.release; getprop ro.build.version.sdk; getprop ro.boot.slot_suffix'
@@ -72,7 +124,7 @@ run prop-files        'ls -la /dev/__properties__/ | head -n 30'
 
 # Emit a conservative machine-readable starting point. Runtime discovery is
 # still authoritative; this records only values recon can identify safely.
-DEVICE=$(adb shell getprop ro.product.device </dev/null | tr -d '\r')
+DEVICE=$(adb_cmd shell getprop ro.product.device </dev/null | tr -d '\r')
 BACKLIGHT=$(ash 'for d in /sys/class/backlight/backlight/brightness /sys/class/backlight/panel0-backlight/brightness /sys/class/backlight/*/brightness; do [ -e "$d" ] && { echo "$d"; break; }; done' | tr -d '\r')
 BLMAX=$(ash "cat '${BACKLIGHT%/brightness}/max_brightness' 2>/dev/null" | tr -d '\r')
 WIFI=$(ash 'for d in /sys/class/net/wlan* /sys/class/net/wifi*; do [ -e "$d" ] && { basename "$d"; break; }; done' | tr -d '\r')

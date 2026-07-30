@@ -1,7 +1,7 @@
 #!/bin/bash
 # Determination guest polish: mobile apps, notch (gmobile panel JSON), phosh
 # settings. Run INSIDE the container as root, in PHONE MODE (guest network
-# needs a stable Android framework — in desktop mode system_server
+# needs a stable Android framework --- in desktop mode system_server
 # crash-loops and takes WiFi down, see AGENTS.md §4 known issues).
 # Idempotent.
 set -e
@@ -14,19 +14,19 @@ apt-get update -qq
 # Core set: kgx (gnome-console, adaptive terminal), calculator, text editor,
 # gnome-backgrounds (phosh warns + shows black without any wallpaper),
 # python3-gi (gmobile build below + generally useful).
-# librsvg2-common — THE app-icon fix: the GNOME apps ship icons ONLY as
+# librsvg2-common --- THE app-icon fix: the GNOME apps ship icons ONLY as
 # scalable SVGs (hicolor/scalable/apps/*.svg) and without the GdkPixbuf SVG
 # loader this provides, phosh can't rasterize them and every one falls back
-# to the generic image placeholder (Foot alone worked — it ships a PNG).
+# to the generic image placeholder (Foot alone worked --- it ships a PNG).
 # Verified 2026-07-08: NO svg loader was in the pixbuf cache.
-# feedbackd — phosh's haptic/LED feedback daemon (org.sigxcpu.Feedback);
+# feedbackd --- phosh's haptic/LED feedback daemon (org.sigxcpu.Feedback);
 # without it phosh/squeekboard spam "Failed to trigger feedback" on every
 # button press and there's no key-press haptic. Uses the qti-haptics evdev.
-# gnome-control-center — the Settings app (requested).
+# gnome-control-center --- the Settings app (requested).
 apt-get install -y -qq --no-install-recommends \
     gnome-console gnome-calculator gnome-text-editor gnome-backgrounds \
     python3-gi librsvg2-common feedbackd gnome-control-center
-# Nice-to-haves that may not exist / may be heavy — install individually so
+# Nice-to-haves that may not exist / may be heavy --- install individually so
 # one failure doesn't abort the set. gnome-software = the Software app
 # (requested); it wants PackageKit + appstream and may be flaky in-container
 # without a full session, but it installs and launches.
@@ -44,22 +44,22 @@ update-gdk-pixbuf-loaders 2>/dev/null ||
 for t in hicolor Adwaita; do
     [ -d "/usr/share/icons/$t" ] && gtk-update-icon-cache -f -t "/usr/share/icons/$t" 2>/dev/null || true
 done
-# Confirm the loader is now present — fail loud if the icon fix didn't take.
+# Confirm the loader is now present --- fail loud if the icon fix didn't take.
 if gdk-pixbuf-query-loaders 2>/dev/null | grep -qi svg; then
-    echo "SVG loader OK — app icons will render"
+    echo "SVG loader OK --- app icons will render"
 else
     echo "WARN: SVG loader still absent after librsvg2-common install"
 fi
 
 echo "== notch: rebuild libgmobile with an OP7 panel entry =="
 # The kernel DT compatible is generic ("qcom,sm8150-mtp qcom,sm8150
-# qcom,mtp" — downstream qcom kernel, no oneplus string), so gmobile's
-# embedded panel db never matches — and gmobile 0.3.1 reads ONLY built-in
+# qcom,mtp" --- downstream qcom kernel, no oneplus string), so gmobile's
+# embedded panel db never matches --- and gmobile 0.3.1 reads ONLY built-in
 # GResources ("currently we only look at the built-in gresources",
 # gm-device-info.c), so a filesystem JSON drop-in does nothing. Rebuild
 # libgmobile from source with the panel added under our compatibles and
 # install to /usr/local (wins via LD_LIBRARY_PATH in desktop-on for BOTH
-# phoc and the phosh session — phosh computes the top-bar margin, so it
+# phoc and the phosh session --- phosh computes the top-bar margin, so it
 # needs our lib too). The OnePlus 6T (fajita) JSON is the same 1080x2340
 # waterdrop glass; reuse its cutout path.
 if ! (LD_LIBRARY_PATH=/usr/local/lib/aarch64-linux-gnu:/usr/local/lib python3 -c "

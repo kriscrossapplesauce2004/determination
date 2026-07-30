@@ -14,7 +14,7 @@
 # native-Mesa diagnostic sessions prepend /opt/minigbm/lib so gbm_* resolves
 # to minigbm.
 # If the downstream driver rejects MSM_GEM_NEW, minigbm's dumb_driver
-# fallback still yields scanout-capable linear buffers — the self-test below
+# fallback still yields scanout-capable linear buffers --- the self-test below
 # prints which backend actually engaged.
 set -e
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
@@ -38,7 +38,7 @@ cd "$B/minigbm"
 # Downstream SDE registers the DRM driver as "msm_drm" (mainline: "msm");
 # minigbm selects backends by drmGetVersion name, so without this the msm
 # backend never engages and gbm_create_device returns NULL (verified
-# 2026-07-13). Guest-only build — the mainline track wants the stock name.
+# 2026-07-13). Guest-only build --- the mainline track wants the stock name.
 sed -i 's/\.name = "msm",/.name = "msm_drm",/' msm.c
 grep -q '\.name = "msm_drm",' msm.c || { echo "FATAL: msm_drm name patch did not apply"; exit 1; }
 

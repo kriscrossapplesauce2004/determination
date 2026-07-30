@@ -7,6 +7,17 @@ different and are recorded in the release manifest.
 
 ### Added
 
+- A typed Linux-first boot profile with generation tracking, health-gated
+  activation, one-shot phone fallback, explicit recovery commands, and a
+  conservative minimum-Android service policy for supported devices.
+- One host-safe validation entrypoint covering shell syntax, Python syntax,
+  repository policy, documentation links, release inputs, native control
+  tests, graphics tests, recon fixtures, and lifecycle fixtures.
+- A repository-native documentation wiki with task-first guides, architecture,
+  reference, operations, qualification, and clearly separated history.
+- Artifact provenance and retention manifests, reproducible package builders,
+  contributor guidance, security reporting guidance, and local policy
+  enforcement.
 - One project-wide version/codename source consumed by every installable
   artifact, replacing the unrelated bring-up-era component versions.
 - Internal phone-to-desktop handoff with SurfaceFlinger release, exclusive
@@ -47,6 +58,16 @@ different and are recorded in the release manifest.
 
 ### Changed
 
+- Lifecycle operations now use a shared lock, generation, boot identity, and
+  process start-time checks so stale PID files and overlapping transitions
+  cannot target unrelated processes.
+- Release-critical guest and HWC sources use immutable revisions. The current
+  release manifest records the remaining package hashes and signing inputs
+  that must be supplied before shipping.
+- Historical reviews, raw logs, boot images, old module archives, and the
+  retired AAudio bridge no longer live in active source paths.
+- Public product copy now distinguishes proven behavior, implemented but
+  device-gated behavior, and roadmap work.
 - Companion audio no longer uses or packages `AudioTrack`, AAudio, AudioFlinger,
   a PCM TCP bridge, media-playback foreground-service policy, or Internet
   permission. Product PCM is PipeWire to ALSA hardware.
@@ -75,7 +96,7 @@ different and are recorded in the release manifest.
 - Direct internal-codec routes and mixer restoration are not yet qualified on
   hardware; ownership remains explicit/manual and no sound claim is made.
 - The guest hardware/control trust boundary is prototype-grade.
-- Several build inputs still follow moving upstream branches; Aqua cannot ship
-  until release inputs are pinned and manifested.
+- Aqua still requires clean-build package hashes, signing verification, and
+  target-device qualification evidence before it can ship.
 
 See [RELEASES.md](RELEASES.md) for the complete scope and ship gates.

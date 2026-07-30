@@ -1,18 +1,18 @@
 # GPU-accelerated app buffers (zero-copy client rendering)
 
 How Wayland clients in the Determination guest render on the device GPU and
-hand their frames to phoc without a copy — and why this design is portable
+hand their frames to phoc without a copy : and why this design is portable
 to essentially any Halium-capable Android device, not just the OnePlus 7.
 
 ## The problem
 
 The compositor (phoc, on the droidian wlroots hwcomposer backend) has been
 GPU-accelerated since §3. Clients were not: with no usable client EGL they
-fell back to `wl_shm` — software rasterization (GTK's cairo path) plus a
+fell back to `wl_shm` : software rasterization (GTK's cairo path) plus a
 full-frame copy and a texture upload every frame. Fine for a terminal,
 hopeless for real apps.
 
-The standard Linux answer — Mesa + `linux-dmabuf` — is **not available** on
+The standard Linux answer : Mesa + `linux-dmabuf` : is **not available** on
 libhybris systems: the vendor EGL driver sits behind bionic, buffers are
 gralloc handles rather than dmabufs you can import with
 `EGL_EXT_image_dma_buf_import`, and downstream kernels (this one: msm 4.14
@@ -40,7 +40,7 @@ phoc / wlroots (android renderer, hybris EGL on the hwcomposer platform)
 ```
 
 Both halves speak `android_wlegl` (protocol XML lives in both trees). No
-Determination-specific patch is needed for the buffer path itself — the
+Determination-specific patch is needed for the buffer path itself : the
 work is environment wiring plus verification.
 
 ### Who provides what
@@ -57,7 +57,7 @@ work is environment wiring plus verification.
 One process tree, two EGL personalities:
 
 - **Compositor** (`toggle/desktop-on` step 5, `guest/*-smoke.sh`):
-  `EGL_PLATFORM=hwcomposer` — owns the panel through hwc2.
+  `EGL_PLATFORM=hwcomposer` : owns the panel through hwc2.
 - **Clients** (`toggle/desktop-on` step 5e session, `/etc/profile.d/hybris.sh`):
   `EGL_PLATFORM=wayland` + the same `HYBRIS_LD_LIBRARY_PATH` as the
   compositor + `/usr/local/lib` first in `LD_LIBRARY_PATH`.
@@ -67,8 +67,8 @@ Three traps, all load-bearing:
 1. **`EGL_PLATFORM` default.** Hybris maps
    `eglGetPlatformDisplay(EGL_PLATFORM_WAYLAND_KHR)` to the wayland
    platform explicitly (GTK4/epoxy take this path), but any client calling
-   plain `eglGetDisplay()` gets the *configure-time default* —
-   `hwcomposer` in our build — and will fight the compositor for the
+   plain `eglGetDisplay()` gets the *configure-time default* :
+   `hwcomposer` in our build : and will fight the compositor for the
    composer HAL. Clients must run with `EGL_PLATFORM=wayland`.
 2. **`HYBRIS_LD_LIBRARY_PATH` in clients.** The vendor EGL and apex bionic
    libc must resolve inside every *client* process, not just phoc. Without
@@ -78,7 +78,7 @@ Three traps, all load-bearing:
    `/lib/aarch64-linux-gnu` must lose to hybris' in `/usr/local/lib`
    (session `LD_LIBRARY_PATH`; same rule as the stale-z4-debs problem).
 
-Also set for GTK4: `GSK_RENDERER=ngl` (skip the Vulkan probe — no hybris
+Also set for GTK4: `GSK_RENDERER=ngl` (skip the Vulkan probe : no hybris
 Vulkan platform installed; the GLES "ngl" renderer is the accelerated
 target).
 
@@ -86,7 +86,7 @@ target).
 
 - Nothing above references this device. Formats and usage bits are
   negotiated per-buffer through gralloc; the GPU is whatever the vendor
-  driver says (`Adreno`, `Mali`, `PowerVR` — the smoke test accepts any).
+  driver says (`Adreno`, `Mali`, `PowerVR` : the smoke test accepts any).
 - Works on HIDL (composer 2.1–2.4) and AIDL devices alike: the client
   buffer path never touches the composer HAL, only gralloc + EGL.
 - The one ABI subtlety: wlroots' `wlr_android_wlegl_buffer_remote_buffer`
@@ -94,7 +94,7 @@ target).
   header standing in for the vptr, `ANativeWindowBuffer` at offset 8), so
   hybris' `eglCreateImageKHR(EGL_WAYLAND_BUFFER_WL)` can cast the resource
   straight into it. That layout is unchanged in hybris since 2012, but if
-  upstream ever adds a field, phoc crashes on the first client buffer —
+  upstream ever adds a field, phoc crashes on the first client buffer :
   re-check `hybris/platforms/common/server_wlegl_buffer.h` against
   `include/wlr/types/wlr_android_wlegl.h` after any libhybris bump.
 - Hard failure mode to know: hybris' wayland platform **`abort()`s the
@@ -110,10 +110,10 @@ target).
 
 `guest/gpu-smoke.sh` (run as root on the phone):
 
-1. `gpu-smoke.sh prep` in **phone mode** — installs `glmark2-es2-wayland`
+1. `gpu-smoke.sh prep` in **phone mode** : installs `glmark2-es2-wayland`
    + `wayland-utils` into the guest (network is only reliable in phone
    mode).
-2. `gpu-smoke.sh` in **desktop mode** (announce first — windows appear on
+2. `gpu-smoke.sh` in **desktop mode** (announce first : windows appear on
    the panel): checks the platform plugin, the `android_wlegl` global,
    runs glmark2 (vendor `GL_RENDERER` string + FPS = proof the buffer path
    is GPU end-to-end), then a GTK4 app under `GDK_DEBUG=opengl` and
@@ -127,14 +127,14 @@ Evidence convention: tee output to `artifacts/guest-gpu-smoke-<date>.txt`.
   default, build prereq check, smoke script).
 - 2026-07-09/10: deployed and debugged on device. Three real blockers were
   found and fixed, all encoded in `guest/build-libhybris.sh`:
-  1. **epoxy abort** — the display advertises `EGL_EXT_device_query` but no
+  1. **epoxy abort** : the display advertises `EGL_EXT_device_query` but no
      client-side provider resolves; epoxy `abort()`s every GTK4 app. Fixed
      by stripping the device-query family from the display extension string.
-     (This is also why `GDK_DEBUG=opengl` "aborts by design" — it was this.)
-  2. **KHR swap** — GDK prefers `eglSwapBuffersWithDamageKHR`, which the
+     (This is also why `GDK_DEBUG=opengl` "aborts by design" : it was this.)
+  2. **KHR swap** : GDK prefers `eglSwapBuffersWithDamageKHR`, which the
      hybris wayland platform didn't override (only the EXT variant); frames
      never reached the compositor. Fixed with an `OVERRIDE_TO` alias.
-  3. **Adreno struct-varying miscompilation** — the A640 blob (V@0502)
+  3. **Adreno struct-varying miscompilation** : the A640 blob (V@0502)
      returns zeros when a `flat in Rect/RoundedRect` varying is read as a
      whole struct; every GSK fragment shader ends in
      `rect_coverage(_rect, _pos)`, so alpha=0 and **no GSK draw produced

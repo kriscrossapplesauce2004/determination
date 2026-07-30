@@ -4,7 +4,7 @@ namespace determination::control {
 
 bool endpoint_peer_allowed(Endpoint endpoint, uid_t uid)
 {
-    if (endpoint == Endpoint::Admin) return uid == 0 || uid == 1000;
+    if (endpoint == Endpoint::Admin) return uid == 0;
     return uid == 0 || uid == 1000;
 }
 

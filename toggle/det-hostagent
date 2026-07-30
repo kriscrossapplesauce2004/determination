@@ -3,14 +3,14 @@
 # Android side, launched by guest-start. Watches a control directory that is
 # bind-mounted into the guest (host /data/determination/run/control ==
 # guest /mnt/det-control) and executes host-privileged actions the guest asks
-# for — the only way to leave desktop mode / power the phone from INSIDE phosh,
+# for --- the only way to leave desktop mode / power the phone from INSIDE phosh,
 # where there is no root shell and Android's UI is grabbed away.
 #
 # Protocol: the guest drops an empty file named after the action; we consume
 # (remove) it, then act. Known actions:
 #   exit      -> desktop-off (return to phone mode)
-#   reboot    -> desktop-off (best-effort) then reboot
-#   poweroff  -> desktop-off (best-effort) then power off
+# Legacy file commands can only request exit. Reboot and power-off require the
+# authenticated guest-agent RPC and its explicit authority record.
 # Anything else is ignored (and cleared) so a typo can't wedge the loop.
 
 set -u
@@ -43,38 +43,39 @@ scan() {
             exit)
                 echo "cmd: exit -> desktop-off $(date)"
                 "$DET/bin/desktop-off" ;;
-            reboot)
-                echo "cmd: reboot $(date)"
-                "$DET/bin/desktop-off" 2>/dev/null
-                reboot_now ;;
-            poweroff)
-                echo "cmd: poweroff $(date)"
-                "$DET/bin/desktop-off" 2>/dev/null
-                power_off ;;
+            reboot|poweroff)
+                echo "denied legacy power command: $cmd (use det-guest-agent RPC)" ;;
             *) echo "ignoring unknown cmd: $cmd" ;;
         esac
     done
 }
 
-# Event-driven wait (2026-07-10): the old loop slept 0.5s forever — ~170k
+# Event-driven wait (2026-07-10): the old loop slept 0.5s forever --- ~170k
 # fork+exec of `sleep` a day for a channel that fires a few times a session.
 # toybox inotifyd blocks until something is CREATED in $CTRL (`:n`) and runs
 # PROG per event; it does NOT exit on its own (verified: PROG rc and a
 # `| head -1` reader both leave it running to the timeout), so PROG kills
-# its parent — first event tears the wait down instantly (rc 143). timeout
+# its parent --- first event tears the wait down instantly (rc 143). timeout
 # caps the wait at 15s as a safety rescan (covers the rare create-between-
 # scan-and-watch race). Command latency ~instant; idle cost is 2 short-lived
 # procs per 15s. Falls back to plain polling if inotifyd is ever absent.
 WAKE="$DET/run/.hostagent-wake"
 if command -v inotifyd >/dev/null 2>&1; then
     printf '#!/system/bin/sh\nkill $PPID\n' > "$WAKE" && chmod 755 "$WAKE"
-    wait_event() { timeout 15 inotifyd "$WAKE" "$CTRL":n >/dev/null 2>&1; }
+    wait_event() { timeout "$1" inotifyd "$WAKE" "$CTRL":n >/dev/null 2>&1; }
 else
-    echo "no inotifyd — falling back to 2s polling"
-    wait_event() { sleep 2; }
+    echo "no inotifyd --- falling back to 2s polling"
+    wait_event() { sleep "$1"; return 124; }
 fi
 
+idle_wait=15
 while :; do
     scan
-    wait_event
+    if wait_event "$idle_wait"; then
+        idle_wait=15
+    else
+        # Timeout-driven rescans back off to two minutes when idle; a create
+        # wakes immediately and resets the interval.
+        [ "$idle_wait" -lt 120 ] && idle_wait=$((idle_wait * 2))
+    fi
 done

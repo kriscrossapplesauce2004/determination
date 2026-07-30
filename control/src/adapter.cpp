@@ -11,6 +11,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+extern char **environ;
+
 namespace determination::control {
 
 AdapterResult run_adapter(const std::string &path,
@@ -38,7 +40,10 @@ AdapterResult run_adapter(const std::string &path,
     if (child == 0) {
         prctl(PR_SET_PDEATHSIG, SIGTERM);
         if (getppid() == 1) _exit(126);
-        setsid();
+        if (setpgid(0, 0) != 0) _exit(126);
+        clearenv();
+        setenv("PATH", "/system/bin:/system/xbin:/usr/bin:/bin", 1);
+        setenv("LANG", "C", 1);
         dup2(output_pipe[1], STDOUT_FILENO);
         dup2(output_pipe[1], STDERR_FILENO);
         close(output_pipe[0]);
@@ -53,6 +58,11 @@ AdapterResult run_adapter(const std::string &path,
         return result;
     }
     result.started = true;
+    // Establish the group in the parent too, closing the child-side race before
+    // timeout handling can send a group signal.
+    if (setpgid(child, child) != 0 && errno != EACCES && errno != ESRCH) {
+        result.error = std::strerror(errno);
+    }
 
     const std::uint64_t deadline = monotonic_milliseconds() +
         static_cast<std::uint64_t>(timeout.count());
@@ -60,12 +70,16 @@ AdapterResult run_adapter(const std::string &path,
     bool exited = false;
     char buffer[4096];
     while (!exited) {
-        while (result.output.size() < output_limit) {
-            const std::size_t wanted =
-                std::min(sizeof(buffer), output_limit - result.output.size());
-            const ssize_t count = read(output_pipe[0], buffer, wanted);
+        for (;;) {
+            const ssize_t count = read(output_pipe[0], buffer, sizeof(buffer));
             if (count > 0) {
-                result.output.append(buffer, static_cast<std::size_t>(count));
+                const std::size_t available = result.output.size() < output_limit
+                    ? output_limit - result.output.size() : 0U;
+                const std::size_t captured = std::min(
+                    static_cast<std::size_t>(count), available);
+                result.output.append(buffer, captured);
+                result.output_truncated = result.output_truncated ||
+                    captured != static_cast<std::size_t>(count);
                 continue;
             }
             if (count < 0 && errno == EINTR) continue;
@@ -103,11 +117,17 @@ AdapterResult run_adapter(const std::string &path,
         poll(&descriptor, 1, 25);
     }
 
-    while (result.output.size() < output_limit) {
-        const std::size_t wanted =
-            std::min(sizeof(buffer), output_limit - result.output.size());
-        const ssize_t count = read(output_pipe[0], buffer, wanted);
-        if (count > 0) result.output.append(buffer, static_cast<std::size_t>(count));
+    for (;;) {
+        const ssize_t count = read(output_pipe[0], buffer, sizeof(buffer));
+        if (count > 0) {
+            const std::size_t available = result.output.size() < output_limit
+                ? output_limit - result.output.size() : 0U;
+            const std::size_t captured = std::min(
+                static_cast<std::size_t>(count), available);
+            result.output.append(buffer, captured);
+            result.output_truncated = result.output_truncated ||
+                captured != static_cast<std::size_t>(count);
+        }
         else if (count < 0 && errno == EINTR) continue;
         else break;
     }

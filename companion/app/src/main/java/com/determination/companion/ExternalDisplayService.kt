@@ -54,10 +54,17 @@ class ExternalDisplayService : Service() {
                 startForeground(NOTIFICATION_ID, notification())
             }
         } catch (error: Exception) {
-            // A denied FGS must not crash-loop the companion. The presenter is
-            // still useful while the process remains alive and detd can retry
-            // it after a later display hotplug.
             Log.w(TAG, "foreground start denied: ${error.message}")
+            ExternalDisplayState.write(
+                this,
+                ExternalDisplaySnapshot(
+                    enabled = false,
+                    phase = "error",
+                    error = "Foreground service unavailable: ${error.message ?: "denied"}",
+                ),
+            )
+            stopSelf()
+            return
         }
         val previous = ExternalDisplayState.read(this)
         ExternalDisplayState.write(this, previous.copy(enabled = true, phase = "starting", error = ""))

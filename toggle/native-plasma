@@ -5,10 +5,10 @@
 # pre-seed, trap-guarded restore, bootanim keeper).
 #
 # Stages (pick with $1, default "kwin"):
-#   kwin    — kwin_wayland + a terminal, ~2 min hold. The atomic-commit and
+#   kwin    --- kwin_wayland + a terminal, ~2 min hold. The atomic-commit and
 #             GL-under-KWin probe. KWin 6 is atomic-only, which modetest
-#             never proved — THIS is the real test.
-#   plasma  — full Plasma Mobile shell (plasmashell mobile lookandfeel)
+#             never proved --- THIS is the real test.
+#   plasma  --- full Plasma Mobile shell (plasmashell mobile lookandfeel)
 #             inside kwin, ~3 min hold.
 # Ends by itself; desktop-off-style restore. Logs: /data/local/tmp/
 # native-plasma.out + kwin log at guest /var/log/kwin.log (pulled by caller).
@@ -40,7 +40,7 @@ esac
 # end it early with: sh native-restore).
 HOLD="${DET_HOLD:-$HOLD}"
 
-[ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active — run desktop-off first"; exit 1; }
+[ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active --- run desktop-off first"; exit 1; }
 $LXC /bin/true 2>/dev/null || { echo "FATAL: guest not running"; exit 1; }
 $LXC /usr/bin/test -x /usr/bin/kwin_wayland || { echo "FATAL: kwin_wayland missing (plasma install still running?)"; exit 1; }
 
@@ -54,7 +54,7 @@ restore() {
 trap restore EXIT INT TERM
 
 # Orphan watchdog: if THIS script dies without its trap (SIGKILL, adb drop,
-# tool-call rejection mid-flight — happened 2026-07-13, panel stayed dark),
+# tool-call rejection mid-flight --- happened 2026-07-13, panel stayed dark),
 # the detached watcher runs native-restore. Normal exit removes $GATE first,
 # so the watchdog no-ops.
 (
@@ -132,7 +132,7 @@ $LXC /bin/sh -c '
 
 echo "== 5. launch kwin ($STAGE) via det-plasma.service =="
 # KWin 6 refuses to open devices outside a logind session (NoopSession::
-# openRestricted is `return -1` — even root). det-plasma.service uses
+# openRestricted is `return -1` --- even root). det-plasma.service uses
 # PAMName=login + TTYPath so pam_systemd registers a real logind session
 # (greetd-style). Session script: guest /usr/local/bin/det-plasma-session
 # (mesa /opt/mesa env). KWin 6 DRM backend is atomic-only: this doubles as
@@ -153,11 +153,11 @@ while [ $i -lt 100 ]; do
     i=$((i+1)); sleep 0.3
 done
 if [ -S "/proc/$GPID/root/run/user/0/wayland-0" ]; then
-    echo "kwin socket up after ~$((i*3/10))s — releasing input grab"
+    echo "kwin socket up after ~$((i*3/10))s --- releasing input grab"
     [ -f "$DET/run/evgrab.pid" ] && kill "$(cat "$DET/run/evgrab.pid")" 2>/dev/null
     rm -f "$DET/run/evgrab.pid"
 else
-    echo "WARN: kwin socket never appeared — check /var/log/kwin.log (holding anyway for log capture)"
+    echo "WARN: kwin socket never appeared --- check /var/log/kwin.log (holding anyway for log capture)"
 fi
 
 # TOUCH FIX (2026-07-14): stopping SF suspends the oplus touchpanel into
@@ -165,12 +165,12 @@ fi
 # The msm_atomic notifier calls are compiled OUT on oplus kernels
 # (#ifndef OPLUS_BUG_STABILITY) so kwin's raw-KMS unblank never resumes it.
 # oplus_display_private_api.c exposes a manual trigger: writing 1 fires
-# MSM_DRM_EVENT_BLANK/UNBLANK → tp_resume. Fire after kwin's first commit.
+# MSM_DRM_EVENT_BLANK/UNBLANK then tp_resume. Fire after kwin's first commit.
 sleep 3
 echo 1 > /sys/kernel/oplus_display/notify_panel_blank 2>/dev/null
 echo "touchpanel resume notifier fired"
 
-echo "== 6. holding ${HOLD}s — LOOK AT (and touch) THE PANEL =="
+echo "== 6. holding ${HOLD}s --- LOOK AT (and touch) THE PANEL =="
 sleep 15
 echo "== 6a. input diagnostics (touch dead across runs 1-6) =="
 $LXC /bin/sh -c '

@@ -12,7 +12,7 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-// Zygisk API v5 — from Magisk source (ISC license above).
+// Zygisk API v5 --- from Magisk source (ISC license above).
 // https://github.com/topjohnwu/Magisk/blob/master/native/src/core/zygisk/api.hpp
 
 #pragma once

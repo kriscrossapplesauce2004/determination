@@ -1,0 +1,9 @@
+# Immutable source identities for the guest graphics stack.
+LIBHYBRIS_REPO=https://github.com/libhybris/libhybris.git
+LIBHYBRIS_COMMIT=7079712a42ea2754adf747e70c6cc75764c8596e
+LIBDROID_REPO=https://github.com/droidian/libdroid.git
+LIBDROID_COMMIT=87e22ff552e1aed6978757e51cb81eaf159ffd6a
+WLROOTS_REPO=https://github.com/droidian/wlroots.git
+WLROOTS_COMMIT=e7f6be5105b009a025b033ab696c34b287011156
+PHOC_REPO=https://github.com/droidian/phoc.git
+PHOC_COMMIT=89e1aa6a5a4ca0d6416104e9e4f322e7dd08cfec
