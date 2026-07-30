@@ -4,9 +4,9 @@
 # not wl_shm. Run ON THE PHONE as root.
 #
 # Two modes:
-#   gpu-smoke.sh prep   — PHONE MODE (guest network only reliable there):
+#   gpu-smoke.sh prep   --- PHONE MODE (guest network only reliable there):
 #                         installs the test clients into the guest.
-#   gpu-smoke.sh        — DESKTOP MODE (desktop-on running, phoc socket up):
+#   gpu-smoke.sh        --- DESKTOP MODE (desktop-on running, phoc socket up):
 #                         runs the actual gate. Windows will appear on the
 #                         panel; melissa should be told before running.
 #
@@ -14,15 +14,15 @@
 #   1. hybris wayland EGL platform plugin installed.
 #   2. wayland-info lists the android_wlegl global (phoc serves it).
 #   3. glmark2-es2-wayland runs and reports a real GPU renderer (Adreno on
-#      this device) with a sane FPS — this isolates the EGL/buffer path
+#      this device) with a sane FPS --- this isolates the EGL/buffer path
 #      from GTK. NOTE: hybris' wayland platform abort()s the process if
-#      android_wlegl is missing — that counts as a loud FAIL, not a crash
+#      android_wlegl is missing --- that counts as a loud FAIL, not a crash
 #      mystery.
 #   4. A GTK4 app (gnome-calculator) maps HYBRIS libEGL (/usr/local/lib),
 #      launched with GSK_DEBUG=renderer (NOT GDK_DEBUG=opengl: that path
 #      used to abort via the epoxy device-query bug; fixed, but the maps
 #      check is what actually proves the hybris EGL path).
-# Evidence goes to stdout — capture to artifacts/ on the host (mind the
+# Evidence goes to stdout --- capture to artifacts/ on the host (mind the
 # su quoting rule: the whole chain in ONE quoted arg):
 #   adb push guest/gpu-smoke.sh /data/local/tmp/
 #   adb shell "su -c 'sh /data/local/tmp/gpu-smoke.sh prep'"   # phone mode
@@ -44,11 +44,11 @@ if [ "${1:-}" = "prep" ]; then
 fi
 
 [ -f "$DET/run/desktop-mode" ] || {
-    echo "FATAL: desktop mode not active — run desktop-on first (and warn melissa: windows will appear)"; exit 1; }
+    echo "FATAL: desktop mode not active --- run desktop-on first (and warn melissa: windows will appear)"; exit 1; }
 
 $LXC /bin/sh -c '
     export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-    # Same env contract as the desktop-on 5e client session — this is what
+    # Same env contract as the desktop-on 5e client session --- this is what
     # every phosh-launched app runs with.
     export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
     export HYBRIS_LD_LIBRARY_PATH=/usr/lib/android:/vendor/lib64:/system/lib64:/odm/lib64:/apex/com.android.runtime/lib64/bionic
@@ -70,7 +70,7 @@ $LXC /bin/sh -c '
         if wayland-info 2>/dev/null | grep -A1 android_wlegl | head -3 | grep -q android_wlegl; then
             echo "ANDROID-WLEGL-GLOBAL: OK"
         else
-            echo "ANDROID-WLEGL-GLOBAL: FAIL — phoc is not serving it (android renderer not active?)"; fail=1
+            echo "ANDROID-WLEGL-GLOBAL: FAIL --- phoc is not serving it (android renderer not active?)"; fail=1
         fi
     else
         echo "SKIP: wayland-info not installed (run gpu-smoke.sh prep in phone mode)"
@@ -79,7 +79,7 @@ $LXC /bin/sh -c '
     echo "== 3. pure EGL/GLES wayland client (glmark2-es2-wayland) =="
     if command -v glmark2-es2-wayland >/dev/null; then
         # -b build:duration=5 keeps it short; --fullscreen exercises the
-        # panel-size buffer path. rc 0 or 124 both fine — the renderer
+        # panel-size buffer path. rc 0 or 124 both fine --- the renderer
         # line is the verdict.
         timeout 40 glmark2-es2-wayland -b build:duration=5 -b texture:duration=5 \
             --fullscreen > /tmp/glmark2.out 2>&1
@@ -88,7 +88,7 @@ $LXC /bin/sh -c '
         if grep -q "GL_RENDERER.*Adreno\|GL_RENDERER.*Mali\|GL_RENDERER.*PowerVR" /tmp/glmark2.out; then
             echo "GLMARK2: OK rc=$rc (vendor GPU renderer in a wayland client)"
         else
-            echo "GLMARK2: FAIL rc=$rc (no vendor GL_RENDERER — see /tmp/glmark2.out)"; fail=1
+            echo "GLMARK2: FAIL rc=$rc (no vendor GL_RENDERER --- see /tmp/glmark2.out)"; fail=1
         fi
     else
         echo "SKIP: glmark2-es2-wayland not installed (run gpu-smoke.sh prep in phone mode)"
@@ -105,11 +105,11 @@ $LXC /bin/sh -c '
             echo "libEGL mapping: ${EGLMAP:-NONE}"
             case "$EGLMAP" in
                 */usr/local/lib/*) echo "GTK4-EGL: OK (hybris libEGL)";;
-                "") echo "GTK4-EGL: FAIL — no EGL at all (cairo/shm fallback)"; fail=1;;
-                *) echo "GTK4-EGL: FAIL — wrong libEGL (glvnd/Mesa won the path)"; fail=1;;
+                "") echo "GTK4-EGL: FAIL --- no EGL at all (cairo/shm fallback)"; fail=1;;
+                *) echo "GTK4-EGL: FAIL --- wrong libEGL (glvnd/Mesa won the path)"; fail=1;;
             esac
         else
-            echo "GTK4-EGL: FAIL — calculator not running (crashed? /tmp/gtkgl.out below)"; fail=1
+            echo "GTK4-EGL: FAIL --- calculator not running (crashed? /tmp/gtkgl.out below)"; fail=1
         fi
         wait $GPID 2>/dev/null
         echo "-- GSK renderer debug (first 25 relevant lines):"
@@ -126,7 +126,7 @@ $LXC /bin/sh -c '
            && python3 -c "import sys; from PIL import Image; sys.exit(0 if len(Image.open(sys.argv[1]).convert(sys.argv[2]).getcolors(100000)) > 10 else 1)" /tmp/gpusmoke-text.png RGBA 2>/dev/null; then
             echo "GSK-DRAW: OK (ngl text render has real pixels)"
         else
-            echo "GSK-DRAW: FAIL — ngl render blank or errored (Adreno struct-varying fix regressed? see /tmp/gpusmoke-node.out)"; fail=1
+            echo "GSK-DRAW: FAIL --- ngl render blank or errored (Adreno struct-varying fix regressed? see /tmp/gpusmoke-node.out)"; fail=1
         fi
     else
         echo "SKIP: gtk4-rendernode-tool not installed (apt install libgtk-4-bin)"

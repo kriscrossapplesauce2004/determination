@@ -73,7 +73,7 @@ fun DetTheme(content: @Composable () -> Unit) {
  *
  * Also anchors LocalContentColor to onSurface: the translucent surfaces used
  * everywhere are alpha-modified colors that contentColorFor() can't match, so
- * without this the default content color falls through to black — invisible
+ * without this the default content color falls through to black : invisible
  * text on the dark theme.
  */
 @Composable

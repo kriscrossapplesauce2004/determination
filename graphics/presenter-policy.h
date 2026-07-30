@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+#include "presenter-protocol.h"
+
 #define DET_PRESENTER_MAX_BUFFERS 6u
 #define DET_PRESENTER_MAX_DIMENSION 8192u
 #define DET_PRESENTER_MAX_REGISTERED_PIXELS (64ull * 1024ull * 1024ull)

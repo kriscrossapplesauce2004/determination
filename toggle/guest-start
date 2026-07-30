@@ -20,12 +20,12 @@ mkdir -p "$DET/lxc/lib/lxc/rootfs" "$DET/run" "$DET/run/control" "$DET/log"
 "$DET/bin/generate-guest-config" || { echo "FATAL: guest config generation failed"; exit 1; }
 
 # 2026-07-11: lxc/bin rebuilt with --with-runtime-path=/data/determination/run
-# (guest/build-lxc.sh) — the /data/decemberos compat symlink is gone. Deploy
+# (guest/build-lxc.sh) --- the /data/decemberos compat symlink is gone. Deploy
 # this script and the new binaries TOGETHER: old binaries + no symlink =
 # "Failed to create lock for guest". Clean up a leftover symlink (never a
 # real directory).
 [ -L /data/decemberos ] && rm -f /data/decemberos
-# lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config —
+# lxc-info/lxc-attach resolve container "guest" as $lxcpath/guest/config ---
 # keep a copy of the config at that path (the rootfs dir doubles as it).
 # Always refresh so config updates propagate.
 cp -f "$DET/lxc/config" "$DET/guest/config"
@@ -75,23 +75,23 @@ net_assert() {
     iptables -C FORWARD -d 192.168.117.0/24 -j ACCEPT 2>/dev/null ||
         iptables -I FORWARD 1 -d 192.168.117.0/24 -j ACCEPT
 
-    # Android's policy routing has NO "lookup main" rule — the rule chain
+    # Android's policy routing has NO "lookup main" rule --- the rule chain
     # ends in "from all unreachable", so replies to the guest die unless
     # the guest subnet is reachable from a consulted table (2026-07-04).
     # Mirror netd's own tether pattern ("iif r_rmnet_data0 lookup wlan0").
     ip rule list | grep -q "to 192.168.117.0/24 lookup main" ||
         ip rule add pref 9000 to 192.168.117.0/24 lookup main
-    # Only valid once the wlan0 table exists (WiFi up) — harmless to retry.
+    # Only valid once the wlan0 table exists (WiFi up) --- harmless to retry.
     # NB `ip rule list` prints the table NUMBER (1030), not "wlan0", so match
     # on the pref+iif instead (the old "lookup wlan0" grep never matched and
-    # we leaned on EEXIST — fine, but this also tolerates a renumbered table).
+    # we leaned on EEXIST --- fine, but this also tolerates a renumbered table).
     [ -n "$DET_WIFI_IFACE" ] && {
         ip rule list | grep -q "^21000:.*iif determ0" ||
             ip rule add pref 21000 iif determ0 lookup "$DET_WIFI_IFACE" 2>/dev/null
     }
 
     # Fallback egress table: during desktop-mode framework thrash netd can
-    # DELETE the wlan0 table outright (2026-07-07) — the pref-21000 rule then
+    # DELETE the wlan0 table outright (2026-07-07) --- the pref-21000 rule then
     # matches nothing and guest egress dies even though wlan0 itself is fine.
     # Mirror the live default route into our own table 117 whenever the real
     # path is known; rule lookups fall through empty tables, so pref 21100
@@ -105,13 +105,13 @@ net_assert
 
 # net-keeper: re-assert forever (all checks are cheap no-ops while the rules
 # survive); 10s ticks in desktop mode (where netd actively fights us), 20s in
-# phone mode. Killed by nothing — it must outlive desktop toggles; a reboot
+# phone mode. Killed by nothing --- it must outlive desktop toggles; a reboot
 # clears it with everything else.
-# WiFi watchdog (desktop mode ONLY — in phone mode wlan0 down may be
+# WiFi watchdog (desktop mode ONLY --- in phone mode wlan0 down may be
 # melissa's choice): system_server crash-loops on the stopped SF and its
 # restarts bounce WiFi until wlan0 stays DOWN (2026-07-07). If wlan0 sits
 # non-up for 3 consecutive ticks, poke `svc wifi enable` (idempotent, framework
-# call — timeout'd because system_server may be mid-crash), and keep retrying
+# call --- timeout'd because system_server may be mid-crash), and keep retrying
 # every ~9 ticks while it stays dead. Real fix is the milestone-6 Zygisk hook.
 if ! kill -0 "$(cat "$DET/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
     (
@@ -123,8 +123,9 @@ if ! kill -0 "$(cat "$DET/run/net-keeper.pid" 2>/dev/null)" 2>/dev/null; then
                     fails=0
                 else
                     fails=$((fails+1))
-                    if [ "$fails" -eq 3 ] || [ $((fails % 9)) -eq 0 ]; then
-                        echo "$DET_WIFI_IFACE not up x$fails — svc wifi enable ($(date))" >> "$DET/log/net-keeper.log"
+                    linux_first=$(sed -n 's/^desired=//p' "$DET/state/boot-profile" 2>/dev/null | tail -n 1)
+                    if [ "$linux_first" != linux-first ] && { [ "$fails" -eq 3 ] || [ $((fails % 9)) -eq 0 ]; }; then
+                        echo "$DET_WIFI_IFACE not up x$fails --- svc wifi enable ($(date))" >> "$DET/log/net-keeper.log"
                         timeout 15 svc wifi enable </dev/null >/dev/null 2>&1
                     fi
                 fi
@@ -152,16 +153,16 @@ if ! lxc-info -P "$DET" -n guest 2>/dev/null | grep -q RUNNING; then
 fi
 
 # Post-start in-guest fixups, ONE lxc-attach (each attach is a full
-# fork+setns round trip — three of them was pure startup latency):
+# fork+setns round trip --- three of them was pure startup latency):
 # - suid root: Android's /data is mounted nosuid,nodev, and the container
 #   rootfs is a bind of a /data subtree, so the container's own `/` inherits
-#   nosuid — sudo's setuid bit is then ignored ("effective uid is not 0 ...
+#   nosuid --- sudo's setuid bit is then ignored ("effective uid is not 0 ...
 #   nosuid", found 2026-07-12). The host-side bind-remount above sets suid on
 #   $DET/guest, but that does NOT reach the container root LXC pivots into on
 #   4.14, so clear it here on `/` itself. `remount,bind` is required to change
 #   a bind mount's per-mount flags (a plain remount targets the superblock).
 #   This is what makes password-gated sudo for melissa actually elevate.
-# - ashmem: modern libcutils opens /dev/ashmem<boot_id> — a per-boot name the
+# - ashmem: modern libcutils opens /dev/ashmem<boot_id> --- a per-boot name the
 #   static lxc config can't carry. Without it composer FMQ creation fails and
 #   every hwc2 validate returns NO_RESOURCES (found 2026-07-05). Plain misc
 #   chardev, so mknod is fine (the binderfs ENXIO rule doesn't apply).
@@ -169,7 +170,7 @@ fi
 #   terminals die with "failed to open PTY" (killed foot 2026-07-06).
 #   lxc.pty.max in the config is NOT honored by our static LXC 4.0.12 build.
 # - VT nodes: kernel #3 has CONFIG_VT, so seatd binds seat0 to VTs and needs
-#   /dev/tty0 for its activation handshake — without it every libseat client
+#   /dev/tty0 for its activation handshake --- without it every libseat client
 #   times out "waiting session to become active" and phoc can't add the
 #   libinput backend (found 2026-07-06, first phosh run). Nothing else uses
 #   VTs on this device (no fbcon), so the ioctls are harmless.

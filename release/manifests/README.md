@@ -1,9 +1,8 @@
 # Release input manifests
 
 Each shippable release needs a checked-in `v<version>.manifest` that pins the
-inputs used to build it. Aqua's manifest does not exist yet because several
-critical inputs still follow moving branches; `release/check.sh ship` treats
-that absence as a hard failure.
+inputs used to build it. `UNRESOLVED` is allowed while a development manifest is
+being assembled, but `release/check.sh ship` rejects it.
 
 The manifest is plain `key=value` data and must include at least:
 
@@ -19,3 +18,8 @@ The manifest is plain `key=value` data and must include at least:
 
 Generated artifact hashes belong in the release bundle's `SHA256SUMS`, not in
 this input manifest.
+
+The manifest is line-oriented, rejects duplicate keys, and has a required
+schema version. Source revisions are 40-character Git object IDs; SHA-256
+values are lowercase hexadecimal digests. Do not replace an unknown value with
+a branch name or a guessed hash.

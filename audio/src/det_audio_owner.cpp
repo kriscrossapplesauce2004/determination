@@ -15,6 +15,7 @@
 #include <string>
 #include <string_view>
 #include <sys/prctl.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <thread>
@@ -51,6 +52,9 @@ struct ServiceSnapshot {
 
 struct Journal {
     int schema = 1;
+    std::uint64_t generation = 0;
+    int owner_pid = 0;
+    std::uint64_t owner_started_ms = 0;
     std::string phase = "none";
     std::string boot_id;
     std::string profile_id;
@@ -314,6 +318,30 @@ struct CommandResult {
     return options.root + "/run/audio-owner.state";
 }
 
+[[nodiscard]] std::uint64_t monotonic_milliseconds() {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+class TransactionLock {
+public:
+    explicit TransactionLock(const Options &options) {
+        const std::string path = options.root + "/run/audio-owner.lock";
+        if (!ensure_directory(parent_directory(path))) return;
+        fd_ = open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0640);
+        if (fd_ >= 0 && flock(fd_, LOCK_EX | LOCK_NB) == 0) return;
+        if (fd_ >= 0) close(fd_);
+        fd_ = -1;
+    }
+    ~TransactionLock() { if (fd_ >= 0) close(fd_); }
+    TransactionLock(const TransactionLock &) = delete;
+    TransactionLock &operator=(const TransactionLock &) = delete;
+    bool held() const { return fd_ >= 0; }
+private:
+    int fd_ = -1;
+};
+
 [[nodiscard]] std::string claim_marker_path(const Options &options) {
     return options.root + "/run/control/audio-claimed";
 }
@@ -379,6 +407,9 @@ struct CommandResult {
     }
     std::ostringstream output;
     output << "schema=" << journal.schema << '\n'
+           << "generation=" << journal.generation << '\n'
+           << "owner_pid=" << journal.owner_pid << '\n'
+           << "owner_started_ms=" << journal.owner_started_ms << '\n'
            << "phase=" << journal.phase << '\n'
            << "boot_id=" << journal.boot_id << '\n'
            << "profile=" << journal.profile_id << '\n'
@@ -436,6 +467,26 @@ struct CommandResult {
                 return false;
             }
             candidate.schema = static_cast<int>(schema);
+        }
+        else if (key == "generation") {
+            if (!parse_u64(value, &candidate.generation)) {
+                *error = "malformed journal generation";
+                return false;
+            }
+        }
+        else if (key == "owner_pid") {
+            unsigned int owner_pid = 0;
+            if (!parse_uint(value, &owner_pid)) {
+                *error = "malformed journal owner pid";
+                return false;
+            }
+            candidate.owner_pid = static_cast<int>(owner_pid);
+        }
+        else if (key == "owner_started_ms") {
+            if (!parse_u64(value, &candidate.owner_started_ms)) {
+                *error = "malformed journal owner start";
+                return false;
+            }
         }
         else if (key == "phase") candidate.phase = value;
         else if (key == "boot_id") candidate.boot_id = value;
@@ -581,6 +632,11 @@ struct CommandResult {
 }
 
 [[nodiscard]] int claim(const Options &options, const Profile &profile) {
+    TransactionLock lock(options);
+    if (!lock.held()) {
+        std::cerr << "another audio ownership transaction is active\n";
+        return 75;
+    }
     std::string error;
     if (!topology_matches(options, profile, &error)) {
         std::cerr << error << '\n';
@@ -612,6 +668,9 @@ struct CommandResult {
     }
 
     Journal journal;
+    journal.generation = previous.generation + 1U;
+    journal.owner_pid = getpid();
+    journal.owner_started_ms = monotonic_milliseconds();
     journal.phase = "snapshot";
     journal.boot_id = boot_id(options);
     journal.profile_id = profile.id;
@@ -681,6 +740,11 @@ struct CommandResult {
 
 [[nodiscard]] int restore(const Options &options, const Profile &profile,
                           bool recovery) {
+    TransactionLock lock(options);
+    if (!lock.held()) {
+        std::cerr << "another audio ownership transaction is active\n";
+        return 75;
+    }
     std::string error;
     Journal journal;
     if (!load_journal(options, &journal, &error)) {

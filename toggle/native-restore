@@ -1,10 +1,10 @@
 #!/system/bin/sh
-# M5 native track: standalone phone-mode restore. Idempotent — safe to run
+# M5 native track: standalone phone-mode restore. Idempotent --- safe to run
 # any time the panel is stuck after a native-kms/native-plasma run (works
 # even if the run was interrupted mid-flight and its trap never fired).
 # Sequence proven 2026-07-13: gate flag off (kills suppressor/freezer loops)
-# → guest compositor teardown → composer HAL → SIGKILL frozen ss (NEVER
-# SIGCONT) → SF → bootanim keeper (one-shot exit dance races) → evgrab off.
+# then guest compositor teardown then composer HAL then SIGKILL frozen ss (NEVER
+# SIGCONT) then SF then bootanim keeper (one-shot exit dance races) then evgrab off.
 DET=/data/determination
 LXC="$DET/lxc/bin/lxc-attach -P $DET -n guest --"
 GATE="$DET/run/native-gate"

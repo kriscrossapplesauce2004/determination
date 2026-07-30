@@ -1,0 +1,1 @@
+partition=vendor_boot

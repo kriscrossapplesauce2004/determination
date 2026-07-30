@@ -11,6 +11,7 @@ namespace determination::control {
 struct AdapterResult {
     bool started = false;
     bool timed_out = false;
+    bool output_truncated = false;
     int exit_status = -1;
     std::string output;
     std::string error;

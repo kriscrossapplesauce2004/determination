@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build libhwc2_compat_layer.so (+ direct_hwc2_test) for guacamoleb — the
+# Build libhwc2_compat_layer.so (+ direct_hwc2_test) for guacamoleb, the
 # bionic-side HWC2 adaptation layer that libhybris' glibc-side libhwc2.so
 # android_dlopen()s. This is the per-Android-version porting work Droidian
 # ships in adaptation-<device>; nobody has done it for an Android 16 base,
@@ -13,7 +13,7 @@
 #             + HIDL headers generated with Debian's hidl-gen (frozen
 #               interfaces -> codegen version drift is bounded)
 #             + composer3 AIDL NDK headers generated with build-tools' aidl
-#   link      real /system/lib64 libs pulled from the device — the compat
+#   link      real /system/lib64 libs pulled from the device; the compat
 #             layer must match the RUNNING Android's ABI, which is why
 #             ANDROID_VERSION_MAJOR=16 and why prebuilts from halium-9/10
 #             ports can't work here (libhwbinder/libhidltransport are gone
@@ -24,6 +24,11 @@ set -eu
 cd "$(dirname "$0")"
 
 TAG=android-16.0.0_r4
+LIBHYBRIS_REV=7079712a42ea2754adf747e70c6cc75764c8596e
+# Release automation must set these from the reviewed input manifest. Refuse
+# to fetch opaque archives rather than accepting an unchecked toolchain.
+HWC_NDK_SHA256=${HWC_NDK_SHA256:-}
+HWC_BUILD_TOOLS_SHA256=${HWC_BUILD_TOOLS_SHA256:-}
 TC=../toolchain
 NDK=$TC/android-ndk-r27c/toolchains/llvm/prebuilt/linux-x86_64/bin
 AIDL=$TC/build-tools/android-16/aidl
@@ -34,25 +39,63 @@ JOBS=$(nproc)
 
 GITILES=https://android.googlesource.com/platform
 
+write_manifest() {
+    local output=out/compat-build-manifest.json
+    local library first=1
+    mkdir -p out
+    {
+        printf '{"schema":1,"android_tag":"%s","libhybris_revision":"%s",' \
+            "$TAG" "$LIBHYBRIS_REV"
+        printf '"libraries":['
+        for library in out/libhwc2_compat_layer.so out/libui_compat_layer.so; do
+            [ -f "$library" ] || continue
+            [ "$first" = 1 ] || printf ','
+            first=0
+            printf '{"path":"%s","sha256":"%s","soname":"%s"}' \
+                "$library" "$(sha256sum "$library" | awk '{print $1}')" \
+                "$(readelf -d "$library" | awk '/SONAME/{gsub(/[\[\]]/, "", $NF); print $NF; exit}')"
+        done
+        printf '],"device_libraries":['
+        first=1
+        for library in device-libs/*.so; do
+            [ -f "$library" ] || continue
+            [ "$first" = 1 ] || printf ','
+            first=0
+            printf '{"path":"%s","sha256":"%s"}' \
+                "$library" "$(sha256sum "$library" | awk '{print $1}')"
+        done
+        printf ']}\n'
+    } > "$output"
+}
+
+verify_archive() {
+    local path=$1 expected=$2
+    [ -n "$expected" ] || { echo "missing reviewed SHA-256 for $path" >&2; exit 1; }
+    echo "$expected  $path" | sha256sum -c -
+}
+
 fetch() {
     mkdir -p aosp "$TC/dl"
     # Toolchain zips (NDK ~650MB; build-tools r36 carries a current `aidl`
-    # that understands composer3's frozen AIDL — Debian's aidl is A10-era
+    # that understands composer3's frozen AIDL; Debian's aidl is A10-era
     # and does not).
-    [ -d "$TC/android-ndk-r27c" ] || { curl -sL -o "$TC/dl/ndk.zip" \
+    [ -d "$TC/android-ndk-r27c" ] || { curl -fsSL -o "$TC/dl/ndk.zip" \
         https://dl.google.com/android/repository/android-ndk-r27c-linux.zip
+        verify_archive "$TC/dl/ndk.zip" "$HWC_NDK_SHA256"
         unzip -q "$TC/dl/ndk.zip" -d "$TC"; }
-    [ -x "$AIDL" ] || { curl -sL -o "$TC/dl/bt.zip" \
+    [ -x "$AIDL" ] || { curl -fsSL -o "$TC/dl/bt.zip" \
         https://dl.google.com/android/repository/build-tools_r36_linux.zip
+        verify_archive "$TC/dl/bt.zip" "$HWC_BUILD_TOOLS_SHA256"
         mkdir -p "$TC/build-tools" && unzip -q "$TC/dl/bt.zip" -d "$TC/build-tools"; }
     # Debian's hidl-gen (runs on Arch with the Debian android libs beside it).
     if [ ! -x "$HIDLGEN_DIR/usr/bin/hidl-gen" ]; then
         mkdir -p "$HIDLGEN_DIR" && cd "$HIDLGEN_DIR"
-        curl -sLO "http://ftp.debian.org/debian/pool/main/a/android-platform-system-tools-hidl/hidl-gen_10.0.0+r36-3.1_amd64.deb"
+        curl -fsSLO "https://ftp.debian.org/debian/pool/main/a/android-platform-system-tools-hidl/hidl-gen_10.0.0+r36-3.1_amd64.deb"
         for p in android-libbase android-liblog android-libboringssl; do
-            url=$(curl -s "https://packages.debian.org/trixie/amd64/$p/download" \
-                  | grep -oE 'http://ftp\.debian\.org/[^"]*\.deb' | head -1)
-            curl -sLO "$url"
+            url=$(curl -fsSL "https://packages.debian.org/trixie/amd64/$p/download" \
+                  | grep -oE 'https://ftp\.debian\.org/[^"]*\.deb' | head -1)
+            [ -n "$url" ] || { echo "cannot resolve $p package" >&2; exit 1; }
+            curl -fsSLO "$url"
         done
         for d in *.deb; do bsdtar xf "$d" data.tar.xz && bsdtar xf data.tar.xz; done
         cd - >/dev/null
@@ -61,7 +104,7 @@ fetch() {
     aosp() { local repo=$1 sub=${2:-} dest=$3
         [ -d "aosp/$dest" ] && return 0
         mkdir -p "aosp/$dest"
-        curl -s "$GITILES/$repo/+archive/refs/tags/$TAG${sub:+/$sub}.tar.gz" \
+        curl -fsSL "$GITILES/$repo/+archive/refs/tags/$TAG${sub:+/$sub}.tar.gz" \
             | tar xz -C "aosp/$dest"; }
     aosp frameworks/native      ""       frameworks_native
     aosp system/core            ""       system_core
@@ -80,7 +123,9 @@ fetch() {
     ln -sfn ../hi_common   aosp/hi_root/common
     ln -sfn ../hi_media    aosp/hi_root/media
     # The compat sources themselves.
-    [ -d libhybris ] || git clone --depth 1 https://github.com/libhybris/libhybris.git
+    [ -d libhybris/.git ] || git clone https://github.com/libhybris/libhybris.git
+    git -C libhybris fetch --depth 1 origin "$LIBHYBRIS_REV"
+    git -C libhybris checkout --detach "$LIBHYBRIS_REV"
 }
 
 gen() {
@@ -208,7 +253,7 @@ build() {
     )
     # The NDK's libc++ headers mangle std into std::__ndk1; the device's
     # platform libs (libc++.so, libhidlbase's std-taking APIs) use std::__1.
-    # Same LLVM libc++, same ABI — only the inline namespace differs. Patch
+    # Same LLVM libc++ and ABI; only the inline namespace differs. Patch
     # a copy of the headers to __1 so our symbols match the platform.
     if [ ! -d stubs/libcxx ]; then
         mkdir -p stubs/libcxx
@@ -217,7 +262,7 @@ build() {
     fi
     # aconfig flag headers are build-generated in AOSP; the gui headers we
     # pull in only use the macro form. Flags off = pre-flag behavior (64
-    # buffer slots etc.), which only sizes OUR client's caches — fine.
+    # buffer slots etc.), which only sizes this client's caches.
     mkdir -p stubs
     cat > stubs/com_android_graphics_libgui_flags.h <<'EOF'
 #pragma once
@@ -298,15 +343,16 @@ static inline int hybris_ui_check_for_symbol(const char *sym) { (void)sym; retur
 /* run() output must survive a timeout kill when redirected to a file */
 __attribute__((constructor)) static void _hwc2_unbuf(void) { setvbuf(stdout, 0, _IONBF, 0); }
 EOF
-    # Upstream typo in the test: the class is HWComposer but the dtor says
-    # HWComposer2 (never built by their CI either, evidently).
-    sed -i 's/HWComposer2/HWComposer/g' "$SRCDIR/tests/direct_hwc2_test.cpp"
+    # Keep the upstream checkout immutable. The diagnostic needs a local copy
+    # with its known destructor spelling corrected.
+    cp "$SRCDIR/tests/direct_hwc2_test.cpp" out/direct_hwc2_test.cpp
+    sed -i 's/HWComposer2/HWComposer/g' out/direct_hwc2_test.cpp
     local TFLAGS=(-DANDROID_BUILD=1 -DHAS_GRALLOC1_HEADER=1
                   -DHWC2_USE_CPP11 -DHWC2_INCLUDE_STRINGIFICATION -I"$SRCDIR/tests")
     $CLANGXX "${CFLAGS[@]}" "${INC[@]}" "${TFLAGS[@]}" \
         -include stubs/gralloc-prelude.h -nostdlib++ \
         -o out/direct_hwc2_test \
-        "$SRCDIR/tests/direct_hwc2_test.cpp" \
+        out/direct_hwc2_test.cpp \
         "$SRCDIR/tests/hwcomposer_window.cpp" \
         "$SRCDIR/tests/nativewindowbase.cpp" \
         "$SRCDIR/GrallocUsageConversion.cpp" \
@@ -318,7 +364,7 @@ EOF
     # CPU-fill diagnostic: same present path as direct_hwc2_test but the
     # buffer is solid-filled through gralloc lock (SW usage => linear, no
     # UBWC) instead of GLES. Splits "GPU never wrote the buffer" from
-    # "presented buffer never reaches scanout" — see diag/.
+    # "presented buffer never reaches scanout"; see diag/.
     $CLANGXX "${CFLAGS[@]}" "${INC[@]}" "${TFLAGS[@]}" \
         -include stubs/gralloc-prelude.h -nostdlib++ \
         -Wl,--allow-multiple-definition \
@@ -331,16 +377,23 @@ EOF
         -x c++ "$SRCDIR/tests/hybris-gralloc.c" -x none \
         out/libhwc2_compat_layer.so device-libs/*.so
     echo "OK: out/direct_hwc2_fill_test"
+    write_manifest
 }
 
 install() {
     # Into the guest rootfs (visible to the hybris linker via
     # HYBRIS_LD_LIBRARY_PATH, see guest/setup-guest.sh).
-    "$ADB" push out/libhwc2_compat_layer.so /sdcard/Download/ >/dev/null
-    "$ADB" shell "su -c 'mkdir -p /data/determination/guest/usr/lib/android && \
-        cp /sdcard/Download/libhwc2_compat_layer.so /data/determination/guest/usr/lib/android/ && \
-        chmod 644 /data/determination/guest/usr/lib/android/libhwc2_compat_layer.so'"
-    echo "Installed to guest rootfs /usr/lib/android/."
+    for library in libhwc2_compat_layer.so libui_compat_layer.so; do
+        [ -f "out/$library" ] || { echo "missing out/$library" >&2; exit 1; }
+        "$ADB" push "out/$library" /sdcard/Download/ >/dev/null
+    done
+    "$ADB" shell "su -c 'set -eu; target=/data/determination/guest/usr/lib/android; \
+        stage=\$target/.determination-stage-\$\$; mkdir -p \$stage; \
+        for library in libhwc2_compat_layer.so libui_compat_layer.so; do \
+          cp /sdcard/Download/\$library \$stage/\$library; chmod 644 \$stage/\$library; \
+        done; mv \$stage/libhwc2_compat_layer.so \$target/; \
+        mv \$stage/libui_compat_layer.so \$target/; rmdir \$stage'"
+    echo "Installed and verified as a complete pair in guest /usr/lib/android/."
     echo "Ensure HYBRIS_LD_LIBRARY_PATH includes /usr/lib/android in the guest."
 }
 

@@ -9,13 +9,13 @@
 # static builds.
 #
 # Everything optional is disabled: the guest is a privileged container
-# launched by root — isolation is not the threat model (spec: the container
+# launched by root --- isolation is not the threat model (spec: the container
 # exists for the glibc world, not for sandboxing). Fewer libs, fewer
 # static-link fights.
 #
 # gcc >= 14 note: glibc 2.40+ declares mount_setattr itself; LXC 4.0's own
 # declaration trips -Wincompatible-pointer-types, an error by default now.
-# The structs are layout-identical — downgrade, don't patch (same policy as
+# The structs are layout-identical --- downgrade, don't patch (same policy as
 # the kernel's KCFLAGS -Wno- rule in AGENTS.md).
 #
 # Usage: guest/build-lxc.sh [--push]

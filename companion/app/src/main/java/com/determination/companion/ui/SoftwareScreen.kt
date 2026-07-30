@@ -51,7 +51,7 @@ fun SoftwareScreen(
         if (!vm.guestUp) {
             GlassCard {
                 Text(
-                    "Guest container is not running — package status and installs need it up. " +
+                    "Guest container is not running : package status and installs need it up. " +
                         "Start it from the Control tab.",
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(20.dp),
@@ -151,7 +151,7 @@ private fun CatalogSection(vm: DetViewModel) {
                             Spacer(Modifier.width(10.dp))
                             when {
                                 !vm.guestUp -> Text(
-                                    "—",
+                                    ":",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )

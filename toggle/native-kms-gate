@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# M5 native-DRM track, Phase 1.1 — THE go/no-go gate: can a non-HWC client
+# M5 native-DRM track, Phase 1.1 --- THE go/no-go gate: can a non-HWC client
 # (guest modetest) take DRM master on the downstream SDE and scan out a dumb
 # buffer on the DSI panel? Run as root, PHONE MODE, device-visible: the panel
 # shows SMPTE bars for ~25s, then Android comes back by itself.
@@ -11,11 +11,11 @@
 # Borrow-from-desktop-on notes:
 #   - SF stop + suppressor + ss-freezer + backlight keeper are the proven
 #     desktop-on mechanisms (steps 2/3/3b/4b there), reused verbatim in
-#     miniature. NOTE: under raw KMS the roles INVERT vs hwc sessions —
+#     miniature. NOTE: under raw KMS the roles INVERT vs hwc sessions ---
 #     panel0-backlight (sde_connector bl device, 0-1023) is the real OLED
 #     brightness lever; backlight/ accepts writes but does nothing here.
 #   - NEW vs desktop-on: the vendor composer service itself
-#     (vendor.hwcomposer-2-4) is stopped too — it holds DRM master on card0
+#     (vendor.hwcomposer-2-4) is stopped too --- it holds DRM master on card0
 #     (recon holders.txt); the guest can't become master while it lives.
 #   - Restore is trap-guarded: any exit path restarts composer + SF.
 # Capture:
@@ -31,7 +31,7 @@ BL_LEVEL=$DET_BACKLIGHT_LEVEL
 CONNECTOR=28          # DSI-1 (kms-probe 2026-07-13)
 MODE="#0"        # mode BY INDEX: downstream SDE mode NAME is 1080x2340x60x179431 (res x refresh x clock)
 
-[ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active — run desktop-off first"; exit 1; }
+[ -f "$DET/run/desktop-mode" ] && { echo "FATAL: desktop mode active --- run desktop-off first"; exit 1; }
 $LXC /bin/true 2>/dev/null || { echo "FATAL: guest not running"; exit 1; }
 $LXC /usr/bin/test -x /usr/bin/modetest || { echo "FATAL: modetest missing in guest (kms-probe.sh prep)"; exit 1; }
 
@@ -45,7 +45,7 @@ restore() {
     # Give the HAL a beat to register with hwservicemanager before SF binds.
     sleep 2
     # Fresh system_server (SIGCONT would just let Watchdog count the
-    # accumulated block time and self-kill — same logic as desktop-off 1b).
+    # accumulated block time and self-kill --- same logic as desktop-off 1b).
     sspid=$(pidof system_server 2>/dev/null)
     [ -n "$sspid" ] && kill -KILL "$sspid" 2>/dev/null
     start surfaceflinger
@@ -122,21 +122,21 @@ sleep 1
 [ -n "$BL" ] && echo "$BL_LEVEL" > "$BL" 2>/dev/null
 dmesg -c > /dev/null 2>&1   # clear ring so the capture below is test-only
 
-# §3 trap, raw-KMS edition — solved by READING THE SOURCE (sde_connector.c):
+# §3 trap, raw-KMS edition --- solved by READING THE SOURCE (sde_connector.c):
 # sde_backlight_device_update_status() silently CACHES brightness writes
 # while c_conn->allow_bl_update is false (true only between bridge_enable
 # and bridge_disable, i.e. while a commit has lit the display). At
 # sde_connector_helper_bridge_enable() the driver applies whatever
-# props.brightness holds at first-frame time — and Android leaves it at 0
+# props.brightness holds at first-frame time --- and Android leaves it at 0
 # when SF stops (runs 2-4: "backlight level changed 1023 -> 0"). So:
 # PRE-SEED panel0-backlight (the sde_connector bl device, 0-1023) BEFORE
 # the modeset; bridge_enable then applies our level instead of 0.
 echo 500 > /sys/class/backlight/panel0-backlight/brightness 2>/dev/null
 echo "pre-seeded panel0-backlight=$(cat /sys/class/backlight/panel0-backlight/brightness 2>/dev/null)"
 
-echo "== 4. modetest: legacy setcrtc, HOLD 30s (no -v — flip events hang; this is the LOOK AT THE PANEL test) =="
+echo "== 4. modetest: legacy setcrtc, HOLD 30s (no -v --- flip events hang; this is the LOOK AT THE PANEL test) =="
 # Mid-hold check: with allow_bl_update true (display lit by our commit), a
-# live brightness write should now go straight through — proves runtime
+# live brightness write should now go straight through --- proves runtime
 # control, not just the pre-seed.
 (
     sleep 8
@@ -164,7 +164,7 @@ dmesg | grep -iE "sde|drm|msm|dsi|backlight|error|fail" | tail -50
 
 echo "== VERDICT =="
 # Honest pass: the mode-set line printed and nothing failed. The REAL verdict
-# is a human seeing SMPTE bars during the 30s hold — exit codes proved
+# is a human seeing SMPTE bars during the 30s hold --- exit codes proved
 # unreliable (run 1 "passed" rc=0 while failing to even find the mode).
 verdict() {  # $1 = label, $2 = file
     if grep -q "setting mode" "$2" && ! grep -qi "failed" "$2"; then
@@ -176,7 +176,7 @@ verdict() {  # $1 = label, $2 = file
 pass=0
 verdict "LEGACY" /data/local/tmp/mt-legacy.out && pass=1
 verdict "ATOMIC" /data/local/tmp/mt-atomic.out && pass=1
-[ "$pass" = 1 ] && echo "NATIVE-KMS-GATE: COMMIT ACCEPTED — did the panel show SMPTE bars?" \
+[ "$pass" = 1 ] && echo "NATIVE-KMS-GATE: COMMIT ACCEPTED --- did the panel show SMPTE bars?" \
                 || echo "NATIVE-KMS-GATE: FAIL (no scanout on either path)"
 restore
 exit 0

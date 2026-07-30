@@ -1,7 +1,7 @@
 #!/bin/sh
 # Repack boot.img with the Determination kernel, keeping the stock ramdisk.
 # Magisk then patches the *ramdisk* of the result on-device (or via the app's
-# "Select and Patch a File") — kernel swap and ramdisk patch are independent
+# "Select and Patch a File") --- kernel swap and ramdisk patch are independent
 # layers by design (spec §2), so we never touch the ramdisk here.
 #
 # Usage: boot/repack.sh <stock-boot.img> [kernel-image]

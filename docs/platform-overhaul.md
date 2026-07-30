@@ -708,7 +708,7 @@ state, wakes the device repeatedly, or surprises the user during recovery.
 The order below is risk-driven. Work may overlap only where lifetimes are truly
 independent.
 
-### Wave 0 — stop making new debt
+### Wave 0 : stop making new debt
 
 - freeze the current hardware truth and collect clean phone-mode status;
 - remove unintended forced display-colour writes;
@@ -719,7 +719,7 @@ independent.
 
 **Gate:** current scripts still enter/exit and an emergency phone restore exists.
 
-### Wave 1 — native control skeleton
+### Wave 1 : native control skeleton
 
 - create host-buildable control protocol and state core;
 - implement `detd` dark launch, lock, atomic state and read-only status;
@@ -729,7 +729,7 @@ independent.
 
 **Gate:** daemon can be killed/restarted 100 times without changing mode.
 
-### Wave 2 — authoritative transition wrapper
+### Wave 2 : authoritative transition wrapper
 
 - add mode requests, request IDs, deadlines and journal;
 - execute proven scripts as fixed adapters;
@@ -739,7 +739,7 @@ independent.
 
 **Gate:** ten cycles through daemon plus kill/restart injection end in known state.
 
-### Wave 3 — app/CLI migration
+### Wave 3 : app/CLI migration
 
 - route host `det` through `detctl`;
 - update Zygisk root companion to forward structured RPC;
@@ -749,7 +749,7 @@ independent.
 
 **Gate:** no periodic app root shell, QS/shortcut/app agree on one state.
 
-### Wave 4 — guest-agent replacement
+### Wave 4 : guest-agent replacement
 
 - ship `det-guest-agent` and guest endpoint policy;
 - map all old control commands;
@@ -758,7 +758,7 @@ independent.
 
 **Gate:** guest logout/reboot/poweroff and recovery work after agent restart.
 
-### Wave 5 — observability and qualification harness
+### Wave 5 : observability and qualification harness
 
 - finish structured doctor/metrics/events;
 - add failure injection and hardware-run manifests;
@@ -767,7 +767,7 @@ independent.
 
 **Gate:** zero ambiguous states; every failure explains its recovery.
 
-### Wave 6 — external presenter gate
+### Wave 6 : external presenter gate
 
 - decouple lifecycle from audio;
 - harden protocol, quotas, resize and asynchronous ownership;
@@ -776,7 +776,7 @@ independent.
 
 **Gate:** internal Android remains interactive throughout and every fd is released.
 
-### Wave 7 — audio product path
+### Wave 7 : audio product path
 
 - inventory and gate direct ALSA/tinyalsa access;
 - implement transactional Android-audio quiesce/direct-hardware/restore;
@@ -788,7 +788,7 @@ independent.
 **Gate:** normal apps play directly through hardware, Android audio restores
 exactly on exit, and disabling audio affects nothing else.
 
-### Wave 8 — compositor external output and input
+### Wave 8 : compositor external output and input
 
 - integrate presenter backend;
 - implement constrained input return;
@@ -797,7 +797,7 @@ exactly on exit, and disabling audio affects nothing else.
 
 **Gate:** two-hour external desktop with Android live, cable cycles, audio and input.
 
-### Wave 9 — extract transition machinery
+### Wave 9 : extract transition machinery
 
 - replace shell supervision, markers and polling in risk order;
 - keep device-specific leaf adapters;
@@ -806,7 +806,7 @@ exactly on exit, and disabling audio affects nothing else.
 
 **Gate:** 50-cycle and recovery suite equal or better than the proven scripts.
 
-### Wave 10 — portability proof
+### Wave 10 : portability proof
 
 - complete recon compiler and generated outputs;
 - bring up a hostile second device end to end;
@@ -815,7 +815,7 @@ exactly on exit, and disabling audio affects nothing else.
 
 **Gate:** clean install, recovery and upgrade work on two materially different devices.
 
-### Wave 11 — release and delight
+### Wave 11 : release and delight
 
 - cut an honest stable point;
 - permanent signing, reproducible builds, rollback and docs;
@@ -845,7 +845,7 @@ changes remain only long enough to measure against and replace; they are not a
 product dependency. Both workstreams are picked up once the state/API spine can
 observe and control their independent lifetimes.
 
-### 20.1 Implementation checkpoint — 2026-07-20
+### 20.1 Implementation checkpoint : 2026-07-20
 
 The first batch is now implemented through source/build gates:
 

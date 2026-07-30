@@ -1,6 +1,6 @@
 # Determination: KWin/Plasma-Mobile session unit (guest /etc/systemd/system/).
 # WHY A UNIT: KWin's DRM backend refuses to open ANY device without a logind
-# session — NoopSession::openRestricted is literally `return -1` (kwin 6.3,
+# session --- NoopSession::openRestricted is literally `return -1` (kwin 6.3,
 # src/core/session_noop.cpp), even as root. PAMName=login + TTYPath makes
 # pam_systemd register a real logind session for this service (the greetd/
 # kiosk trick), and systemd-logind DOES run in the container (verified

@@ -1,6 +1,6 @@
 #!/bin/sh
-# Determination §3 finish: build the REAL guest compositor — phoc 0.47 on the
-# droidian wlroots fork's hwcomposer backend — inside the trixie guest,
+# Determination §3 finish: build the REAL guest compositor --- phoc 0.47 on the
+# droidian wlroots fork's hwcomposer backend --- inside the trixie guest,
 # against OUR upstream libhybris in /usr/local (guest/build-libhybris.sh).
 # Run INSIDE the container as root. Non-destructive/idempotent-ish: safe to
 # re-run; clones are wiped and re-fetched.
@@ -14,12 +14,12 @@
 #    (fails on the backported 0.18 presentation/transform APIs), sway 1.10
 #    wants real 0.18 (version pin rejects 0.17.4). Don't retry.
 #  - droidian/phoc branch group/102/keypad-slide-lights (phoc 0.47, their
-#    droidian-102 shipping line) pins system wlroots >=0.17 <0.18 — an
+#    droidian-102 shipping line) pins system wlroots >=0.17 <0.18 --- an
 #    exact match for the fork. It REQUIRES xwayland-enabled wlroots
 #    (unguarded includes and struct fields).
 #  - libdroid is a build-dep of the wlroots hwcomposer backend. It is
 #    glibc-native (gio + libgbinder, talks to HALs over binder directly, no
-#    libhybris linkage) — but droidian's BINARY package would drag in their
+#    libhybris linkage) --- but droidian's BINARY package would drag in their
 #    stale TLS-broken libhybris debs, so it's built from source too.
 #
 # RUNTIME GOTCHAS THE OUTPUT DEPENDS ON (encoded in toggle/desktop-on):
@@ -32,15 +32,16 @@
 #    session down thinking the child died. Launch clients separately.
 #  - The container needs lxc.pty.max (guest/lxc/config) or terminals get
 #    "failed to open PTY" (inherited devpts has ptmxmode=000).
-#  - /etc/phoc.ini sets output scale 3 — default scale 1 is unreadable at
+#  - /etc/phoc.ini sets output scale 3 --- default scale 1 is unreadable at
 #    403dpi (guest/phoc.ini).
 #  - SDM DSPP-dims new composer clients to black: our wlroots patch below
 #    calls hwc2_compat_display_set_brightness(1.0) after power-on.
 #  - Input (§4): WLR_BACKENDS=hwcomposer,libinput + LIBSEAT_BACKEND=seatd,
 #    plus the udev-db faker + seatd from guest/setup-input.sh (udevd can't
-#    run in the container — ro /sys). PATCH 2 below adds the EVIOCGRAB
+#    run in the container --- ro /sys). PATCH 2 below adds the EVIOCGRAB
 #    handoff; desktop-on kills evgrab once phoc's socket is up.
 set -e
+. "$(dirname "$0")/sources.lock"
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export DEBIAN_FRONTEND=noninteractive
 export TMPDIR=/tmp
@@ -52,7 +53,7 @@ mkdir -p "$B"
 echo "== deps (apt) =="
 # wlroots core + sway-era leftovers + phoc/GNOME bits + xwayland (phoc hard
 # requirement) + drm backend bits (libdisplay-info/liftoff) + runtime
-# (foot terminal, a font — foot fails without one — grim for screenshots,
+# (foot terminal, a font --- foot fails without one --- grim for screenshots,
 # dbus quiets phoc's session warnings).
 apt-get update -qq
 apt-get install -y -qq --no-install-recommends \
@@ -77,28 +78,30 @@ echo "== libhybris prereq check =="
 pkg-config --exists 'android-headers >= 9.0.0' || {
     echo "FATAL: android-headers pkg-config missing (install android-headers-30)"; exit 1; }
 nm -D /usr/local/lib/libhybris-hwcomposerwindow.so | grep -q HWCNativeWindowSetBufferCount || {
-    echo "FATAL: libhybris lacks HWCNativeWindowSetBufferCount — re-run guest/build-libhybris.sh"; exit 1; }
+    echo "FATAL: libhybris lacks HWCNativeWindowSetBufferCount --- re-run guest/build-libhybris.sh"; exit 1; }
 nm -D /usr/local/lib/libhwc2.so.1 | grep -q hwc2_compat_display_set_brightness || {
-    echo "FATAL: libhwc2 lacks set_brightness wrapper — re-run guest/build-libhybris.sh"; exit 1; }
+    echo "FATAL: libhwc2 lacks set_brightness wrapper --- re-run guest/build-libhybris.sh"; exit 1; }
 grep -q hwc2_compat_display_set_brightness /usr/local/include/hybris/hwc2/hwc2_compatibility_layer.h || {
-    echo "FATAL: installed hwc2 header lacks set_brightness decl — re-run guest/build-libhybris.sh"; exit 1; }
+    echo "FATAL: installed hwc2 header lacks set_brightness decl --- re-run guest/build-libhybris.sh"; exit 1; }
 # GPU app buffers: clients reach the GPU through hybris' wayland EGL
 # platform (android_wlegl); wlroots' android renderer serves the other
 # half. Without this plugin every app silently falls back to wl_shm.
 [ -f /usr/local/lib/libhybris/eglplatform_wayland.so ] || {
-    echo "FATAL: libhybris wayland EGL platform missing — re-run guest/build-libhybris.sh (--enable-wayland)"; exit 1; }
+    echo "FATAL: libhybris wayland EGL platform missing --- re-run guest/build-libhybris.sh (--enable-wayland)"; exit 1; }
 
-echo "== libdroid (from source — do NOT apt install libdroid-dev) =="
+echo "== libdroid (from source --- do NOT apt install libdroid-dev) =="
 cd "$B" && rm -rf libdroid
-git clone --depth 1 -b droidian https://github.com/droidian/libdroid.git
+git clone --depth 1 -b droidian "$LIBDROID_REPO"
 cd libdroid
+[ "$(git rev-parse HEAD)" = "$LIBDROID_COMMIT" ] || { echo "FATAL: libdroid pin mismatch" >&2; exit 1; }
 meson setup build --prefix=/usr/local -Dbuildtype=release
 ninja -C build && ninja -C build install
 
 echo "== wlroots (droidian fork, hwcomposer backend) =="
 cd "$B" && rm -rf wlroots
-git clone --depth 1 -b feature/next/backport-0.18 https://github.com/droidian/wlroots.git
+git clone --depth 1 -b feature/next/backport-0.18 "$WLROOTS_REPO"
 cd wlroots
+[ "$(git rev-parse HEAD)" = "$WLROOTS_COMMIT" ] || { echo "FATAL: wlroots pin mismatch" >&2; exit 1; }
 
 # PATCH (upstream-able to droidian): SDM (qcom sm8150) starts every NEW
 # composer client at per-client brightness 0 and DSPP-dims its output to
@@ -111,7 +114,7 @@ grep -q hwc2_compat_display_set_brightness "$F" || { echo "FATAL: brightness pat
 
 # PATCH 2 (Determination §4, 2026-07-06): EVIOCGRAB handoff in the libinput
 # backend. Android's EventHub (inside system_server) keeps every
-# /dev/input/event* open non-exclusively — without a grab, events reach
+# /dev/input/event* open non-exclusively --- without a grab, events reach
 # BOTH stacks. The Android-side evgrab holds the grab through the SF stop;
 # this patch makes the guest take its own grab (dup'd fd + detached
 # 100ms-retry thread) the moment libinput opens each node, so desktop-on
@@ -143,7 +146,7 @@ s = s.replace(inc_anchor, inc_anchor + (
 
 helper = '''\
 /* Determination §4: Android's EventHub (inside system_server) keeps
- * /dev/input/event* open non-exclusively — without EVIOCGRAB every event
+ * /dev/input/event* open non-exclusively --- without EVIOCGRAB every event
  * is delivered to BOTH stacks (double input). During the handoff the
  * Android-side evgrab daemon still holds the grab, so retry from a
  * detached thread until desktop-on kills evgrab. The grab is taken on a
@@ -226,11 +229,12 @@ ldconfig
 
 echo "== phoc (droidian group/102) =="
 cd "$B" && rm -rf phoc
-git clone --depth 1 -b group/102/keypad-slide-lights https://github.com/droidian/phoc.git
+git clone --depth 1 -b group/102/keypad-slide-lights "$PHOC_REPO"
 cd phoc
+[ "$(git rev-parse HEAD)" = "$PHOC_COMMIT" ] || { echo "FATAL: phoc pin mismatch" >&2; exit 1; }
 
 # PATCH 3 (Determination): Ctrl+Alt+F2-F12 spawns a console terminal instead
-# of the no-op wlr_session_change_vt (no real VTs — CONFIG_FRAMEBUFFER_CONSOLE
+# of the no-op wlr_session_change_vt (no real VTs --- CONFIG_FRAMEBUFFER_CONSOLE
 # is off because it fights SF for the panel). VT 1 is left as-is (phosh). The
 # helper /usr/local/bin/det-console opens a fullscreen foot terminal; it can
 # also be a dispatcher for VT-specific sessions later. Works from any external
@@ -283,6 +287,6 @@ ldconfig
 echo "== sanity =="
 export LD_LIBRARY_PATH=/usr/local/lib:/usr/local/lib/aarch64-linux-gnu
 ldd /usr/local/lib/aarch64-linux-gnu/libwlroots.so.12a | grep -E 'EGL|hwc2' | grep -q /usr/local/lib || {
-    echo "WARN: hybris libs not resolving to /usr/local — check LD_LIBRARY_PATH at runtime"; }
+    echo "WARN: hybris libs not resolving to /usr/local --- check LD_LIBRARY_PATH at runtime"; }
 /usr/local/bin/phoc --version
-echo "BUILD-WLROOTS-PHOC-OK — run via toggle/desktop-on (never phoc -E)"
+echo "BUILD-WLROOTS-PHOC-OK --- run via toggle/desktop-on (never phoc -E)"

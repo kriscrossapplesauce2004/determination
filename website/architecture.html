@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="The Determination Android and Linux convergence architecture.">
-  <title>Architecture — Determination</title>
+  <title>Architecture : Determination</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -24,7 +24,7 @@
 
     <section class="architecture architecture-page">
       <div class="system-map" data-reveal>
-        <div class="map-column host"><div class="map-title">ANDROID HOST <span>ALWAYS LIVE</span></div><div class="node node-large" data-tilt><b>Android 16</b><small>init / system_server / SystemUI</small><span class="node-status">PID 1</span></div><div class="node" data-tilt><b>SurfaceFlinger</b><small>Internal panel owner</small></div></div>
+        <div class="map-column host"><div class="map-title">ANDROID HOST <span>PID 1</span></div><div class="node node-large" data-tilt><b>Android 16</b><small>internal mode pauses framework services</small><span class="node-status">PID 1</span></div><div class="node" data-tilt><b>SurfaceFlinger</b><small>Internal panel owner</small></div></div>
         <div class="bridge" aria-label="Shared kernel and hardware bridge"><span class="packet p1"></span><span class="packet p2"></span><div class="bridge-label">DISPLAY HANDOFF</div><div class="bridge-line"></div><div class="kernel-chip"><small>SHARED</small><b>4.14.357</b><span>DOWNSTREAM KERNEL</span></div><div class="bridge-line"></div><div class="bridge-label">LIBHYBRIS / DRM</div></div>
         <div class="map-column guest"><div class="map-title">LINUX GUEST <span>ON DEMAND</span></div><div class="node node-large accent-node" data-tilt><b>Debian arm64</b><small>glibc userland inside LXC</small><span class="node-status">GUEST</span></div><div class="node" data-tilt><b>Wayland desktop</b><small>Plasma Mobile / KWin / wlroots</small></div></div>
         <div class="hardware-rail"><span>ADRENO 640</span><span>KGSL + TURNIP</span><span>MINIGBM / DMABUF</span><span>DSI + DP-ALT</span></div>

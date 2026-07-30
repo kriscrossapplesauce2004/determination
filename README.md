@@ -2,10 +2,10 @@
 
 Android convergence layer for the OnePlus 7 (`guacamoleb`, SM8150 / Adreno 640).
 
-Android stays PID1 and fully live; a glibc Wayland desktop runs as an LXC guest
+Android stays PID1; a glibc Wayland desktop runs as an LXC guest
 on the **same downstream vendor kernel**; `libhybris` bridges the guest to the
 bionic GPU/display blobs. Shipped as a custom `boot.img` (custom kernel +
-Magisk-patched ramdisk) plus a Zygisk module — **not a ROM**. `/system` and
+Magisk-patched ramdisk) plus a Zygisk module : **not a ROM**. `/system` and
 `/vendor` stay stock.
 
 Two modes:
@@ -16,8 +16,8 @@ Two modes:
   respawn-masked, the guest compositor takes the panel via hwcomposer, input is
   handed off with `EVIOCGRAB`. Toggle back restores the phone.
 
-Full rationale, topology decision, and risk register: see
-[`docs/design-spec.md`](docs/design-spec.md).
+Start with the [documentation home](docs/README.md). Full rationale, topology
+decision, and risk register: see [`docs/design-spec.md`](docs/design-spec.md).
 The post-proof platform overhaul and hardware-gated execution order are in
 [`docs/platform-overhaul.md`](docs/platform-overhaul.md).
 Direct audio's no-Android-framework contract is in
@@ -33,7 +33,7 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
 
 | Path | What |
 |---|---|
-| `recon/` | §9 device recon — run first, with the phone attached |
+| `recon/` | §9 device recon : run first, with the phone attached |
 | `kernel/` | kconfig fragment (container enables) + fetch/build scripts for the downstream SM8150 kernel |
 | `boot/` | boot.img unpack/repack with the custom kernel; Magisk patching flow |
 | `magisk-module/` | the on-device Determination Magisk module: container launch, boot hooks, sepolicy rules |
@@ -44,21 +44,50 @@ in [`RELEASES.md`](RELEASES.md); project-wide changes are in
 | `companion/` | Android UI and permission facade: mode confirmation, status/API, Quick Settings, share sheet, optional external presenter |
 | `tools/evgrab/` | small C daemon that holds `EVIOCGRAB` on evdev nodes during desktop mode |
 | `usb-install/` | cable-free install: Magisk action zips that flash/restore the kernel from a USB drive on the phone itself |
-| `zygisk/` | Zygisk/LSPosed module for `system_server` hooks (desktop-mode flags, summon UX) — milestone 6 |
-| `docs/` | design spec, bring-up notes |
+| `zygisk/` | Zygisk/LSPosed module for `system_server` hooks (desktop-mode flags, summon UX) : milestone 6 |
+| `docs/` | Current wiki: guides, architecture, reference, operations, qualification, and separated history |
+
+## Host validation
+
+Run every host-safe check from the repository root:
+
+```sh
+./tools/check-host.sh
+```
+
+This does not connect to a phone, invoke ADB, flash a partition, or run a live
+display handoff. Those operations remain separate hardware qualification steps.
+
+## Linux-first profile
+
+Supported device profiles can request a health-gated Linux-first startup while
+retaining the minimum Android and vendor services needed for the downstream
+kernel, radio, thermal, power, binder, and qualified networking stack:
+
+```sh
+det linux-first status
+det linux-first enable
+det linux-first apply
+det linux-first disable
+```
+
+A failed automatic attempt returns to phone mode and disables automatic retry
+until it is explicitly enabled again. See the
+[boot-profile reference](docs/reference/device-and-boot-profiles.md) and
+[recovery guide](docs/guides/install-and-recovery.md) before enabling it.
 
 ## Bring-up order (risk-ordered milestones)
 
-1. **Recon** — `recon/recon.sh` with the device on USB. Determines composer HAL
+1. **Recon** : `recon/recon.sh` with the device on USB. Determines composer HAL
    flavour (HIDL 2.x vs AIDL composer3) and gralloc/mapper version, which gates
    the libhybris backend choice.
-2. **Kernel** — `kernel/fetch.sh && kernel/build.sh`, then `boot/repack.sh` and
+2. **Kernel** : `kernel/fetch.sh && kernel/build.sh`, then `boot/repack.sh` and
    Magisk-patch the result. Flash to a *non-active slot / with a way back*.
-3. **Guest** — `guest/build-rootfs.sh` on the host, push, register with the
+3. **Guest** : `guest/build-rootfs.sh` on the host, push, register with the
    on-device LXC from the Magisk module. libhybris EGL smoke test
    (`test_hwcomposer`) must pass before anything else.
 4. **wlroots on the panel**, then **the toggle** (`toggle/`), cycle-stressed.
-5. External convergence, KWin, summon UX — in that order.
+5. External convergence, KWin, summon UX : in that order.
 
 ## Guest SSH
 
@@ -100,12 +129,12 @@ default dedicated `~/.ssh/determination_ed25519` key.
 - [x] wlroots on the panel: phoc + phosh + squeekboard live, touch-verified
       (2026-07-06/07); GPU app buffers zero-copy path working (2026-07-10)
 - [x] Toggle round trip cable-free: companion app Enter, guest launchers /
-      phosh power menu Exit, verified on-device (2026-07-11) — milestone 4 done
+      phosh power menu Exit, verified on-device (2026-07-11) : milestone 4 done
       (QS tile confirmed)
-- [x] Milestone 6: Zygisk hook on system_server's SF-death handling —
+- [x] Milestone 6: Zygisk hook on system_server's SF-death handling :
       verified on device 2026-07-11: system_server stable, WiFi stays up,
       guest networking alive throughout desktop mode
-- [x] Milestone 5 phase 1: native graphics/KMS path proven (2026-07-13/14) —
+- [x] Milestone 5 phase 1: native graphics/KMS path proven (2026-07-13/14) :
       Turnip on KGSL, minigbm allocation, dmabuf→Vulkan import, raw DSI KMS
       scanout, and Plasma Mobile under KWin with GPU compositing + touch.
       This is retained as an explicit native-Mesa experiment, not the portable
@@ -120,8 +149,8 @@ default dedicated `~/.ssh/determination_ed25519` key.
       full-handle and minigbm setup cost 8 us and 92 us mean respectively.
       Direct KWin integration, authoritative plane metadata, presentation, and
       sync-fence transport remain.
-- [ ] Milestone 5 phase 2: concurrent external convergence — Android/SF keeps
+- [ ] Milestone 5 phase 2: concurrent external convergence : Android/SF keeps
       the panel while a guest-rendered dmabuf is presented on DP-alt
-- [ ] Direct audio — native host/guest topology probe and journalled exclusive
+- [ ] Direct audio : native host/guest topology probe and journalled exclusive
       ownership/rollback are implemented and packaged. On-device mixer/PCM
       route capture, PipeWire qualification, latency, and failure testing remain.

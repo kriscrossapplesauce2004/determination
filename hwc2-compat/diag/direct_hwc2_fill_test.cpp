@@ -1,5 +1,5 @@
 /*
- * direct_hwc2_fill_test — CPU-fill variant of direct_hwc2_test.
+ * direct_hwc2_fill_test: CPU-fill variant of direct_hwc2_test.
  *
  * Same window class, same validate/accept/setClientTarget/present path,
  * but the buffer content is written by the CPU (gralloc lock + solid-fill),
@@ -38,10 +38,10 @@ std::condition_variable hotplugCv;
 hwc2_compat_device_t* hwcDevice;
 
 // FILL_MODE env: which submission path carries the pixels.
-//   client — buffer as the composer client target (GL test's path)
-//   device — buffer on the layer, composition DEVICE (what SF actually
+//   client: buffer as the composer client target (GL test's path)
+//   device: buffer on the layer, composition DEVICE (what SF actually
 //            does on this ROM: baseline dump shows Device/Device)
-//   solid  — SOLID_COLOR layer, no buffer at all: the DPU generates the
+//   solid: SOLID_COLOR layer, no buffer at all: the DPU generates the
 //            color, taking gralloc/fetch entirely out of the path
 enum FillMode { MODE_CLIENT, MODE_DEVICE, MODE_SOLID };
 FillMode g_mode = MODE_CLIENT;
@@ -315,7 +315,7 @@ int main()
         }
 
         // The buffer is CPU-cached; without explicit cache maintenance the
-        // DPU can scan stale DRAM (black) while our pixels sit in cache —
+        // DPU can scan stale DRAM (black) while our pixels sit in cache.
         // CPU readback still sees them, so prev-content proves nothing.
         // dma-buf sync ioctls on the ion fd do the clean/invalidate.
         int dmafd = (buf->handle && buf->handle->numFds > 0)

@@ -2,6 +2,7 @@
 
 #include <cerrno>
 #include <cstring>
+#include <poll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -9,7 +10,29 @@
 
 namespace determination::control {
 
-bool send_packet(int fd, const Packet &packet, std::string *error)
+namespace {
+
+bool wait_for_io(int fd, short events, std::uint32_t timeout_ms,
+                 std::string *error)
+{
+    pollfd descriptor{.fd = fd, .events = events, .revents = 0};
+    int result;
+    do {
+        result = poll(&descriptor, 1, static_cast<int>(timeout_ms));
+    } while (result < 0 && errno == EINTR);
+    if (result > 0 && (descriptor.revents & events) != 0) return true;
+    if (error) {
+        *error = result == 0 ? "RPC deadline exceeded" :
+            (result < 0 ? std::strerror(errno) : "socket closed");
+    }
+    errno = result == 0 ? ETIMEDOUT : EPIPE;
+    return false;
+}
+
+} // namespace
+
+bool send_packet(int fd, const Packet &packet, std::string *error,
+                 std::uint32_t timeout_ms)
 {
     if (packet.payload.size() > kMaximumPayload) {
         if (error) *error = "payload exceeds protocol limit";
@@ -33,6 +56,7 @@ bool send_packet(int fd, const Packet &packet, std::string *error)
     message.msg_iov = vectors;
     message.msg_iovlen = packet.payload.empty() ? 1U : 2U;
 
+    if (!wait_for_io(fd, POLLOUT, timeout_ms, error)) return false;
     const auto expected = static_cast<ssize_t>(sizeof(header) + packet.payload.size());
     ssize_t sent;
     do {
@@ -47,7 +71,7 @@ bool send_packet(int fd, const Packet &packet, std::string *error)
     return true;
 }
 
-ReceiveResult receive_packet(int fd)
+ReceiveResult receive_packet(int fd, std::uint32_t timeout_ms)
 {
     ReceiveResult result;
     std::vector<std::byte> bytes(sizeof(PacketHeader) + kMaximumPayload);
@@ -56,6 +80,12 @@ ReceiveResult receive_packet(int fd)
     message.msg_iov = &vector;
     message.msg_iovlen = 1;
 
+    std::string wait_error;
+    if (!wait_for_io(fd, POLLIN, timeout_ms, &wait_error)) {
+        result.status = errno == ETIMEDOUT ? Status::DeadlineExceeded : Status::Unavailable;
+        result.error = wait_error;
+        return result;
+    }
     ssize_t received;
     do {
         received = recvmsg(fd, &message, MSG_CMSG_CLOEXEC);
@@ -137,6 +167,9 @@ std::string operation_name(Operation operation)
     case Operation::ModeGet: return "mode-get";
     case Operation::ModeSet: return "mode-set";
     case Operation::ModeRecover: return "mode-recover";
+    case Operation::BootProfileGet: return "boot-profile-get";
+    case Operation::BootProfileSet: return "boot-profile-set";
+    case Operation::BootProfileApply: return "boot-profile-apply";
     case Operation::GuestReport: return "guest-report";
     }
     return "unknown";

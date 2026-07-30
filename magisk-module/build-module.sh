@@ -62,6 +62,7 @@ mkdir -p "$WORK/tools" "$WORK/guest-tools" "$WORK/zygisk" \
 cp ../tools/evgrab/evgrab \
    "$DETD" "$DETCTL" "$DET_AUDIO_HOST" "$DET_AUDIO_OWNER" \
    ../toggle/device-config ../toggle/generate-lxc-config ../toggle/generate-guest-config \
+   ../toggle/lifecycle-lib ../toggle/boot-profile \
    ../toggle/guest-start ../toggle/desktop-on ../toggle/desktop-off \
    ../toggle/run-transition ../toggle/external-presenter \
    ../toggle/native-plasma ../toggle/native-kms-gate ../toggle/native-restore \
@@ -78,14 +79,24 @@ cp "$ZYGISK_32" "$WORK/zygisk/armeabi-v7a.so"
 
 OUT="$PWD/determination-magisk-v$DET_VERSION.zip"
 rm -f "$OUT"
-# python zipfile: no zip(1) dependency, deterministic enough for our use
-(cd "$WORK" && python3 -c "
-import os, zipfile
-with zipfile.ZipFile('$OUT', 'w', zipfile.ZIP_DEFLATED) as z:
-    for root, _, files in os.walk('.'):
-        for f in sorted(files):
-            p = os.path.join(root, f)
-            z.write(p, os.path.relpath(p, '.'))
-")
+# Python zipfile keeps this independent of zip(1). Fixed metadata plus a
+# sorted file list make repeated release builds byte-for-byte reproducible.
+(cd "$WORK" && SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-315532800}" python3 - "$OUT" <<'PY'
+import os, stat, sys, time, zipfile
+out = sys.argv[1]
+epoch = max(315532800, int(os.environ['SOURCE_DATE_EPOCH']))
+stamp = time.gmtime(epoch)[:6]
+paths = sorted(os.path.relpath(os.path.join(root, name), '.')
+               for root, dirs, files in os.walk('.') for name in files)
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+    for path in paths:
+        info = zipfile.ZipInfo(path, stamp)
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = (stat.S_IFREG | 0o644) << 16
+        with open(path, 'rb') as src:
+            z.writestr(info, src.read(), compress_type=zipfile.ZIP_DEFLATED,
+                       compresslevel=9)
+PY
+)
 echo "Wrote ${OUT##*/}"
 python3 -c "import zipfile; print('\n'.join(zipfile.ZipFile('$OUT').namelist()))"

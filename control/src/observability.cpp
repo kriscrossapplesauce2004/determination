@@ -111,6 +111,8 @@ std::string status_payload(const ObservabilityOptions &options,
     const Mode live = observed_mode(options.root);
     const std::string guest_report = trim(
         read_file(options.root + "/run/guest-health.json", 8192));
+    const bool guest_report_is_object = guest_report.size() >= 2U &&
+        guest_report.front() == '{' && guest_report.back() == '}';
     const std::string direct_audio_phase = audio_phase(options);
     const std::string audio_profile = key_value(
         read_file(options.root + "/etc/audio-owner.conf", 64U * 1024U), "profile");
@@ -129,9 +131,7 @@ std::string status_payload(const ObservabilityOptions &options,
            << ",\"memory\":{\"available\":\"" << json_escape(memory_value("MemAvailable"))
            << "\",\"swap_free\":\"" << json_escape(memory_value("SwapFree")) << "\"}"
            << ",\"guest_report\":"
-           << (guest_report.empty()
-                   ? "null"
-                   : std::string("\"") + json_escape(guest_report) + '"')
+           << (guest_report_is_object ? guest_report : "null")
            << ",\"direct_audio\":{\"phase\":\""
            << json_escape(direct_audio_phase) << "\",\"profile\":\""
            << json_escape(audio_profile) << "\",\"probe\":"
@@ -228,7 +228,8 @@ std::string capabilities_payload(const ObservabilityOptions &options,
 {
     return "{\"operations\":[\"hello\",\"ping\",\"status\",\"doctor\","
            "\"capabilities\",\"metrics\",\"mode-get\",\"mode-set\","
-           "\"mode-recover\",\"guest-report\"],\"guest_endpoint\":" +
+           "\"mode-recover\",\"boot-profile-get\",\"boot-profile-set\","
+           "\"boot-profile-apply\",\"guest-report\"],\"guest_endpoint\":" +
            std::string(guest_endpoint ? "true" : "false") +
            ",\"transitions\":" +
            std::string(options.observe_only ? "false" : "true") +

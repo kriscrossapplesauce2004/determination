@@ -1,4 +1,4 @@
-// Determination Zygisk module — SF-death suppression hook.
+// Determination Zygisk module --- SF-death suppression hook.
 // PLT-hooks __system_property_set in system_server: when desktop-mode is
 // active, swallows ctl.start/ctl.restart for surfaceflinger so the stopped
 // SF stays stopped (replacing the shell suppressor loop in desktop-on).
@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <array>
@@ -27,6 +28,13 @@ static constexpr const char *APP_PROCESS = "com.determination.companion";
 static constexpr const char *BRIDGE_NAME = "determination.companion.bridge";
 static constexpr const char *DETD_SOCKET = "/data/determination/run/detd.sock";
 static int (*orig_system_property_set)(const char *, const char *) = nullptr;
+
+static void set_socket_deadline(int fd) {
+    timeval timeout{};
+    timeout.tv_sec = 5;
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
+}
 
 static bool write_all(int fd, const void *data, size_t size) {
     const auto *p = static_cast<const uint8_t *>(data);
@@ -89,6 +97,7 @@ static void forward_protocol_request(
                              "detd socket failed");
         return;
     }
+    set_socket_deadline(daemon);
     sockaddr_un address{};
     address.sun_family = AF_UNIX;
     memcpy(address.sun_path, DETD_SOCKET, strlen(DETD_SOCKET) + 1);
@@ -229,7 +238,7 @@ static bool find_lib(const char *name, dev_t *dev, ino_t *ino) {
         // Format: addr perms offset dev inode pathname
         unsigned int dev_maj, dev_min;
         unsigned long inode_val;
-        // Skip addr, perms, offset — find dev field (4th column)
+        // Skip addr, perms, offset --- find dev field (4th column)
         char *col = line;
         for (int i = 0; i < 3; i++) {
             col = strchr(col, ' ');
@@ -284,9 +293,11 @@ class DeterminationModule : public zygisk::ModuleBase {
                 close(app);
                 continue;
             }
+            set_socket_deadline(app);
 
             int root = api_->connectCompanion();
             if (root >= 0) {
+                set_socket_deadline(root);
                 std::array<uint8_t, 4096> request{};
                 size_t total = 0;
                 ssize_t n;

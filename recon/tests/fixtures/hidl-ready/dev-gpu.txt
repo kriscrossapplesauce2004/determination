@@ -1,0 +1,2 @@
+crw-rw-rw- /dev/kgsl-3d0
+crw-rw-rw- /dev/dri/card0

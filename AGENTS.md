@@ -1,9 +1,9 @@
-# Determination — project context
+# Determination - project context
 
 Android convergence layer for melissa's OnePlus 7 (`guacamoleb`, SM8150 /
 Adreno 640). Android stays PID1; a Debian LXC guest on the same downstream
 kernel takes the display via libhybris→hwcomposer. Ships as custom boot.img +
-Magisk module + Zygisk — never a ROM, never touches /system.
+Magisk module + Zygisk - never a ROM, never touches /system.
 
 **Read first:** `docs/design-spec.md` (authoritative design), `docs/recon-findings.md`
 (device ground truth), `README.md` (repo map + milestones).
@@ -66,11 +66,11 @@ guest `/usr/lib/android/`.
 create `/run/user/1000`, `chmod a+r /etc/phoc.ini`) then `runuser -u melissa`
 launches phoc + phosh; runtime dir is `/run/user/1000`. Device access works
 because GPU/dri/binder/ashmem are world-rw and kgsl/ion are 1000-owned (uid
-1000 == Android AID_SYSTEM); the ONE gate is `/dev/input/*` (0660 root:1004) —
+1000 == Android AID_SYSTEM); the ONE gate is `/dev/input/*` (0660 root:1004) -
 handled by group `android_input` (gid 1004, matches AID_INPUT) that melissa
 joins. seatd socket is group `video`(44). Perms recon: `artifacts/node-perms-probe.txt`.
 `/etc/phoc.ini` MUST be world-readable or phoc segfaults on parse. Sudo is
-password-gated (`melissa ALL=(ALL) ALL`) — run `det passwd` once before sudo
+password-gated (`melissa ALL=(ALL) ALL`) - run `det passwd` once before sudo
 works. **nosuid gotcha:** Android's /data is `nosuid,nodev`, and the container
 rootfs is a bind of a /data subtree, so the container `/` inherits nosuid and
 sudo's setuid bit is ignored ("effective uid is not 0 … nosuid"). `guest-start`
@@ -78,10 +78,10 @@ fixes it by `mount -o remount,bind,suid,dev,exec /` inside the container
 post-start (the host-side bind-remount of `$DET/guest` does NOT reach the
 pivoted container root on 4.14). `det guest` = melissa shell; `det guest-root`
 = root escape hatch. Known
-gap: phosh runs bare (no logind), so polkit-gated actions log "No session" —
+gap: phosh runs bare (no logind), so polkit-gated actions log "No session" -
 Logout/Reboot/Poweroff are fine (det-session-manager intercepts them).
 
-**pidfd shim:** `det-pidfd-shim.so` (LD_PRELOAD) — pidfd_open→ENOSYS forces
+**pidfd shim:** `det-pidfd-shim.so` (LD_PRELOAD) - pidfd_open→ENOSYS forces
 SIGCHLD fallback. Required because waitid(P_PIDFD) is EINVAL on 4.14.
 
 **Session manager:** `det-session-manager` owns org.gnome.SessionManager on the
@@ -98,10 +98,10 @@ on USB plug/unplug and silently drops the bind (else phosh falls back to the
 stuck raw value). The bind reaches UPower even though upowerd runs in its own
 private mount namespace, because `/sys` is a shared mount so the pid1-ns bind
 propagates in. (Separate, likely pre-existing: UPower reports `discharging`
-while charging — `ac` line_power is online=0, only `pc_port`/`usb` are online=1.)
+while charging - `ac` line_power is online=0, only `pc_port`/`usb` are online=1.)
 
 **Container PTYs:** guest-start remounts devpts + symlinks /dev/ptmx (ptmxmode=000 fix).
-Same post-start block remounts `/` suid (nosuid /data would break sudo — see non-root session).
+Same post-start block remounts `/` suid (nosuid /data would break sudo - see non-root session).
 
 **sway is dead:** incompatible with the droidian wlroots hybrid 0.17/0.18 API.
 
@@ -118,7 +118,7 @@ v0.5.0-alpha.1 (versionCode=12) is the current source release. Guest RUNNING.
 
 **Milestones complete:** 1 (kernel flash), 3 (guest renders on panel), 4 (input +
 phosh verified, cable-free round trip, §4 signed off), 6 (SF-death Zygisk hook +
-system_server freezer — full desktop-mode stability).
+system_server freezer - full desktop-mode stability).
 
 **Milestone 5 native experiment proven:** Turnip-on-KGSL + minigbm pass the
 native smoke gate, raw KMS scans out on DSI, and Plasma Mobile runs under KWin
@@ -151,7 +151,7 @@ from the accumulated block time). **Guest networking now works in desktop mode.*
 
 Failed alternative: PLT-hooking `kill`/`tgkill`/`abort`/`exit`/`_exit` in
 libandroid_runtime/libc/libutils/libbase/libprocessgroup from Zygisk. Hooks
-registered fine but never fired — the actual Watchdog kill path doesn't go
+registered fine but never fired - the actual Watchdog kill path doesn't go
 through any of those GOT entries in system_server. Don't retry this angle.
 
 **Other known issues:**
@@ -168,7 +168,7 @@ through any of those GOT entries in system_server. Don't retry this angle.
 
 ## adb/su/lxc quoting rule
 
-`adb shell "su -c '<entire chain>'"` — one quoted arg or only the first command
+`adb shell "su -c '<entire chain>'"` - one quoted arg or only the first command
 runs as root. File drop into guest: adb push → su cp over existing guest file →
 lxc-attach `/bin/cp` to final path.
 

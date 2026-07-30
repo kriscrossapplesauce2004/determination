@@ -27,7 +27,8 @@ void usage(const char *program)
 {
     std::cerr << "usage: " << program << " [--root PATH] [--socket PATH] "
               << "hello|ping|status|doctor|capabilities|metrics|mode [phone|desktop] "
-              << "|recover [--wait] [--deadline SECONDS] [--json]\n";
+              << "|recover|boot-profile [phone|linux-first]|boot-apply "
+                 "[--wait] [--deadline SECONDS] [--json]\n";
 }
 
 bool parse(int argc, char **argv, Options *options)
@@ -78,6 +79,19 @@ bool parse(int argc, char **argv, Options *options)
         } else if (!command_seen && argument == "recover") {
             options->operation = Operation::ModeRecover;
             options->payload = "phone";
+            command_seen = true;
+        } else if (!command_seen && argument == "boot-profile") {
+            command_seen = true;
+            if (index + 1 < argc &&
+                (std::string(argv[index + 1]) == "phone" ||
+                 std::string(argv[index + 1]) == "linux-first")) {
+                options->operation = Operation::BootProfileSet;
+                options->payload = argv[++index];
+            } else {
+                options->operation = Operation::BootProfileGet;
+            }
+        } else if (!command_seen && argument == "boot-apply") {
+            options->operation = Operation::BootProfileApply;
             command_seen = true;
         } else {
             usage(argv[0]);
@@ -156,6 +170,7 @@ int main(int argc, char **argv)
         return exit_code(response.status);
     }
     const Status status = static_cast<Status>(response.packet.header.status);
+    const std::string initial_payload = response.packet.payload;
     if (!response.packet.payload.empty() &&
         !(options.wait && status == Status::Accepted)) {
         std::cout << response.packet.payload << '\n';
@@ -165,12 +180,17 @@ int main(int argc, char **argv)
     }
     if (status != Status::Accepted || !options.wait ||
         (options.operation != Operation::ModeSet &&
-         options.operation != Operation::ModeRecover)) {
+         options.operation != Operation::ModeRecover &&
+         options.operation != Operation::BootProfileApply)) {
         return exit_code(status);
     }
 
     const std::string target = options.operation == Operation::ModeRecover
-        ? "phone" : options.payload;
+        ? "phone"
+        : (options.operation == Operation::BootProfileApply
+            ? (initial_payload.find("\"profile\":\"linux-first\"") !=
+                    std::string::npos ? "desktop" : "phone")
+            : options.payload);
     const std::string observed = "\"observed\":\"" + target + "\"";
     const std::uint64_t deadline = monotonic_milliseconds() + options.deadline_ms;
     while (monotonic_milliseconds() < deadline) {

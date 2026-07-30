@@ -1,9 +1,9 @@
 /*
- * evgrab — hold EVIOCGRAB on evdev nodes for Determination desktop mode.
+ * evgrab holds EVIOCGRAB on evdev nodes for Determination desktop mode.
  *
  * On modern Android there is no standalone inputflinger process to stop:
  * input is EventHub/InputReader inside system_server, reading
- * /dev/input/event* non-exclusively. The clean handoff is an exclusive grab —
+ * /dev/input/event* non-exclusively. The clean handoff is an exclusive grab.
  * while we hold EVIOCGRAB, Android's readers see nothing (no double input),
  * and the guest's libinput reads the same nodes normally. Release on SIGTERM
  * returns input to Android. (Design spec §4.)
@@ -28,13 +28,50 @@
 #include <unistd.h>
 
 #define MAX_NODES 64
-#define INPUT_DIR "/dev/input"
+#define DEFAULT_INPUT_DIR "/dev/input"
 
 static int fds[MAX_NODES];
 static int nfds;
 static volatile sig_atomic_t quit;
+static const char *input_dir = DEFAULT_INPUT_DIR;
 
 static void on_term(int sig) { (void)sig; quit = 1; }
+
+static int write_pidfile(const char *path, pid_t pid)
+{
+    char temporary[320];
+    snprintf(temporary, sizeof(temporary), "%s.new.%ld", path, (long)getpid());
+    int fd = open(temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0640);
+    if (fd < 0) return -1;
+    char proc[64], stat[512], start[64] = "unknown";
+    snprintf(proc, sizeof(proc), "/proc/%ld/stat", (long)pid);
+    int stat_fd = open(proc, O_RDONLY | O_CLOEXEC);
+    if (stat_fd >= 0) {
+        ssize_t count = read(stat_fd, stat, sizeof(stat) - 1);
+        close(stat_fd);
+        if (count > 0) {
+            stat[count] = '\0';
+            char *field = strrchr(stat, ')');
+            for (int index = 0; field && index < 20; ++index)
+                field = strchr(field + 1, ' ');
+            if (field) {
+                char *value = field + 1;
+                char *end = strchr(value, ' ');
+                if (end) *end = '\0';
+                snprintf(start, sizeof(start), "%s", value);
+            }
+        }
+    }
+    dprintf(fd, "pid=%ld\nstart=%s\n", (long)pid, start);
+    if (fsync(fd) != 0 || close(fd) != 0 || link(temporary, path) != 0) {
+        int saved = errno;
+        unlink(temporary);
+        errno = saved;
+        return -1;
+    }
+    unlink(temporary);
+    return 0;
+}
 
 static int grab(const char *path)
 {
@@ -70,38 +107,42 @@ static void release_all(void)
 
 static int grab_all(void)
 {
-    DIR *d = opendir(INPUT_DIR);
-    if (!d) {
-        perror("evgrab: opendir " INPUT_DIR);
+    struct dirent **entries = NULL;
+    const int count = scandir(input_dir, &entries, NULL, alphasort);
+    if (count < 0) {
+        perror("evgrab: scandir");
         return -1;
     }
-    struct dirent *e;
     int rc = 0;
-    while ((e = readdir(d))) {
-        if (strncmp(e->d_name, "event", 5) != 0)
+    for (int index = 0; index < count; ++index) {
+        struct dirent *e = entries[index];
+        if (strncmp(e->d_name, "event", 5) != 0) {
+            free(e);
             continue;
+        }
         char path[288];
-        snprintf(path, sizeof(path), INPUT_DIR "/%s", e->d_name);
-        /* A node that appears/disappears mid-scan isn't fatal; a node that
-         * exists but refuses the grab is — someone else holds it. */
+        snprintf(path, sizeof(path), "%s/%s", input_dir, e->d_name);
         if (grab(path) < 0 && errno != ENOENT)
             rc = -1;
+        free(e);
     }
-    closedir(d);
+    free(entries);
     return rc;
 }
 
 int main(int argc, char **argv)
 {
     const char *pidfile = NULL;
-    int all = 0, opt;
+    int all = 0, foreground = 0, opt;
 
-    while ((opt = getopt(argc, argv, "ap:")) != -1) {
+    while ((opt = getopt(argc, argv, "afp:D:")) != -1) {
         switch (opt) {
         case 'a': all = 1; break;
+        case 'f': foreground = 1; break;
         case 'p': pidfile = optarg; break;
+        case 'D': input_dir = optarg; break;
         default:
-            fprintf(stderr, "usage: evgrab -a [-p pidfile] | evgrab [-p pidfile] node...\n");
+            fprintf(stderr, "usage: evgrab [-f] [-D input-dir] -a [-p pidfile] | evgrab [-f] [-p pidfile] node...\n");
             return 2;
         }
     }
@@ -121,14 +162,24 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    /* Daemonize only after every grab succeeded, so the caller's exit-code
-     * check is meaningful. */
+    if (foreground) {
+        signal(SIGTERM, on_term);
+        signal(SIGINT, on_term);
+        while (!quit) pause();
+        release_all();
+        return 0;
+    }
+
+    /* Daemonize only after every grab succeeded. */
     pid_t pid = fork();
     if (pid < 0) { perror("evgrab: fork"); release_all(); return 1; }
     if (pid > 0) {
         if (pidfile) {
-            FILE *f = fopen(pidfile, "w");
-            if (f) { fprintf(f, "%d\n", pid); fclose(f); }
+            if (write_pidfile(pidfile, pid) != 0) {
+                perror("evgrab: pidfile");
+                kill(pid, SIGTERM);
+                return 1;
+            }
         }
         return 0;
     }

@@ -23,6 +23,7 @@ set -eu
 
 SRC="${SRC:-/root/build/libhybris}"
 JOBS="$(nproc)"
+. "$(dirname "$0")/sources.lock"
 export TMPDIR=/tmp   # Android leaks TMPDIR=/data/local/tmp into the guest;
 mkdir -p /tmp        # config.guess needs a writable one.
 
@@ -34,10 +35,13 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
     android-headers-30 libwayland-dev wayland-protocols libwayland-egl-backend-dev
 
 mkdir -p "$(dirname "$SRC")"
-[ -d "$SRC/.git" ] || git clone --depth 1 https://github.com/libhybris/libhybris.git "$SRC"
+[ -d "$SRC/.git" ] || git clone --depth 1 "$LIBHYBRIS_REPO" "$SRC"
+[ "$(git -C "$SRC" rev-parse HEAD)" = "$LIBHYBRIS_COMMIT" ] || {
+    echo "FATAL: libhybris source is not pinned $LIBHYBRIS_COMMIT" >&2; exit 1;
+}
 
 # hooks_mm gap fix (2026-07-04, upstream-able): the q linker hooks the whole
-# locale.h family to glibc, but NOT __ctype_get_mb_cur_max — a bionic-only
+# locale.h family to glibc, but NOT __ctype_get_mb_cur_max --- a bionic-only
 # export (bionic's MB_CUR_MAX) that reads bionic TLS tp[-1], which never
 # exists on a glibc thread. Vendor libc++'s std::locale::classic() calls it
 # during android_dlopen of anything that touches std::locale => SIGSEGV in
@@ -111,7 +115,7 @@ fi
 # renders a FIXED frame count (`for (i=0; i<1020*60; ++i)`) then exits ~24s,
 # which tears the hwc2 display down; desktop-on needs it to render CONTINUOUSLY
 # (one instance, no per-cycle teardown/black-flicker). Patch the loop to never
-# terminate. Idempotent — only rewrites the stock finite bound.
+# terminate. Idempotent --- only rewrites the stock finite bound.
 if grep -q 'i<1020\*60;' "$SRC/hybris/tests/test_hwcomposer.cpp"; then
     sed -i 's/i<1020\*60;/;/' "$SRC/hybris/tests/test_hwcomposer.cpp"
 fi
@@ -147,7 +151,7 @@ fi
 # Device-query extension filter (2026-07-08, GPU app buffers; upstream-able):
 # GTK4/GDK sees EGL_EXT_device_query in the DISPLAY extension string (the
 # vendor driver advertises it) and calls eglQueryDisplayAttribEXT for its
-# software-renderer check — but libepoxy resolves that entrypoint against
+# software-renderer check --- but libepoxy resolves that entrypoint against
 # the CLIENT extension list (no display is current yet), where hybris
 # advertises none of the device extensions, and abort()s the app:
 #   "No provider of eglQueryDisplayAttribEXT found."
@@ -241,7 +245,7 @@ fi
 
 # KHR swap-with-damage override (2026-07-09; upstream-able): vendors
 # advertise EGL_KHR_swap_buffers_with_damage, but hybris only overrides the
-# EXT name — eglGetProcAddress(eglSwapBuffersWithDamageKHR) hands out the
+# EXT name --- eglGetProcAddress(eglSwapBuffersWithDamageKHR) hands out the
 # raw vendor entrypoint, which skips the ws finishSwap wayland attach+commit,
 # so client windows never map (GTK4/GDK prefers the KHR name). Alias the KHR
 # name onto the EXT wrapper (identical semantics).
@@ -253,12 +257,12 @@ fi
 
 # GSK struct-varying fix (2026-07-10; upstream-able as a driver quirk): the
 # Adreno GLES blob (A640 V@0502) mishandles struct varyings matched by name
-# across shader stages — a "flat in Rect/RoundedRect" read as a whole struct
+# across shader stages --- a "flat in Rect/RoundedRect" read as a whole struct
 # (function argument) yields zeros, though per-field access works; sometimes
 # the link fails outright ("input _rect not declared in output from previous
 # stage").  GTK4 GSK ends every fragment path in rect_coverage(_rect,_pos),
 # so alpha=0 and NO GSK shader draw ever produced pixels ("apps launch to a
-# white screen" — only glClear/occlusion output was visible).  The custom
+# white screen" --- only glClear/occlusion output was visible).  The custom
 # glShaderSource below rewrites GSK fragment sources to rebuild the struct
 # from its fields at each use site (proven correct on-device 2026-07-10,
 # artifacts/guest-gsk-struct-varying-fix-20260710.txt).  Runtime opt-out:
@@ -423,7 +427,7 @@ cd "$SRC/hybris"
     --enable-wayland --enable-adreno-quirks --enable-experimental
 
 # The tests subdir fails to build test_audio (strdup decl missing in the
-# android audio.h) — irrelevant, and it is the LAST subdir, so the libraries
+# android audio.h) --- irrelevant, and it is the LAST subdir, so the libraries
 # and the linker are already built/installed before it aborts. Ignore it.
 make -j"$JOBS" || true
 make install || true    # -> /usr/local; installs the q/mm/n/o linkers to

@@ -1,10 +1,10 @@
 #!/bin/sh
 # M5 native-DRM track, Phase 0.2: build Mesa with the Turnip KGSL backend
-# (Vulkan on /dev/kgsl-3d0 — no DRM render-node submission on this downstream
+# (Vulkan on /dev/kgsl-3d0 --- no DRM render-node submission on this downstream
 # kernel) plus zink (desktop GL over Turnip). Run INSIDE the container as
 # root. Expect hours on-device; that's fine (libhybris/wlroots precedent).
 #
-# WHY /opt/mesa AND NOT /usr/local: /usr/local/lib is the HYBRIS world —
+# WHY /opt/mesa AND NOT /usr/local: /usr/local/lib is the HYBRIS world ---
 # libEGL.so.1 there is hybris' and desktop-on's LD_LIBRARY_PATH contract
 # depends on it winning. Mesa must live in its own prefix and be selected
 # per-session via /opt/mesa/env.sh. Never merge the two.
@@ -48,7 +48,7 @@ echo "== patch: zink device selection on kgsl (phase 0.4) =="
 # Turnip-KGSL exposes no VK_EXT_physical_device_drm identity, so zink's
 # display-device matching can never succeed ("ZINK: failed to choose pdev")
 # and GL-on-zink is dead for EGL/GBM/surfaceless. Env-gated fallback to the
-# first enumerated device — single-GPU phone, so device 0 is always right.
+# first enumerated device --- single-GPU phone, so device 0 is always right.
 # Activated by ZINK_MATCH_ANY_DEVICE=1 in /opt/mesa/env.sh below.
 cd "$B/mesa"
 patch -p1 <<'EOF'
@@ -96,12 +96,12 @@ LIBDIR="$PREFIX/lib/aarch64-linux-gnu"
 ICD="$PREFIX/share/vulkan/icd.d/freedreno_icd.aarch64.json"
 cat > "$PREFIX/env.sh" <<EOF
 # Mesa/native session env (M5 native-DRM track). Mutually exclusive with the
-# hybris env in /etc/profile.d/hybris.sh — do NOT put /usr/local/lib here.
+# hybris env in /etc/profile.d/hybris.sh --- do NOT put /usr/local/lib here.
 export LD_LIBRARY_PATH=$LIBDIR\${LD_LIBRARY_PATH:+:\$LD_LIBRARY_PATH}
 export VK_DRIVER_FILES=$ICD
 export LIBGL_DRIVERS_PATH=$LIBDIR/dri
 export MESA_LOADER_DRIVER_OVERRIDE=zink
-# kgsl turnip has no VK_EXT_physical_device_drm — see the zink patch in
+# kgsl turnip has no VK_EXT_physical_device_drm --- see the zink patch in
 # build-mesa.sh; without this GL-on-zink cannot find the GPU.
 export ZINK_MATCH_ANY_DEVICE=1
 EOF
@@ -111,10 +111,10 @@ echo "== gate: Turnip enumerates over kgsl =="
 # vulkaninfo works headless. deviceName should read "Turnip Adreno (TM) 640".
 if VK_DRIVER_FILES="$ICD" LD_LIBRARY_PATH="$LIBDIR" vulkaninfo --summary \
         2>/tmp/vulkaninfo.err | tee /tmp/vulkaninfo.out | grep -i turnip; then
-    echo "BUILD-MESA: OK (Turnip live — see /tmp/vulkaninfo.out)"
+    echo "BUILD-MESA: OK (Turnip live --- see /tmp/vulkaninfo.out)"
 else
     echo "BUILD-MESA: INSTALLED BUT TURNIP NOT ENUMERATING"
     echo "-- vulkaninfo stderr:"; tail -20 /tmp/vulkaninfo.err
-    echo "   (kgsl UAPI mismatch is the known risk — this is the kill-switch)"
+    echo "   (kgsl UAPI mismatch is the known risk --- this is the kill-switch)"
     exit 1
 fi

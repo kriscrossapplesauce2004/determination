@@ -1,10 +1,8 @@
 #!/system/bin/sh
 # Shared device configuration for host-side Determination scripts.
 #
-# Values are discovered conservatively at runtime, then overridden by
-# /data/determination/etc/device.conf.  Profiles contain data only: do not put
-# commands or shell expansions in them.  `det-recon` will eventually generate
-# this file; until then a porter can copy etc/device.conf.example and edit it.
+# Values are discovered conservatively at runtime, then overridden by a typed
+# data file. Profiles are never sourced as shell code.
 
 DET=${DET:-/data/determination}
 
@@ -43,10 +41,42 @@ DET_PANEL_WIDTH=${DET_PANEL_WIDTH:-}
 DET_PANEL_HEIGHT=${DET_PANEL_HEIGHT:-}
 DET_OUTPUT_SCALE=${DET_OUTPUT_SCALE:-}
 
+det_profile_bad() { echo "device-config: invalid $1" >&2; return 1; }
+det_profile_word() { case "$2" in ''|*[!A-Za-z0-9._-]*) det_profile_bad "$1";; esac; }
+det_profile_uint() { case "$2" in ''|*[!0-9]*) det_profile_bad "$1";; esac; }
+det_profile_path() { case "$2" in /sys/*|/dev/*) case "$2" in *[!A-Za-z0-9._/-]*) det_profile_bad "$1";; esac;; *) det_profile_bad "$1";; esac; }
+
+det_profile_set() {
+    det_key=$1 det_value=$2
+    case "$det_key" in
+        DET_PROFILE_ID|DET_WIFI_IFACE|DET_BATTERY_GAUGE|DET_INPUT_QUIRK|DET_GRAPHICS_RENDERER|DET_GBM_PROVIDER)
+            det_profile_word "$det_key" "$det_value" || return 1 ;;
+        DET_BACKLIGHT_LEVEL|DET_PANEL_WIDTH|DET_PANEL_HEIGHT|DET_OUTPUT_SCALE)
+            det_profile_uint "$det_key" "$det_value" || return 1 ;;
+        DET_BACKLIGHT_PATH|DET_DRM_CARD|DET_DRM_RENDER_NODE)
+            det_profile_path "$det_key" "$det_value" || return 1 ;;
+        DET_HWC_OUTPUT)
+            case "$det_value" in HWCOMPOSER-[0-9]) ;; *) det_profile_bad "$det_key"; return 1;; esac ;;
+        DET_LINUX_FIRST_SUPPORTED|DET_LINUX_FIRST_KEEP_NETWORK|DET_LINUX_FIRST_FREEZE_SYSTEM_SERVER)
+            case "$det_value" in 0|1) ;; *) det_profile_bad "$det_key"; return 1;; esac ;;
+        DET_EXTRA_DEVICES)
+            for det_extra in $det_value; do det_profile_path "$det_key" "$det_extra" || return 1; done ;;
+        *) det_profile_bad "unknown key $det_key"; return 1 ;;
+    esac
+    export "$det_key=$det_value"
+}
+
+DET_LINUX_FIRST_SUPPORTED=${DET_LINUX_FIRST_SUPPORTED:-0}
+DET_LINUX_FIRST_KEEP_NETWORK=${DET_LINUX_FIRST_KEEP_NETWORK:-1}
+DET_LINUX_FIRST_FREEZE_SYSTEM_SERVER=${DET_LINUX_FIRST_FREEZE_SYSTEM_SERVER:-1}
 DET_DEVICE_CONFIG="$DET/etc/device.conf"
 if [ -r "$DET_DEVICE_CONFIG" ]; then
-    # shellcheck disable=SC1090 -- fixed, root-owned on-device configuration.
-    . "$DET_DEVICE_CONFIG"
+    while IFS= read -r det_line || [ -n "$det_line" ]; do
+        case "$det_line" in ''|'#'*) continue;; *'='*)
+            det_key=${det_line%%=*}; det_value=${det_line#*=}
+            det_profile_set "$det_key" "$det_value" || return 1 ;;
+        *) det_profile_bad "malformed line"; return 1;; esac
+    done < "$DET_DEVICE_CONFIG"
 fi
 
 # Android reports the unrotated physical panel size. This is safe for UI
@@ -81,3 +111,4 @@ export DET_BACKLIGHT_PATH DET_BACKLIGHT_LEVEL DET_WIFI_IFACE
 export DET_DRM_CARD DET_DRM_RENDER_NODE DET_BATTERY_GAUGE DET_EXTRA_DEVICES DET_INPUT_QUIRK
 export DET_HWC_OUTPUT DET_PANEL_WIDTH DET_PANEL_HEIGHT DET_OUTPUT_SCALE
 export DET_GRAPHICS_RENDERER DET_GBM_PROVIDER
+export DET_LINUX_FIRST_SUPPORTED DET_LINUX_FIRST_KEEP_NETWORK DET_LINUX_FIRST_FREEZE_SYSTEM_SERVER

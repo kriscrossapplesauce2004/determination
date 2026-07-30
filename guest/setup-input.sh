@@ -1,27 +1,27 @@
 #!/bin/sh
-# Determination §4 guest-side input handoff + mobile shell — one script, all
+# Determination §4 guest-side input handoff + mobile shell --- one script, all
 # gotchas encoded. Run INSIDE the container as root. Idempotent.
 #
 # WHAT THIS SETS UP (2026-07-06):
 #  - phosh 0.46 + squeekboard 1.43 from trixie as the real mobile session
-#    (Debian's phosh dep pulls Debian's phoc/wlroots — harmless, we run
+#    (Debian's phosh dep pulls Debian's phoc/wlroots --- harmless, we run
 #    /usr/local/bin/phoc with LD_LIBRARY_PATH=/usr/local/... which wins).
 #  - seatd: wlroots' libinput backend (droidian-extensions OFF in our build)
 #    requires a wlr_session via libseat; seatd is the no-logind-session
 #    backend. Debian's libseat tries seatd first when the socket exists,
 #    but desktop-on still exports LIBSEAT_BACKEND=seatd to be explicit.
 #  - det-input-udevdb: hand-written /run/udev/data entries. systemd-udevd
-#    NEVER runs in this container (ConditionPathIsReadWrite=/sys fails —
+#    NEVER runs in this container (ConditionPathIsReadWrite=/sys fails ---
 #    the container's /sys is read-only), so libinput's udev backend sees no
 #    ID_INPUT_* properties and silently ignores every device. The hardware
 #    is static, so generating the db once per boot from udevadm's input_id
 #    builtin (which works daemon-less) is sufficient. Verified mapping on
 #    guacamoleb: event1 = "touchpanel" -> ID_INPUT_TOUCHSCREEN=1.
 #  - det-pidfd-shim.so: THE glib child-watch fix. This 4.14 kernel
-#    BACKPORTS pidfd_open (syscall 434 returns a real fd — probed
+#    BACKPORTS pidfd_open (syscall 434 returns a real fd --- probed
 #    2026-07-06) but NOT waitid(P_PIDFD), which returns EINVAL. glib sees
 #    pidfd_open succeed, commits to the pidfd path, then child-watch
-#    dispatch dies on waitid — this is the real mechanism behind the
+#    dispatch dies on waitid --- this is the real mechanism behind the
 #    "never phoc -E" rule and would break phosh's app launching. The shim
 #    interposes syscall()/pidfd_open() to return ENOSYS so glib takes its
 #    SIGCHLD fallback. LD_PRELOAD it into anything glib-spawn-based
@@ -39,7 +39,7 @@ apt-get update -qq
 # xkb-data: libxkbcommon finds no keymaps without it (we install with
 # --no-install-recommends everywhere); fonts-cantarell: phosh's UI font.
 # gnome-settings-daemon-common: phosh ABORTS (fatal GLib-GIO-ERROR) without
-# the org.gnome.settings-daemon.* schemas — it's only in Recommends
+# the org.gnome.settings-daemon.* schemas --- it's only in Recommends
 # (found 2026-07-06: the "blinking compositor" crash loop on first light).
 # adwaita-icon-theme: squeekboard renders without its key icons otherwise.
 apt-get install -y -qq --no-install-recommends \
@@ -55,14 +55,14 @@ cat > /usr/local/sbin/det-input-udevdb <<'EOF'
 #!/bin/sh
 # Determination: hand-write /run/udev/data entries for input event nodes so
 # libinput's udev backend accepts devices WITHOUT a running udevd (udevd is
-# condition-blocked in this container: /sys is read-only). /run is tmpfs —
+# condition-blocked in this container: /sys is read-only). /run is tmpfs ---
 # desktop-on re-runs this before each phoc launch. Only devices input_id
 # actually classifies get an entry; the rest stay invisible to libinput.
 #
 # 2026-07-14 (KWin/logind): logind TakeDevice needs (a) the eventN char entry
 # to exist so sd_device sees it initialized ("I:" line), and (b) the PARENT
 # inputN device (db id "+input:inputN") to carry current udev tag "seat"
-# ("Q:seat"), or session_device_verify → manager_process_seat_device skips it
+# ("Q:seat"), or session_device_verify then manager_process_seat_device skips it
 # and TakeDevice returns ENODEV. Verified against systemd v257 source.
 set -e
 mkdir -p /run/udev/data
@@ -88,7 +88,7 @@ echo "== device-class libinput quirks =="
 # The OnePlus touchpanel driver advertises ABS_MT_WIDTH_MAJOR and
 # ABS_MT_PRESSURE with min==max==0; libinput hard-rejects the whole device
 # ("kernel bug: device has min == max on ABS_MT_WIDTH_MAJOR", found
-# 2026-07-06). Strip the bogus axes via quirk — the good ones are
+# 2026-07-06). Strip the bogus axes via quirk --- the good ones are
 # POSITION_X 0-1078, POSITION_Y 0-2338, TOUCH_MAJOR, SLOT 0-9, TRACKING_ID.
 mkdir -p /etc/libinput
 DET_INPUT_QUIRK=none
@@ -110,7 +110,7 @@ none|'')
     ;;
 esac
 # Power key (history): 2026-07-06..11 KEY_POWER was quirked inert here
-# because a blank was permanent — "power button kills it". Root cause was
+# because a blank was permanent --- "power button kills it". Root cause was
 # NOT the phoc hwcomposer backend: phosh has no internal unblank path at
 # all; unblanking is gsd-power's job (ScreenSaver.SetActive(false) on user
 # activity) and we run phosh bare. det-session-manager (setup-controls.sh)
@@ -121,10 +121,10 @@ esac
 echo "== det-pidfd-shim =="
 cat > /tmp/det-pidfd-shim.c <<'EOF'
 /* Determination: this 4.14 kernel backports pidfd_open(434) but NOT
- * waitid(P_PIDFD) (EINVAL) — glib child-watch commits to the pidfd path
+ * waitid(P_PIDFD) (EINVAL) --- glib child-watch commits to the pidfd path
  * and dies. Make pidfd_open fail ENOSYS so glib uses its SIGCHLD
  * fallback. Interposes both the raw syscall() route glib uses and the
- * glibc pidfd_open() wrapper for good measure. glibc-world only — the
+ * glibc pidfd_open() wrapper for good measure. glibc-world only --- the
  * bionic side has its own linker and never sees LD_PRELOAD. */
 #define _GNU_SOURCE
 #include <dlfcn.h>

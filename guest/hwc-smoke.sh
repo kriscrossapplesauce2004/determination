@@ -1,7 +1,7 @@
 #!/system/bin/sh
 # Atomic §3 gate test: stop SF, run test_hwcomposer INSIDE the guest via
 # libhybris, restore SF regardless of outcome. Forces the panel backlight
-# on during the run — stopping SF zeroes it, which made renders invisible.
+# on during the run --- stopping SF zeroes it, which made renders invisible.
 set -u
 # ACTIVE node is backlight/ (max 4095); panel0-backlight is inert (2026-07-05).
 BL=/sys/class/backlight/backlight/brightness

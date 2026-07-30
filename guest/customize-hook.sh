@@ -4,7 +4,7 @@
 #
 # When the rootfs is built via the debootstrap-on-device path instead
 # (build-rootfs.sh fallback), guest/setup-guest.sh applies these same
-# steps over adb — keep the two in sync.
+# steps over adb --- keep the two in sync.
 
 set -eu
 R="$1"
@@ -14,7 +14,7 @@ HERE=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 # patched wlroots and phoc. 2026-07: repositories.droidian.org is dead;
 # the staging repo carries a trixie suite and is current. The staging repo
 # signs with a Jan/2025 key that is NOT in any published
-# droidian-archive-keyring deb (they're all stale) — fetch the keyring
+# droidian-archive-keyring deb (they're all stale) --- fetch the keyring
 # straight from their git, which does carry it.
 mkdir -p "$R/etc/apt/sources.list.d" "$R/usr/share/keyrings"
 wget -qO "$R/usr/share/keyrings/droidian.gpg" \
@@ -26,7 +26,7 @@ deb [signed-by=/usr/share/keyrings/droidian.gpg] https://staging.repo.droidian.o
 EOF
 
 # Staging's newest libhybris needs libc6 > 2.42; trixie has 2.41. The
-# droidian0+z4 build is the newest that installs — pin the whole family
+# droidian0+z4 build is the newest that installs --- pin the whole family
 # or apt's solver mixes versions and fails.
 mkdir -p "$R/etc/apt/preferences.d"
 printf 'Package: *\nPin: version *z4+git20250520205628*\nPin-Priority: 1001\n' \
@@ -34,7 +34,7 @@ printf 'Package: *\nPin: version *z4+git20250520205628*\nPin-Priority: 1001\n' \
 
 # Hybris: bionic linker namespace needs the vendor paths that lxc bind-mounts
 # at the real root. libc.so lives in the apex on Android 10+, which is not on
-# libhybris' default search path — add it explicitly.
+# libhybris' default search path --- add it explicitly.
 cat > "$R/etc/profile.d/hybris.sh" <<'EOF'
 # Default to the wayland EGL platform: ordinary processes are Wayland
 # CLIENTS of phoc (GPU app buffers over android_wlegl). Only the
@@ -49,7 +49,7 @@ EOF
 ln -sf /system/product "$R/product" || true
 ln -sf /system/system_ext "$R/system_ext" || true
 
-# Resolver: no systemd-resolved in the guest — static resolv.conf, two
+# Resolver: no systemd-resolved in the guest --- static resolv.conf, two
 # nameservers + short timeouts. Prefer IPv4 in gai.conf: the guest is
 # IPv4-NAT only but gets AAAA answers (see setup-guest.sh, keep in sync).
 cat > "$R/etc/resolv.conf" <<'EOF'
@@ -76,7 +76,7 @@ chroot "$R" sh -c 'id melissa >/dev/null 2>&1 || useradd -m -u 1000 -s /bin/bash
 chroot "$R" usermod -aG video,input,render,audio,android_input,android_graphics,android_audio melissa
 
 # Password-gated sudo (proper sudo, not NOPASSWD-ALL). No password is baked into
-# the image — set one on-device with `det passwd` before sudo will work.
+# the image --- set one on-device with `det passwd` before sudo will work.
 echo 'melissa ALL=(ALL) ALL' > "$R/etc/sudoers.d/melissa"
 chmod 440 "$R/etc/sudoers.d/melissa"
 

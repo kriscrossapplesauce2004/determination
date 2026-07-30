@@ -1,0 +1,32 @@
+name: host-validation
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  static-and-host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Shell and Python checks
+        run: |
+          sh -n recon/recon.sh release/check.sh release/version.sh
+          python3 -m py_compile recon/classify.py docs/check-links.py
+          python3 -m py_compile artifacts/build-index.py website/check-site.py
+          sh recon/tests/test-classify.sh
+      - name: Documentation and release checks
+        run: |
+          python3 docs/check-links.py
+          python3 artifacts/build-index.py --check
+          python3 website/check-site.py
+          release/check.sh check
+      - name: Native host tests
+        run: |
+          tools/check-host.sh
+      - name: Reject untracked generated packages
+        run: |
+          test -z "$(git ls-files -o --exclude-standard | grep -E '\.(img|apk|zip|tar\.gz)$' || true)"

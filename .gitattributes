@@ -1,0 +1,13 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.img binary
+*.zip binary
+*.gz binary
+*.apk binary
+*.so binary
+
+# Generated packages and device captures require an explicit retention record.
+artifacts/** -text

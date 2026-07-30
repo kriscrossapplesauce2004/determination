@@ -1,0 +1,3 @@
+android.hardware.graphics.composer@2.4::IComposer/default
+android.hardware.graphics.mapper@4.0::IMapper/default
+android.hardware.graphics.allocator@4.0::IAllocator/default

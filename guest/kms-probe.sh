@@ -1,17 +1,17 @@
 #!/system/bin/sh
 # M5 native-DRM track, Phase 0.1: READ-ONLY enumeration of the downstream SDE
 # DRM/KMS device (/dev/dri/card0) from inside the guest. Safe to run while
-# Android owns the display — no master is taken, nothing is committed.
+# Android owns the display --- no master is taken, nothing is committed.
 #
 # Key questions this answers (plan: m5 native-DRM track):
-#   - driver name/version the guest sees (drmGetVersion — minigbm backend
+#   - driver name/version the guest sees (drmGetVersion --- minigbm backend
 #     selection keys off this)
 #   - does the DP-alt connector enumerate on card0 alongside the DSI panel?
 #   - atomic cap, plane inventory, format+modifier lists (UBWC present?)
 #
 # Two modes, like gpu-smoke.sh:
-#   kms-probe.sh prep   — PHONE MODE: apt-installs the probe tools.
-#   kms-probe.sh        — any mode: runs the read-only dump.
+#   kms-probe.sh prep   --- PHONE MODE: apt-installs the probe tools.
+#   kms-probe.sh        --- any mode: runs the read-only dump.
 # Capture on the host:
 #   adb shell "su -c 'sh /data/local/tmp/kms-probe.sh'" \
 #       | tee artifacts/kms-probe-$(date +%Y%m%d).txt

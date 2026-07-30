@@ -1,5 +1,5 @@
 #!/bin/sh
-# det — Determination host helper. Wraps the wireless-adb dance so nothing else
+# det - Determination host helper. Wraps the wireless-adb dance so nothing else
 # has to remember it. Uses official platform-tools if present (distro adb has
 # broken pairing), and never runs `adb root` (drops wireless transports).
 #
@@ -14,6 +14,7 @@
 #   det ssh-route         route the guest subnet directly through the phone
 #   det ssh [command...]  direct SSH to melissa@192.168.117.2
 #   det on | det off      enter / leave desktop mode (detached; panel changes!)
+#   det linux-first CMD   status, enable, disable, or apply the boot profile
 #   det log [name] [n]    tail a /data/determination/log file (default toggle)
 #   det version           print the local project version and release state
 #   det status            connection, root, kernel, mode, guest state
@@ -69,7 +70,7 @@ mdns_addr() {
 ensure() {
     adb get-state >/dev/null 2>&1 && return 0
     addr=$(mdns_addr)
-    [ -n "$addr" ] || { echo "phone not advertising — is Wireless debugging on?" >&2; exit 1; }
+    [ -n "$addr" ] || { echo "phone not advertising - is Wireless debugging on?" >&2; exit 1; }
     adb connect "$addr" >/dev/null
     adb get-state >/dev/null 2>&1 || { echo "connect to $addr failed (re-pair?)" >&2; exit 1; }
 }
@@ -97,7 +98,7 @@ shell)
     if [ $# -gt 0 ]; then
         # adb re-joins argv with spaces, so `adb shell su -c "$*"` reaches the
         # remote shell UNQUOTED: everything after the first ;/&&/| ran as the
-        # shell user (the exact AGENTS.md quoting trap — this helper shipped
+        # shell user (the exact AGENTS.md quoting trap - this helper shipped
         # with it from day one, found 2026-07-11 masquerading as a "degraded
         # boot"). Single-quote the whole chain for the remote shell, escaping
         # embedded single quotes.
@@ -109,7 +110,7 @@ guest)
     G=/data/determination
     # Attach as the unprivileged guest user melissa (root shell: det guest-root).
     # runuser -l reads /etc/group, so melissa keeps her supplementary groups
-    # (video/android_input/…) — lxc-attach --uid would drop them. Absolute path:
+    # (video/android_input/…) - lxc-attach --uid would drop them. Absolute path:
     # lxc-attach hands a minimal PATH that omits /usr/sbin.
     # The whole su -c argument must be ONE quoted string (see AGENTS.md).
     if [ $# -gt 0 ]; then
@@ -120,7 +121,7 @@ guest)
 guest-root)
     ensure; shift
     G=/data/determination
-    # Root shell inside the guest — admin escape hatch (was the old `det guest`).
+    # Root shell inside the guest - admin escape hatch (was the old `det guest`).
     if [ $# -gt 0 ]; then
         adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /bin/sh -lc \"$*\"'"
     else
@@ -132,7 +133,7 @@ passwd)
     # Set melissa's guest password. passwd(1) reads /dev/tty with echo off, and
     # that controlling tty does NOT survive adb->su->lxc-attach (the prompt is
     # lost and the typed password just echoes to the shell). So read it HERE,
-    # where there is a real terminal, and feed chpasswd over STDIN — never argv,
+    # where there is a real terminal, and feed chpasswd over STDIN - never argv,
     # so it stays out of ps. No -t: we want raw stdin piped through, not a pty.
     printf 'New password for guest user melissa: ' >&2
     stty -echo 2>/dev/null; read pw;  stty echo 2>/dev/null; echo >&2
@@ -142,7 +143,7 @@ passwd)
     [ "$pw" = "$pw2" ] || { echo 'det: passwords do not match' >&2; exit 1; }
     if printf 'melissa:%s\n' "$pw" | \
         adb shell "su -c '$G/lxc/bin/lxc-attach -P $G -n guest -- /usr/sbin/chpasswd'"
-    then echo 'det: password set — sudo now works for melissa' >&2
+    then echo 'det: password set - sudo now works for melissa' >&2
     else echo 'det: chpasswd failed' >&2; exit 1; fi ;;
 ssh-setup)
     ensure
@@ -230,11 +231,25 @@ on)
     ensure
     # setsid-detach: the SF handoff must not die with this adb session.
     adb shell "su -c 'setsid /data/determination/bin/desktop-on >/dev/null 2>&1 &'" </dev/null
-    echo "desktop-on launched (detached) — watch: det log toggle" ;;
+    echo "desktop-on launched (detached) - watch: det log toggle" ;;
 off)
     ensure
     adb shell "su -c 'setsid /data/determination/bin/desktop-off >/dev/null 2>&1 &'" </dev/null
-    echo "desktop-off launched (detached) — watch: det log toggle" ;;
+    echo "desktop-off launched (detached) - watch: det log toggle" ;;
+linux-first)
+    ensure
+    action=${2:-status}
+    case "$action" in
+        status)
+            adb shell "su -c '/data/determination/bin/boot-profile status'" ;;
+        enable)
+            adb shell "su -c '/data/determination/bin/boot-profile linux-first'" ;;
+        disable)
+            adb shell "su -c '/data/determination/bin/boot-profile phone'" ;;
+        apply)
+            adb shell "su -c '/data/determination/bin/boot-profile apply'" ;;
+        *) echo "usage: det linux-first status|enable|disable|apply" >&2; exit 2 ;;
+    esac ;;
 log)
     ensure
     adb shell "su -c 'tail -n ${3:-60} /data/determination/log/${2:-toggle}.log'" ;;
@@ -248,6 +263,10 @@ status)
         [ -e /proc/self/ns/pid ] && echo "pid-ns: YES (Determination kernel)" || echo "pid-ns: no (stock kernel)"
         echo "sf: `getprop init.svc.surfaceflinger`"
         [ -f /data/determination/run/desktop-mode ] && echo "mode: desktop" || echo "mode: phone"
+        [ -x /data/determination/bin/boot-profile ] && {
+            desired=`sed -n 's/^desired=//p' /data/determination/state/boot-profile 2>/dev/null | tail -n 1`
+            echo "boot-profile: ${desired:-phone}"
+        }
         [ -x /data/determination/bin/desktop-on ] && echo "module: installed" || echo "module: not installed"
 EOF
     ;;
@@ -274,13 +293,13 @@ hybrid-bench)
 push-module)
     ensure
     zipf="magisk-module/determination-magisk-v$DET_VERSION.zip"
-    [ -f "$zipf" ] || { echo "missing $zipf — run magisk-module/build-module.sh" >&2; exit 1; }
+    [ -f "$zipf" ] || { echo "missing $zipf - run magisk-module/build-module.sh" >&2; exit 1; }
     adb push "$zipf" /data/local/tmp/determination.zip
     adb shell su -c 'magisk --install-module /data/local/tmp/determination.zip && rm /data/local/tmp/determination.zip'
-    echo "installed — reboot the phone to activate" ;;
+    echo "installed - reboot the phone to activate" ;;
 publish)
     ensure
-    [ -d dist/usb-payload ] || { echo "no payload — run usb-install/build-usb-payload.sh" >&2; exit 1; }
+    [ -d dist/usb-payload ] || { echo "no payload - run usb-install/build-usb-payload.sh" >&2; exit 1; }
     # A mounted OTG drive shows up under /mnt/media_rw/<VOLUME>. adb push can't
     # write there (shell uid), so push to /data/local/tmp and su-copy over.
     vol=$(adb shell su -c 'ls /mnt/media_rw/ 2>/dev/null' </dev/null | tr -d '\r' | head -n1)
@@ -292,7 +311,7 @@ publish)
     else
         dest=/sdcard/Determination
         adb shell su -c "rm -rf $dest && cp -r /data/local/tmp/usb-payload $dest && rm -rf /data/local/tmp/usb-payload" </dev/null
-        echo "no USB drive mounted — published to $dest instead"
+        echo "no USB drive mounted - published to $dest instead"
     fi
     echo "next: usb-install/README.md (patch determination-boot.img in Magisk, flash install zip)" ;;
 migrate)

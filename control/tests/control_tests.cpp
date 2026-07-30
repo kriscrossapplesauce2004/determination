@@ -229,6 +229,53 @@ void invalid_packet_is_rejected()
     close(pair[1]);
 }
 
+void silent_peer_deadline()
+{
+    int pair[2];
+    CHECK(socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, pair) == 0);
+    const auto before = std::chrono::steady_clock::now();
+    const ReceiveResult received = receive_packet(pair[0], 40);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - before).count();
+    CHECK(!received.ok);
+    CHECK(received.status == Status::DeadlineExceeded);
+    CHECK(elapsed >= 30 && elapsed < 500);
+    close(pair[0]);
+    close(pair[1]);
+}
+
+void partial_body_and_stalled_reader()
+{
+    int pair[2];
+    CHECK(socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, pair) == 0);
+    PacketHeader header;
+    header.operation = static_cast<std::uint32_t>(Operation::Ping);
+    header.payload_size = 8;
+    CHECK(send(pair[0], &header, sizeof(header), MSG_NOSIGNAL) ==
+          static_cast<ssize_t>(sizeof(header)));
+    const ReceiveResult partial = receive_packet(pair[1], 100);
+    CHECK(!partial.ok);
+    CHECK(partial.status == Status::InvalidRequest);
+    close(pair[0]);
+    close(pair[1]);
+
+    CHECK(socketpair(AF_UNIX, SOCK_SEQPACKET | SOCK_CLOEXEC, 0, pair) == 0);
+    Packet packet;
+    packet.header.operation = static_cast<std::uint32_t>(Operation::Status);
+    packet.payload.assign(kMaximumPayload, 'x');
+    std::string error;
+    bool blocked = false;
+    for (int attempt = 0; attempt < 128; ++attempt) {
+        if (!send_packet(pair[0], packet, &error, 20)) {
+            blocked = true;
+            break;
+        }
+    }
+    CHECK(blocked);
+    close(pair[0]);
+    close(pair[1]);
+}
+
 void adapter_runner()
 {
     const AdapterResult success = run_adapter(
@@ -246,6 +293,7 @@ void adapter_runner()
     const AdapterResult timeout = run_adapter(
         "/bin/sh", {"-c", "sleep 5"}, std::chrono::milliseconds(50));
     CHECK(timeout.timed_out);
+
 }
 
 void utility_contracts()
@@ -261,7 +309,7 @@ void utility_contracts()
         {trim(read_file("/proc/self/comm", 256)), "not-a-real-det-process"});
     CHECK(states.at("not-a-real-det-process") == '-');
     CHECK(endpoint_peer_allowed(Endpoint::Admin, 0));
-    CHECK(endpoint_peer_allowed(Endpoint::Admin, 1000));
+    CHECK(!endpoint_peer_allowed(Endpoint::Admin, 1000));
     CHECK(!endpoint_peer_allowed(Endpoint::Admin, 2000));
     CHECK(mode_request_allowed(Endpoint::Admin, 0, Mode::Desktop));
     CHECK(!mode_request_allowed(Endpoint::Admin, 1000, Mode::Phone));
@@ -326,6 +374,12 @@ void observability_contracts()
         0640, &error));
     CHECK(doctor_payload(options, state).find(
               "\"direct_audio_mode_consistent\":false") != std::string::npos);
+
+    CHECK(atomic_write_file(root + "/run/guest-health.json",
+                            "{\"schema\":1,\"ready\":true}\n", 0640, &error));
+    CHECK(status_payload(options, state).find(
+              "\"guest_report\":{\"schema\":1,\"ready\":true}") !=
+          std::string::npos);
 }
 
 } // namespace
@@ -335,6 +389,8 @@ int main()
     state_round_trip();
     packet_round_trip();
     invalid_packet_is_rejected();
+    silent_peer_deadline();
+    partial_body_and_stalled_reader();
     adapter_runner();
     transition_success_and_rollback();
     transition_conflicts_and_reconciliation();

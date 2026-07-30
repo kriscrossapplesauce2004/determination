@@ -9,6 +9,11 @@ toolchain/
 determination-magisk-*.zip
 dist/
 artifacts/backups/
+artifacts/local/
+artifacts/raw/
+artifacts/*.img
+artifacts/*.apk
+artifacts/*.zip
 zygisk/libs/
 zygisk/obj/
 .agents/

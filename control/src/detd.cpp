@@ -26,6 +26,8 @@ using namespace determination::control;
 namespace {
 
 std::atomic<bool> running{true};
+constexpr std::uint32_t kClientDeadlineMs = 1'000;
+constexpr int kListenerBacklog = 16;
 
 void handle_signal(int)
 {
@@ -70,6 +72,34 @@ bool parse_options(int argc, char **argv, Options *options)
     return true;
 }
 
+std::string boot_profile_intent_path(const Options &options)
+{
+    return options.root + "/state/boot-profile.intent";
+}
+
+std::string boot_profile(const Options &options)
+{
+    const std::string intent = trim(
+        read_file(boot_profile_intent_path(options), 64));
+    if (intent == "phone" || intent == "linux-first") return intent;
+
+    const std::string state = read_file(
+        options.root + "/state/boot-profile", 4096);
+    const std::string desired = key_value(state, "desired");
+    return desired == "linux-first" ? desired : "phone";
+}
+
+bool boot_profile_allowed(const std::string &value)
+{
+    return value == "phone" || value == "linux-first";
+}
+
+std::string boot_profile_payload(const Options &options, const char *result)
+{
+    return "{\"schema\":1,\"profile\":\"" + boot_profile(options) +
+        "\",\"result\":\"" + result + "\"}";
+}
+
 Packet response_for(const Packet &request, const Options &options,
                     TransitionController *controller, uid_t peer_uid,
                     bool guest_endpoint)
@@ -87,7 +117,7 @@ Packet response_for(const Packet &request, const Options &options,
     switch (operation) {
     case Operation::Hello:
         response.payload = "{\"service\":\"detd\",\"protocol_major\":1,"
-                           "\"protocol_minor\":0,\"observe_only\":" +
+                           "\"protocol_minor\":1,\"observe_only\":" +
                            std::string(options.observe_only ? "true" : "false") + "}";
         break;
     case Operation::Ping:
@@ -133,6 +163,48 @@ Packet response_for(const Packet &request, const Options &options,
         response.header.generation = transition.state.generation;
         response.payload = "{\"message\":\"" + json_escape(transition.message) +
                            "\",\"state\":" + state_json(transition.state) + "}";
+        break;
+    }
+    case Operation::BootProfileGet:
+        response.payload = boot_profile_payload(options, "committed");
+        break;
+    case Operation::BootProfileSet: {
+        if (endpoint != Endpoint::Admin || peer_uid != 0 ||
+            !boot_profile_allowed(request.payload)) {
+            response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
+            response.payload = "{\"error\":\"boot profile requires root admin peer\"}";
+            break;
+        }
+        std::string write_error;
+        if (!atomic_write_file(boot_profile_intent_path(options),
+                               request.payload + "\n",
+                               0640, &write_error)) {
+            response.header.status = static_cast<std::int32_t>(Status::InternalError);
+            response.payload = "{\"error\":\"" + json_escape(write_error) + "\"}";
+            break;
+        }
+        response.payload = boot_profile_payload(options, "committed");
+        break;
+    }
+    case Operation::BootProfileApply: {
+        if (endpoint != Endpoint::Admin || peer_uid != 0) {
+            response.header.status = static_cast<std::int32_t>(Status::PermissionDenied);
+            response.payload = "{\"error\":\"boot profile requires root admin peer\"}";
+            break;
+        }
+        const Mode target = boot_profile(options) == "linux-first"
+            ? Mode::Desktop : Mode::Phone;
+        const TransitionRequestResult transition = controller->request(
+            target, request.header.request_id, request.header.deadline_ms);
+        response.header.status = static_cast<std::int32_t>(transition.status);
+        response.header.generation = transition.state.generation;
+        const char *result = transition.status == Status::Ok
+            ? "committed"
+            : (transition.status == Status::Accepted ? "accepted" : "degraded");
+        response.payload = "{\"schema\":1,\"profile\":\"" +
+            boot_profile(options) + "\",\"result\":\"" + result +
+            "\",\"message\":\"" + json_escape(transition.message) +
+            "\",\"state\":" + state_json(transition.state) + "}";
         break;
     }
     case Operation::GuestReport: {
@@ -183,7 +255,8 @@ int create_server(const std::string &path, gid_t group, std::string *error)
     const mode_t previous = umask(0077);
     const int bound = bind(server, reinterpret_cast<sockaddr *>(&address), sizeof(address));
     umask(previous);
-    if (bound != 0 || chmod(path.c_str(), 0660) != 0 || listen(server, 8) != 0) {
+    if (bound != 0 || chmod(path.c_str(), 0660) != 0 ||
+        listen(server, kListenerBacklog) != 0) {
         *error = std::strerror(errno);
         close(server);
         unlink(path.c_str());
@@ -251,7 +324,7 @@ int main(int argc, char **argv)
     sigaction(SIGINT, &action, nullptr);
     signal(SIGPIPE, SIG_IGN);
 
-    std::cout << "detd: protocol 1.0 "
+    std::cout << "detd: protocol 1.1 "
               << (options.observe_only ? "observe-only" : "transitions-enabled")
               << " on " << options.socket << '\n';
     while (running.load()) {
@@ -270,7 +343,7 @@ int main(int argc, char **argv)
         if ((listeners[listener].revents & POLLIN) == 0) continue;
         const bool is_guest = listener == 1U;
         const int client = accept4(listeners[listener].fd, nullptr, nullptr,
-                                   SOCK_CLOEXEC);
+                                   SOCK_CLOEXEC | SOCK_NONBLOCK);
         if (client < 0) {
             if (errno == EINTR) continue;
             std::cerr << "detd: accept: " << std::strerror(errno) << '\n';
@@ -287,7 +360,7 @@ int main(int argc, char **argv)
             close(client);
             continue;
         }
-        const ReceiveResult received = receive_packet(client);
+        const ReceiveResult received = receive_packet(client, kClientDeadlineMs);
         Packet response;
         if (!received.ok) {
             response.header.flags = kFlagResponse;
@@ -298,7 +371,7 @@ int main(int argc, char **argv)
                                     peer.uid, is_guest);
         }
         std::string send_error;
-        if (!send_packet(client, response, &send_error)) {
+        if (!send_packet(client, response, &send_error, kClientDeadlineMs)) {
             std::cerr << "detd: response: " << send_error << '\n';
         }
         close(client);

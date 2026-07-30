@@ -1,5 +1,5 @@
 #!/system/bin/sh
-# Determination kernel installer — an "action zip" for the Magisk app.
+# Determination kernel installer --- an "action zip" for the Magisk app.
 #
 # Flow (all on the phone, no PC needed):
 #   1. Magisk app -> Install -> Select and Patch a File -> pick
@@ -14,10 +14,10 @@
 #   - image is a real Android boot image (ANDROID! magic)
 #   - image fits the partition
 #   - kernel inside is THIS exact Determination build (full version banner,
-#     including build timestamp — a stale patched image from an older
+#     including build timestamp --- a stale patched image from an older
 #     build fails here, not at boot)
 #   - ramdisk is Magisk-patched (flashing an unpatched image would boot
-#     but silently remove root — and root is the only way back)
+#     but silently remove root --- and root is the only way back)
 #   - battery >= 15%
 #   - backup destination has room; backup is taken and its sha256 is
 #     verified against the partition BEFORE flashing
@@ -30,7 +30,7 @@
 # writing the boot partition. Delete the flag file to arm the real flash.
 #
 # It aborts at the end ON PURPOSE so Magisk does not register it as a module
-# — the flash (or dry run) has already happened by then.
+# --- the flash (or dry run) has already happened by then.
 
 SKIPUNZIP=1
 
@@ -45,7 +45,7 @@ DRYFLAG=/sdcard/Download/determination-dryrun
 
 MB=/data/adb/magisk/magiskboot
 
-fail() { ui_print ""; ui_print "!!! $1"; abort "aborting — nothing was flashed"; }
+fail() { ui_print ""; ui_print "!!! $1"; abort "aborting --- nothing was flashed"; }
 
 DRYRUN=false
 [ -f "$DRYFLAG" ] && DRYRUN=true && ui_print "- DRY RUN (found $DRYFLAG): all checks, no flash"
@@ -62,10 +62,10 @@ ui_print "- Active slot: ${slot:-none}, target: $part"
 batt=$(cat /sys/class/power_supply/battery/capacity 2>/dev/null)
 [ -n "$batt" ] || batt=$(dumpsys battery 2>/dev/null | awk '/level:/{print $2; exit}')
 if [ -n "$batt" ]; then
-    [ "$batt" -ge 15 ] 2>/dev/null || fail "battery at ${batt}% — charge to at least 15% first"
+    [ "$batt" -ge 15 ] 2>/dev/null || fail "battery at ${batt}% --- charge to at least 15% first"
     ui_print "- Battery: ${batt}%"
 else
-    ui_print "- Battery level unreadable — continuing"
+    ui_print "- Battery level unreadable --- continuing"
 fi
 
 # --- pick a patched image: newest first, first one that passes ----------
@@ -95,7 +95,7 @@ for cand in $(ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null); do
     rc=$?
     if [ "$rc" != "1" ]; then
         if [ "$rc" = "0" ]; then
-            ui_print "    skip: ramdisk NOT Magisk-patched — flashing it would remove root"
+            ui_print "    skip: ramdisk NOT Magisk-patched --- flashing it would remove root"
         else
             ui_print "    skip: ramdisk state unsupported (magiskboot cpio test rc=$rc)"
         fi
@@ -118,8 +118,8 @@ want=$(sha256sum "$img" | cut -d' ' -f1)
 cur=$(head -c "$imgsize" "$part" | sha256sum | cut -d' ' -f1)
 if [ "$cur" = "$want" ]; then
     ui_print ""
-    ui_print "- This exact image is ALREADY on boot$slot — nothing to do."
-    abort "NOT AN ERROR — partition already matches; nothing was written"
+    ui_print "- This exact image is ALREADY on boot$slot --- nothing to do."
+    abort "NOT AN ERROR --- partition already matches; nothing was written"
 fi
 
 # --- backup: taken and verified before any write -------------------------
@@ -133,7 +133,7 @@ done
 freek=$(df -Pk "$bdst" 2>/dev/null | awk 'NR==2{print $4}')
 needk=$(( partsize / 1024 + 20480 ))
 if [ -n "$freek" ] && [ "$freek" -lt "$needk" ]; then
-    fail "only ${freek}K free at $bdst — need ${needk}K for the backup"
+    fail "only ${freek}K free at $bdst --- need ${needk}K for the backup"
 fi
 
 backup="$bdst/boot${slot}-before-determination-$ts.img"
@@ -142,14 +142,14 @@ dd if="$part" of="$backup" bs=1048576 2>/dev/null || fail "backup dd failed"
 sync
 psha=$(sha256sum "$part" | cut -d' ' -f1)
 bsha=$(sha256sum "$backup" | cut -d' ' -f1)
-[ "$psha" = "$bsha" ] || fail "backup does not match the partition (sha mismatch) — refusing to flash without a good backup"
+[ "$psha" = "$bsha" ] || fail "backup does not match the partition (sha mismatch) --- refusing to flash without a good backup"
 ui_print "- Backup verified (sha256 $bsha)"
 
 # --- dry-run stop ---------------------------------------------------------
 if $DRYRUN; then
     ui_print ""
     ui_print "*******************************************"
-    ui_print "  DRY RUN COMPLETE — every check passed."
+    ui_print "  DRY RUN COMPLETE --- every check passed."
     ui_print "  A verified backup was left at:"
     ui_print "  $backup"
     ui_print "  Nothing was written to $part."
@@ -157,17 +157,17 @@ if $DRYRUN; then
     ui_print "  $DRYFLAG"
     ui_print "  and install this zip again."
     ui_print "*******************************************"
-    abort "NOT AN ERROR — dry run finished; nothing was flashed"
+    abort "NOT AN ERROR --- dry run finished; nothing was flashed"
 fi
 
 # --- flash + readback verify ----------------------------------------------
 ui_print "- Flashing $img -> boot$slot"
-dd if="$img" of="$part" bs=1048576 2>/dev/null || fail "FLASH dd FAILED — do not reboot; flash the restore zip now"
+dd if="$img" of="$part" bs=1048576 2>/dev/null || fail "FLASH dd FAILED --- do not reboot; flash the restore zip now"
 sync
 
 got=$(head -c "$imgsize" "$part" | sha256sum | cut -d' ' -f1)
 if [ "$want" != "$got" ]; then
-    fail "readback mismatch after flash — do NOT reboot.
+    fail "readback mismatch after flash --- do NOT reboot.
     Flash determination-kernel-restore.zip now (your verified
     backup is at $backup)."
 fi
@@ -182,4 +182,4 @@ ui_print "  contain: $MARKER"
 ui_print "  Undo anytime: determination-kernel-restore.zip"
 ui_print "*******************************************"
 ui_print ""
-abort "NOT AN ERROR — flash succeeded; this zip intentionally installs no module"
+abort "NOT AN ERROR --- flash succeeded; this zip intentionally installs no module"

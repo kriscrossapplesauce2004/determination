@@ -1,12 +1,12 @@
 #!/bin/sh
-# Determination kernel install/restore driven from the PC over a USB cable —
+# Determination kernel install/restore driven from the PC over a USB cable ---
 # the cable-era sibling of the on-phone action zips, with one safety layer
 # the zips cannot have: the pre-flash backup is ALSO pulled to this machine
 # (artifacts/backups/), so a copy survives anything that happens to the
 # phone's storage.
 #
 # The one step that stays manual is Magisk-patching determination-boot.img in
-# the Magisk app (Install -> Select and Patch a File) — the app owns the
+# the Magisk app (Install -> Select and Patch a File) --- the app owns the
 # patch settings and we do not second-guess them from here.
 #
 # Usage:
@@ -45,7 +45,7 @@ esac
 
 command -v "$ADB" >/dev/null || die "adb not found at $ADB (set ADB=)"
 "$ADB" get-state >/dev/null 2>&1 || die "no adb device connected"
-rsh id | grep -q uid=0 || die "su denied — flip the Shell toggle in Magisk's Superuser tab"
+rsh id | grep -q uid=0 || die "su denied --- flip the Shell toggle in Magisk's Superuser tab"
 
 slot=$("$ADB" shell getprop ro.boot.slot_suffix | tr -d '\r\n')
 part=/dev/block/bootdevice/by-name/boot$slot
@@ -76,8 +76,8 @@ fi
 battery() {
     b=$("$ADB" shell dumpsys battery 2>/dev/null | awk '/^ *level:/{print $2; exit}' | tr -d '\r\n ')
     [ -n "$b" ] || b=$(rsh "cat /sys/class/power_supply/battery/capacity" 2>/dev/null | tr -d '\r\n ')
-    [ -n "$b" ] || { echo "battery unreadable — continuing"; return 0; }
-    [ "$b" -ge 15 ] 2>/dev/null || die "battery at ${b}% — charge to at least 15% first"
+    [ -n "$b" ] || { echo "battery unreadable --- continuing"; return 0; }
+    [ "$b" -ge 15 ] 2>/dev/null || die "battery at ${b}% --- charge to at least 15% first"
     echo "battery: ${b}%"
 }
 
@@ -91,19 +91,19 @@ take_backup() {
     rsh "dd if=$part of=$backup bs=1048576 && sync" >/dev/null
     psha=$(rsh "sha256sum $part" | cut -d' ' -f1)
     bsha=$(rsh "sha256sum $backup" | cut -d' ' -f1)
-    [ "$psha" = "$bsha" ] || die "on-device backup sha mismatch — refusing to continue"
+    [ "$psha" = "$bsha" ] || die "on-device backup sha mismatch --- refusing to continue"
     mkdir -p "$REPO/artifacts/backups"
     hostbackup="$REPO/artifacts/backups/${backup##*/}"
     "$ADB" pull "$backup" "$hostbackup" >/dev/null
     hsha=$(sha256sum "$hostbackup" | cut -d' ' -f1)
-    [ "$hsha" = "$psha" ] || die "pulled backup sha mismatch — refusing to continue"
+    [ "$hsha" = "$psha" ] || die "pulled backup sha mismatch --- refusing to continue"
     echo "backup verified on device AND pulled to $hostbackup"
 }
 
 flash_and_verify() { # $1 = device path of image to flash, $2 = its sha, $3 = size
-    rsh "dd if=$1 of=$part bs=1048576 && sync" >/dev/null || die "FLASH dd FAILED — do not reboot; run '$0 restore'"
+    rsh "dd if=$1 of=$part bs=1048576 && sync" >/dev/null || die "FLASH dd FAILED --- do not reboot; run '$0 restore'"
     got=$(rsh "head -c $3 $part | sha256sum" | cut -d' ' -f1)
-    [ "$got" = "$2" ] || die "readback mismatch — do NOT reboot; run '$0 restore'"
+    [ "$got" = "$2" ] || die "readback mismatch --- do NOT reboot; run '$0 restore'"
     echo "flashed and readback-verified"
 }
 
@@ -116,8 +116,10 @@ if [ "$cmd" = restore ]; then
     battery
     want=$(sha256sum "$PRISTINE" | cut -d' ' -f1)
     size=$(stat -c%s "$PRISTINE")
+    [ "$size" -le "$partsize" ] || die "pristine image exceeds boot partition"
+    head -c 8 "$PRISTINE" | grep -q 'ANDROID!' || die "pristine image has invalid Android boot magic"
     cur=$(rsh "head -c $size $part | sha256sum" | cut -d' ' -f1)
-    [ "$cur" != "$want" ] || { echo "partition already holds the pristine image — nothing to do"; exit 0; }
+    [ "$cur" != "$want" ] || { echo "partition already holds the pristine image --- nothing to do"; exit 0; }
     rsh "mkdir -p $DWORK"
     "$ADB" push "$PRISTINE" "$DWORK/restore.img" >/dev/null
     got=$(rsh "sha256sum $DWORK/restore.img" | cut -d' ' -f1)
@@ -131,7 +133,7 @@ if [ "$cmd" = restore ]; then
 fi
 
 # ---------- check / flash ------------------------------------------------------
-[ -f "$BOOTIMG" ] || die "$BOOTIMG missing — run boot/repack.sh"
+[ -f "$BOOTIMG" ] || die "$BOOTIMG missing --- run boot/repack.sh"
 command -v magiskboot >/dev/null || die "magiskboot not found (toolchain/usr/bin)"
 uw=$(mktemp -d); trap 'rm -rf "$uw"' EXIT
 (cd "$uw" && magiskboot unpack "$BOOTIMG" >/dev/null 2>&1)
@@ -141,27 +143,29 @@ echo "pinning build: $BANNER"
 
 battery
 
-img=$("$ADB" shell "ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null | head -n1" | tr -d '\r\n')
-[ -n "$img" ] || die "no magisk_patched-*.img in /sdcard/Download — patch determination-boot.img in the Magisk app first"
-echo "candidate: $img"
-
-imgsize=$(rsh "stat -c%s $img" | tr -d '\r\n')
-[ "$imgsize" -le "$partsize" ] || die "image ($imgsize) larger than partition ($partsize)"
-rsh "head -c 8 $img" | grep -q 'ANDROID!' || die "$img is not an Android boot image"
-
-rsh "rm -rf $DWORK && mkdir -p $DWORK && cd $DWORK && $DMB unpack $img" >/dev/null 2>&1 || die "magiskboot could not unpack $img on the device"
-rsh "grep -qF \\\"$BANNER\\\" $DWORK/kernel" || die "kernel inside $img is NOT this exact Determination build
-    (want: $BANNER)
-    Re-patch boot/determination-boot.img in the Magisk app."
-rc=0; rsh "cd $DWORK && $DMB cpio ramdisk.cpio test" >/dev/null 2>&1 || rc=$?
-[ "$rc" = 1 ] || die "ramdisk of $img is not Magisk-patched (magiskboot cpio test rc=$rc) — flashing would remove root"
+img=
+for candidate in $("$ADB" shell "ls -t /sdcard/Download/magisk_patched-*.img 2>/dev/null" | tr -d '\r'); do
+    echo "checking candidate: $candidate"
+    candidate_size=$(rsh "stat -c%s '$candidate'" | tr -d '\r\n') || continue
+    [ "$candidate_size" -le "$partsize" ] || { echo "  reject: too large"; continue; }
+    rsh "head -c 8 '$candidate'" | grep -q 'ANDROID!' || { echo "  reject: bad boot magic"; continue; }
+    rsh "rm -rf $DWORK && mkdir -p $DWORK && cd $DWORK && $DMB unpack '$candidate'" >/dev/null 2>&1 || { echo "  reject: unpack failed"; continue; }
+    if ! rsh "grep -qF \\\"$BANNER\\\" $DWORK/kernel"; then
+        echo "  reject: wrong Determination kernel"; continue
+    fi
+    rc=0; rsh "cd $DWORK && $DMB cpio ramdisk.cpio test" >/dev/null 2>&1 || rc=$?
+    [ "$rc" = 1 ] || { echo "  reject: ramdisk is not Magisk-patched (rc=$rc)"; continue; }
+    img=$candidate; imgsize=$candidate_size; break
+done
 rsh "rm -rf $DWORK"
+[ -n "$img" ] || die "no valid magisk_patched-*.img in /sdcard/Download --- patch determination-boot.img in the Magisk app first"
+echo "candidate accepted: $img"
 echo "verified: exact Determination kernel build + Magisk-patched ramdisk"
 
 want=$(rsh "sha256sum $img" | cut -d' ' -f1)
 cur=$(rsh "head -c $imgsize $part | sha256sum" | cut -d' ' -f1)
 if [ "$cur" = "$want" ]; then
-    echo "this exact image is already on boot$slot — nothing to do"
+    echo "this exact image is already on boot$slot --- nothing to do"
     exit 0
 fi
 
@@ -169,7 +173,7 @@ take_backup determination
 
 if [ "$cmd" = check ]; then
     echo
-    echo "CHECK COMPLETE — every check passed, nothing was flashed."
+    echo "CHECK COMPLETE --- every check passed, nothing was flashed."
     echo "Verified backups: $backup (device) and $hostbackup (here)."
     echo "Run '$0 flash' to do it for real."
     exit 0
